@@ -5,12 +5,28 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 
+import Login from "@/pages/login";
+import Home from "@/pages/home";
+import Discover from "@/pages/discover";
+import Campaigns from "@/pages/campaigns";
+import CampaignDetail from "@/pages/campaign-detail";
+import EmailCenter from "@/pages/email";
+import Finance from "@/pages/finance";
+import Tracking from "@/pages/tracking";
+import Groups from "@/pages/groups";
+
 function Router() {
   return (
     <Switch>
-      {/* Add pages below */}
-      {/* <Route path="/" component={Home}/> */}
-      {/* Fallback to 404 */}
+      <Route path="/login" component={Login} />
+      <Route path="/" component={Home} />
+      <Route path="/discover" component={Discover} />
+      <Route path="/campaigns" component={Campaigns} />
+      <Route path="/campaigns/:id" component={CampaignDetail} />
+      <Route path="/groups" component={Groups} />
+      <Route path="/email" component={EmailCenter} />
+      <Route path="/finance" component={Finance} />
+      <Route path="/tracking" component={Tracking} />
       <Route component={NotFound} />
     </Switch>
   );
