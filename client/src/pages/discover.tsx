@@ -28,7 +28,16 @@ export default function Discover() {
   
   const [search, setSearch] = useState("");
   const [platformFilter, setPlatformFilter] = useState<string>("");
+  const [advertiserFilter, setAdvertiserFilter] = useState<string>("all");
   const { data: influencers, isLoading } = useInfluencers(workspaceId || 0, { search, platform: platformFilter || undefined });
+  
+  // Example advertisers for filtering
+  const advertisers = [
+    { id: "all", name: "전체" },
+    { id: "codingvalley", name: "코딩밸리" },
+    { id: "grab", name: "Grab" },
+    { id: "voye", name: "Voye" },
+  ];
   const createInfluencer = useCreateInfluencer(workspaceId || 0);
   const { toast } = useToast();
   const [, setLocation] = useLocation();
