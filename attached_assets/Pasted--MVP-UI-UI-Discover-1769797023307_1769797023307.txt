@@ -1,0 +1,160 @@
+당신은 이미 생성된 MVP 코드베이스를 “겉 UI”가 아니라 “업무가 돌아가는” 인플루언서 운영 플랫폼으로 리빌드한다.
+현재 상태: 한국어 UI는 대체로 됐지만, Discover/Manage/Analyze의 핵심 기능(리스트 관리, 아카이빙, 라인아이템 기반 운영, 계약/정산, 트래킹)이 대부분 동작하지 않는다.
+목표: 기존 UI 레이아웃(사이드바, 카드/테이블, 2패널 드로어, 탭, Wizard)은 유지하되, 아래 기능을 실제로 구현하고 DB/CRUD/API까지 end-to-end로 연결하라.
+
+────────────────────────────────────────
+[0] 최우선 원칙(중요)
+1) “탐색(Discover)”은 단순 검색 화면이 아니다. 후보를 저장/리스트화/아카이빙하고 운영으로 넘기는 입구여야 한다.
+2) “관리(Manage)”는 캠페인 단위가 아니라 “캠페인-인플루언서 라인아이템(CampaignLineItem)” 단위로 운영이 돌아야 한다.
+   - 계약(Contract), 정산(Settlement), 이메일 로그, 콘텐츠 링크는 모두 LineItem에 붙는다.
+3) “분석(Analyze)”는 캠페인/그룹 기준으로 콘텐츠 성과 데이터가 쌓이고 다운로드되어야 한다(자동수집은 Phase2, MVP는 수동 입력/업데이트 허용).
+4) 기존 코드에 기능이 없으면 “추가”가 아니라 “정상 동작하도록 리팩터 + 구현”한다.
+
+────────────────────────────────────────
+[1] 해야 할 기능(반드시 구현)
+A. Discover(탐색): 리스트 관리 + 인플루언서 아카이빙
+A-1) 검색/필터/정렬
+- DB에 저장된 Influencer 대상으로 검색/필터/정렬이 실제 동작해야 한다.
+- 필터: 플랫폼, 카테고리, 언어, 태그
+- 정렬: 팔로워, ER, 최근 업로드일(없으면 createdAt 기준)
+A-2) 멀티 선택 + 액션
+- 검색 결과 리스트(테이블 또는 카드)에 체크박스 멀티 선택 구현
+- 멀티 선택 후 액션 2개 필수:
+  1) “그룹에 저장” (Group 선택/생성 모달 → GroupInfluencer로 저장, 중복 방지)
+  2) “캠페인에 배정” (Campaign 선택/생성 모달 → CampaignLineItem 생성, 중복 방지)
+A-3) 인플루언서 상세(아카이빙 핵심) - 드로어/상세페이지
+- 리스트에서 인플루언서를 클릭하면 2패널 UI(좌 리스트/우 상세) 또는 Drawer로 상세가 열린다.
+- 상세에 반드시 포함:
+  - 기본정보(플랫폼/핸들/URL/카테고리/언어)
+  - 연락처(이메일 등), 메모, 태그 (저장/수정 가능)
+  - 콘텐츠 아카이브(ContentPost) 리스트 (최소 수동 추가: 링크/썸네일/게시일)
+  - 협업 이력 타임라인(TimelineEvent) (캠페인 배정/이메일 발송/계약/정산 이벤트 자동 기록)
+- 여기까지가 “아카이빙이 된다”의 최소 조건이다.
+
+B. Manage(관리): 그룹 CRM + 캠페인 운영 + 계약/정산
+B-1) 그룹 CRM(좌 그룹 목록 + 우 테이블)
+- 그룹 생성/수정/삭제/아카이브
+- 그룹 인플루언서 테이블(컬럼 on/off, 순서 변경)
+- 커스텀 컬럼(CustomField) 추가(텍스트/숫자/날짜/셀렉트)
+- 대량 추가: CSV 업로드로 Group에 인플루언서 추가(없으면 신규 Influencer 생성 옵션)
+- 그룹 링크 공유(ShareLink): 발급/회수/만료(읽기전용 페이지 구현)
+- 그룹 CSV/엑셀 다운로드(필드 선택)
+B-2) 캠페인 운영(캠페인 상세)
+- 캠페인 생성/수정(클라이언트/목표/예산/기간)
+- 캠페인 상세 상단 KPI 카드:
+  - 총 라인아이템 수, 계약완료 수, 정산완료 수, 지급대기 총액
+- 라인아이템 테이블(CampaignLineItem) 필수 컬럼:
+  - 인플루언서, 플랫폼, 캠페인 단계(stage), 계약 상태, 정산 상태, 총액, 지급예정일, 담당자
+- 라인아이템 클릭 시 상세 Drawer(탭):
+  - 개요/메모
+  - 계약(Contract)
+  - 정산(Settlement)
+  - 콘텐츠(링크/썸네일)
+  - 이메일 로그(해당 인플루언서 또는 라인아이템에 연결된 대화/발송 기록)
+B-3) 계약 관리(라인아이템 기준)
+- ContractStatus: 미작성/발송/회신대기/수정/서명완료/보류
+- 계약서 파일 업로드(or 링크) 저장
+- 계약 조건 JSON 구조화 입력 폼(콘텐츠/2차활용/경쟁배제/납기 등)
+- 상태 변경 시 AuditLog + TimelineEvent 자동 기록
+B-4) 정산 관리(라인아이템 기준)
+- SettlementStatus: 정보미수집/증빙요청/증빙수령/지급대기/지급완료/보류
+- 금액 구조(진행비/2차활용비/추가옵션/차감/공급가/VAT/총액) 계산
+- 세금계산서/청구서 파일 업로드 + 발행일/번호 저장
+- 지급 예정일/지급 완료일 + 지급 증빙 업로드
+- 상태 변경 시 AuditLog + TimelineEvent 자동 기록
+B-5) Finance(정산 대시보드)
+- 필터: 월/담당자/상태
+- KPI: 지급대기 총액, 이번달 지급완료 총액, 증빙 미수집 건수
+
+C. Analyze(분석): 트래킹 생성 Wizard + 성과 데이터 축적 + 다운로드
+C-1) Tracking 리스트(차트+KPI+테이블)
+- TrackingJob 리스트에 상태 배지(정상/경고/오류) 및 스케줄 표시(수동 입력 가능)
+- MVP는 자동수집 OFF여도 된다. 대신 “데이터 입력/업데이트” 흐름이 있어야 한다.
+C-2) Tracking 생성 Wizard(3-step) 구현
+- Step1 대상 추가: 그룹/캠페인/링크(콘텐츠 URL) 중 선택
+- Step2 키워드 조건(AND/OR/제외) 입력(저장)
+- Step3 수집 기간(지정기간 vs 최근 N일) 입력(저장)
+C-3) Tracking 상세 탭
+- 탭: 성과 추이 / 수집 콘텐츠 / 수집 계정 / 설정&로그
+- 성과 추이 그래프(일/주/월 토글 + 지표 선택) — MVP는 ContentPost의 수동 metrics를 집계해도 OK
+- 콘텐츠 리스트: 카드뷰↔리스트뷰 토글
+- 이슈 플래그(비공개/오류/급락): MVP는 수동 체크/상태로 구현 가능
+- 전체 데이터 CSV/엑셀 다운로드(필드 선택)
+
+D. 공통: AuditLog + Notification + 권한
+- Role: MASTER/EDITOR/VIEWER
+- VIEWER는 편집/업로드/다운로드/공유/발송 제한 옵션 적용
+- AuditLog: 상태 변경/파일 업로드/배정/발송/정산 변경 기록
+- Notification: 정산 D-3(지급예정일 기준), 트래킹 오류(수동), 발송 실패(이메일 실패)
+
+────────────────────────────────────────
+[2] DB/백엔드 요구사항(Prisma + Postgres)
+- Prisma를 사용하며, 기존 schema.prisma가 있다면 아래 엔티티/관계가 “실제로 작동”하도록 보완/마이그레이션하라.
+필수 엔티티:
+Workspace, User, WorkspaceMember
+Influencer(+ Metric), ContentPost, TimelineEvent
+Group, GroupInfluencer, ShareLink, CustomField
+Campaign, CampaignLineItem
+Contract, Settlement
+EmailAccount, EmailThread, EmailMessage, Attachment, EmailParticipant (이메일은 유지/확장)
+TrackingJob
+AuditLog, Notification
+
+요구:
+- Discover/Manage/Analyze의 모든 동작은 DB CRUD로 연결되어야 한다.
+- 파일 업로드(계약서/세금계산서/증빙)는 MVP에서 로컬 저장 가능하되, DB에는 메타데이터/URL만 저장.
+- 상태 변경 시 AuditLog + TimelineEvent 자동 생성 트리거(서버 로직) 구현.
+
+────────────────────────────────────────
+[3] API(필수 엔드포인트) — Route Handlers로 구현
+아래 CRUD는 최소 구현:
+- /api/influencers (GET/POST), /api/influencers/:id (GET/PATCH/DELETE(archive))
+- /api/influencers/:id/contents (POST/DELETE)
+- /api/groups (GET/POST), /api/groups/:id (GET/PATCH), /api/groups/:id/members (POST bulk add, DELETE)
+- /api/groups/:id/share-links (POST create/revoke)
+- /api/campaigns (GET/POST), /api/campaigns/:id (GET/PATCH)
+- /api/campaigns/:id/line-items (POST bulk add), /api/line-items/:id (GET/PATCH)
+- /api/line-items/:id/contract (GET/PUT), /api/line-items/:id/settlement (GET/PUT)
+- /api/finance/summary (GET: KPI/필터)
+- /api/tracking-jobs (GET/POST), /api/tracking-jobs/:id (GET/PATCH), /api/tracking-jobs/:id/export (GET)
+- /api/audit-logs (GET), /api/notifications (GET/PATCH read)
+
+추가: Discover 멀티 액션을 위한 벌크 API
+- /api/bulk/save-to-group (POST: influencerIds, groupId or groupCreate)
+- /api/bulk/assign-to-campaign (POST: influencerIds, campaignId or campaignCreate)
+
+────────────────────────────────────────
+[4] UI 구현 가이드(기존 레이아웃 유지)
+- Discover: 테이블/카드 + 체크박스 멀티 + 상단 액션바(그룹저장/캠페인배정)
+- Influencer 상세: Drawer or right panel (메모/태그/연락처/콘텐츠/타임라인)
+- Groups: 좌 목록 + 우 테이블 + 컬럼 설정 + 커스텀 컬럼 + 다운로드 + 공유 링크
+- Campaign 상세: KPI 카드 + 라인아이템 테이블 + 라인아이템 상세 Drawer 탭(계약/정산/콘텐츠/이메일로그)
+- Finance: 필터 + KPI + 테이블
+- Tracking: 리스트 + 생성 Wizard + 상세 탭 + 다운로드
+
+────────────────────────────────────────
+[5] 시드 데이터(반드시)
+- 데모 워크스페이스 1개
+- 인플루언서 10명(플랫폼/연락처/태그/간단 콘텐츠 1~2개)
+- 그룹 2개(멤버 포함)
+- 캠페인 1개 + 라인아이템 3개 + 계약/정산 상태 샘플
+- 트래킹 잡 1개 + 콘텐츠 metrics 샘플
+
+────────────────────────────────────────
+[6] 완료 기준(필수 시나리오 테스트)
+Scenario 1 (Discover → Group)
+- Discover에서 검색 → 3명 멀티 선택 → “그룹에 저장” → Groups에서 해당 그룹에 3명 확인 OK
+Scenario 2 (Discover → Campaign)
+- Discover에서 2명 멀티 선택 → “캠페인에 배정” → Campaign 상세 라인아이템 2개 생성 OK
+Scenario 3 (Influencer Archiving)
+- 인플루언서 상세에서 메모/태그/연락처 저장 → 콘텐츠 링크 1개 추가 → 다시 열어도 유지 OK
+Scenario 4 (Contract/Settlement end-to-end)
+- 캠페인 라인아이템에서 계약 상태 변경 + 계약서 업로드 → 정산 금액 입력 + 증빙 업로드 + 지급예정일 입력 → Finance KPI 반영 OK
+Scenario 5 (Analyze)
+- Tracking Wizard로 생성 → 상세에서 콘텐츠 리스트/그래프 표시 → CSV 다운로드 OK
+Scenario 6 (Audit/Timeline)
+- 위 모든 상태 변경/업로드/배정이 AuditLog와 Influencer 타임라인에 기록 OK
+
+작업 방식:
+1) 현재 코드베이스를 먼저 점검하고, 누락된 엔티티/API/UI를 순서대로 구현하라.
+2) “겉 UI”보다 “데이터가 실제로 저장되고 흐름이 연결되는지”를 우선 완성하라.
