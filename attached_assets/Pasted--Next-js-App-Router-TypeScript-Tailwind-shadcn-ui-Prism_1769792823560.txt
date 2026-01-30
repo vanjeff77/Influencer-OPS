@@ -1,0 +1,71 @@
+너는 풀스택 엔지니어다. Next.js(App Router) + TypeScript + Tailwind + shadcn/ui + Prisma + Postgres로
+인플루언서 운영 플랫폼 MVP를 구현해라. (DM 기능은 제외, 이메일만 발신/수신 내재화)
+
+[핵심 요구]
+1) 멀티 워크스페이스 + 팀원 권한
+- Workspace: 이름/로고 설정
+- Membership: MASTER/EDITOR/VIEWER
+- 권한에 따라 편집/발송/다운로드/공유 버튼 및 API를 제한
+
+2) 엔티티/기능
+- Influencer: 프로필(이름, 이메일, 전화), 태그, 메모
+- InfluencerAccount: platform(IG/YT/TikTok/X/Blog), handle, url, category, language, verified
+- Metrics snapshot(팔로워, ER, 평균조회/좋아요)
+- Content list(썸네일/링크/게시일/지표)
+
+- Discover(탐색): 검색 결과 테이블 + 정렬 + 고급 필터(정보/콘텐츠지표/오디언스) + 포함/제외 키워드
+  - 다중 선택 → 그룹 저장 / 캠페인 배정
+  - 유사 그룹 추천(단순 규칙 기반으로 MVP 구현)
+
+- Groups(관리): 플랫폼 탭 + 그룹 리스트(좌) + 그룹 테이블(우)
+  - 그룹 CRUD, 대량 추가(검색/CSV/링크), 공유 링크 발급/회수, 읽기전용 공유 페이지
+  - 엑셀/CSV 다운로드(컬럼 선택)
+  - 컬럼 설정(기본 on/off + 순서 변경) + 커스텀 컬럼(텍스트/숫자/날짜/셀렉트) + 프리셋 저장
+
+- Campaigns: 캠페인 생성/편집(클라이언트, 목표, 예산, 기간)
+  - 캠페인 상세(/campaigns/:id): 인플루언서 라인아이템 테이블 + KPI 카드
+  - 라인아이템(CampaignInfluencer)에서 단계 상태 + 계약 상태 + 정산 상태를 관리
+  - 계약/정산 문서 업로드(계약서/세금계산서/지급증빙)
+  - 업로드 일정 캘린더 + 콘텐츠 링크/갤러리
+  - 캠페인 결과 리포트 + 엑셀 다운로드
+
+- Finance(정산 대시보드): 월/담당자/상태 필터, 지급대기 총액 KPI, 지급 리스트 테이블
+
+3) 이메일 내재화(중요)
+- Gmail OAuth만 MVP에서 지원
+- EmailAccount 연결/관리 페이지
+- Email Center:
+  - 스레드 리스트 + 스레드 상세(메일 대화가 채팅처럼 보이게)
+  - 수신 동기화 버튼(/api/email/accounts/:id/sync): 최근 30일 범위로 inbox를 조회해 Thread/Message로 저장
+  - 대량 발송 Wizard: (그룹/캠페인에서 수신자 선택) → 템플릿/변수 치환({이름},{캠페인명}) → 발신 계정 선택 → 즉시/예약 발송
+  - 발송 상태 추적(성공/실패/미응답/응답) + 재발송(실패자/미응답자)
+- 토큰은 DB에 저장하되 반드시 암호화(평문 금지). 환경변수 ENCRYPTION_KEY 사용.
+
+4) 분석(트래킹) — UI/흐름 중심 MVP
+- TrackingJob 생성 Wizard(3-step): 대상(그룹/캠페인/링크/검색) + 키워드(AND/OR/EXCLUDE 태그) + 기간(지정기간/최근N일)
+- TrackingJob 리스트(차트+KPI+테이블) + 상세(탭: 성과추이/콘텐츠/대상/설정)
+- 자동 수집은 MVP에서 제외: 대신 수동 콘텐츠 추가(링크/CSV) + mock-update 버튼으로 일자별 지표를 생성해 그래프가 동작하게
+- 전체 데이터 CSV 다운로드
+
+[기술 요구]
+- App Router, Server Actions 또는 Route Handlers로 API 구현
+- Prisma schema를 작성하고 migrate
+- 로그인: 이메일/비밀번호(bcrypt hash), 세션은 JWT 또는 NextAuth(간단히)
+- 파일 업로드: 로컬 저장으로 시작 가능(단, 구조는 S3로 교체 가능하게 설계). Document 테이블에 fileUrl 저장.
+- UI 패턴: 테이블 중심 + 상단 고정 CTA + 리스트-디테일 드로어(선택)
+- seed 스크립트로 샘플 데이터(워크스페이스 1개, 인플루언서 30명, 그룹 3개, 캠페인 2개, 라인아이템 포함)를 자동 생성
+
+[환경변수]
+DATABASE_URL=
+JWT_SECRET=
+ENCRYPTION_KEY=
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_REDIRECT_URI= (예: http://localhost:3000/api/email/gmail/callback)
+
+[완성 기준]
+- 로그인 후 모든 주요 화면에 접근 가능
+- Discover에서 그룹 저장/캠페인 배정이 실제 DB에 반영됨
+- 캠페인 상세에서 계약/정산 상태+파일 업로드가 동작
+- Gmail OAuth 연결 후, sync 버튼으로 수신 메일이 스레드에 쌓이고, 대량발송이 성공/실패로 기록됨
+- Tracking에서 mock-update로 그래프가 갱신됨
