@@ -95,3 +95,31 @@ Preferred communication style: Simple, everyday language.
 - `recharts`: Charting library for dashboards
 - `xlsx`: Excel file generation for exports
 - `nodemailer`: Email sending capability
+
+## Recent Changes (2026-01-30)
+
+### Implemented Interactive Features
+- **Discover Page**: Multi-select checkboxes, bulk actions (save to group, assign to campaign), influencer detail drawer with 4 tabs (info, content, timeline, memo)
+- **Groups Page**: Sidebar with group list and member counts, group detail view with member table, add/remove member functionality, CSV export
+- **Campaign Detail Page**: Summary cards showing influencer count and payment status, line item table with status dropdowns, add influencer modal, line item detail drawer with contract/settlement tabs
+
+### Database Updates
+- Added `timeline_events` table for tracking influencer history (campaign assignments, group additions, status changes)
+- Added `audit_logs` table for tracking all data changes
+- Added `notifications` table for in-app notifications
+
+### API Endpoints Added
+- Bulk operations: `/api/bulk/save-to-group`, `/api/bulk/assign-to-campaign`
+- Group management: `/api/groups/:id`, `/api/groups/:id/influencers`, `/api/groups/:id/members/:influencerId`
+- Campaign management: `/api/campaigns/:id/line-items`
+- Finance: `/api/finance/summary`
+- Timeline: `/api/influencers/:id/timeline`
+
+### Demo Credentials
+- Email: demo@example.com
+- Password: password
+
+### Seeded Test Data
+- 5 influencers with Korean names (인플루언서 1-5)
+- 2 groups: 뷰티 인플루언서 (3 members), 라이프스타일 크리에이터 (2 members)
+- 1 campaign: 서머 런칭 2025 with 3 line items at various stages

@@ -152,10 +152,13 @@ export const trackingJobs = pgTable("tracking_jobs", {
   id: serial("id").primaryKey(),
   workspaceId: integer("workspace_id").notNull(),
   name: text("name").notNull(),
-  targetType: text("target_type").notNull(), // keyword, link, account
+  targetType: text("target_type").notNull(), // keyword, link, account, group, campaign
+  targetId: integer("target_id"), // group or campaign id if applicable
   keywords: jsonb("keywords"), // { include: [], exclude: [] }
+  period: jsonb("period"), // { type: 'fixed' | 'rolling', startDate, endDate, rollingDays }
   status: text("status").default("active"),
   lastRunAt: timestamp("last_run_at"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const trackingMetrics = pgTable("tracking_metrics", {
@@ -163,6 +166,47 @@ export const trackingMetrics = pgTable("tracking_metrics", {
   jobId: integer("job_id").notNull(),
   date: date("date").notNull(),
   value: integer("value").default(0), // Simplified metric
+});
+
+// === TIMELINE EVENTS (for influencer history) ===
+export const timelineEvents = pgTable("timeline_events", {
+  id: serial("id").primaryKey(),
+  workspaceId: integer("workspace_id").notNull(),
+  influencerId: integer("influencer_id"),
+  campaignId: integer("campaign_id"),
+  lineItemId: integer("line_item_id"),
+  eventType: text("event_type").notNull(), // campaign_assigned, email_sent, contract_signed, payment_completed, content_added, memo_updated, etc
+  title: text("title").notNull(),
+  description: text("description"),
+  metadata: jsonb("metadata"), // flexible JSON for additional data
+  createdAt: timestamp("created_at").defaultNow(),
+  createdBy: integer("created_by"), // user id
+});
+
+// === AUDIT LOGS (for all changes) ===
+export const auditLogs = pgTable("audit_logs", {
+  id: serial("id").primaryKey(),
+  workspaceId: integer("workspace_id").notNull(),
+  userId: integer("user_id"),
+  action: text("action").notNull(), // create, update, delete, assign, upload, send
+  entityType: text("entity_type").notNull(), // influencer, campaign, group, line_item, contract, settlement
+  entityId: integer("entity_id").notNull(),
+  oldValue: jsonb("old_value"),
+  newValue: jsonb("new_value"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// === NOTIFICATIONS ===
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  workspaceId: integer("workspace_id").notNull(),
+  userId: integer("user_id"),
+  type: text("type").notNull(), // payment_due, tracking_error, email_failed
+  title: text("title").notNull(),
+  message: text("message"),
+  read: boolean("read").default(false),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 
@@ -214,7 +258,10 @@ export const insertInfluencerAccountSchema = createInsertSchema(influencerAccoun
 export const insertGroupSchema = createInsertSchema(groups).omit({ id: true, createdAt: true });
 export const insertCampaignSchema = createInsertSchema(campaigns).omit({ id: true, createdAt: true });
 export const insertEmailAccountSchema = createInsertSchema(emailAccounts).omit({ id: true, lastSyncedAt: true });
-export const insertTrackingJobSchema = createInsertSchema(trackingJobs).omit({ id: true, lastRunAt: true });
+export const insertTrackingJobSchema = createInsertSchema(trackingJobs).omit({ id: true, lastRunAt: true, createdAt: true });
+export const insertContentSchema = createInsertSchema(contents).omit({ id: true });
+export const insertTimelineEventSchema = createInsertSchema(timelineEvents).omit({ id: true, createdAt: true });
+export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({ id: true, createdAt: true });
 
 // === TYPES ===
 export type User = typeof users.$inferSelect;
@@ -222,12 +269,24 @@ export type Workspace = typeof workspaces.$inferSelect;
 export type Influencer = typeof influencers.$inferSelect;
 export type InfluencerAccount = typeof influencerAccounts.$inferSelect;
 export type Group = typeof groups.$inferSelect;
+export type GroupInfluencer = typeof groupInfluencers.$inferSelect;
 export type Campaign = typeof campaigns.$inferSelect;
 export type CampaignInfluencer = typeof campaignInfluencers.$inferSelect;
+export type Content = typeof contents.$inferSelect;
+export type TimelineEvent = typeof timelineEvents.$inferSelect;
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;
 export type EmailAccount = typeof emailAccounts.$inferSelect;
 export type EmailThread = typeof emailThreads.$inferSelect;
 export type EmailMessage = typeof emailMessages.$inferSelect;
 export type TrackingJob = typeof trackingJobs.$inferSelect;
+
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type InsertWorkspace = z.infer<typeof insertWorkspaceSchema>;
+export type InsertInfluencer = z.infer<typeof insertInfluencerSchema>;
+export type InsertContent = z.infer<typeof insertContentSchema>;
+export type InsertTimelineEvent = z.infer<typeof insertTimelineEventSchema>;
+export type InsertTrackingJob = z.infer<typeof insertTrackingJobSchema>;
 
 export type CreateInfluencerWithAccounts = z.infer<typeof insertInfluencerSchema> & {
   accounts?: z.infer<typeof insertInfluencerAccountSchema>[];

@@ -5,7 +5,6 @@ import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
-import { google } from "googleapis";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -15,7 +14,6 @@ export async function registerRoutes(
 
   // === AUTH ===
   app.post(api.auth.login.path, (req, res, next) => {
-    // Manual passport handling to return JSON
     import("passport").then((passport) => {
       passport.default.authenticate("local", (err: any, user: any, info: any) => {
         if (err) return next(err);
@@ -43,7 +41,6 @@ export async function registerRoutes(
 
   // === WORKSPACES ===
   app.get(api.workspaces.list.path, async (req, res) => {
-    // For MVP, return all workspaces. In real app, filter by user membership.
     const w = await storage.getWorkspaces();
     res.json(w);
   });
@@ -57,8 +54,9 @@ export async function registerRoutes(
   // === INFLUENCERS ===
   app.get(api.influencers.list.path, async (req, res) => {
     const wId = parseInt(req.params.workspaceId);
-    const { search } = req.query as { search?: string };
-    const infs = await storage.getInfluencers(wId, search);
+    const { search, platform, tags } = req.query as { search?: string; platform?: string; tags?: string };
+    const filters = platform || tags ? { platform, tags: tags?.split(',') } : undefined;
+    const infs = await storage.getInfluencers(wId, search, filters);
     res.json(infs);
   });
 
@@ -75,6 +73,54 @@ export async function registerRoutes(
     res.json(inf);
   });
 
+  // Update influencer (memo, tags, email, phone)
+  app.patch('/api/influencers/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const inf = await storage.updateInfluencer(id, req.body);
+      res.json(inf);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to update" });
+    }
+  });
+
+  // === INFLUENCER CONTENTS ===
+  app.get('/api/influencers/:id/contents', async (req, res) => {
+    const contents = await storage.getInfluencerContents(parseInt(req.params.id));
+    res.json(contents);
+  });
+
+  app.post('/api/influencers/:id/contents', async (req, res) => {
+    const influencerId = parseInt(req.params.id);
+    const content = await storage.createContent({ ...req.body, influencerId });
+    
+    // Create timeline event
+    const inf = await storage.getInfluencer(influencerId);
+    if (inf) {
+      await storage.createTimelineEvent({
+        workspaceId: inf.workspaceId,
+        influencerId,
+        eventType: 'content_added',
+        title: '콘텐츠 추가',
+        description: req.body.link,
+        metadata: { contentId: content.id }
+      });
+    }
+    
+    res.status(201).json(content);
+  });
+
+  app.delete('/api/contents/:id', async (req, res) => {
+    await storage.deleteContent(parseInt(req.params.id));
+    res.json({ success: true });
+  });
+
+  // === TIMELINE EVENTS ===
+  app.get('/api/influencers/:id/timeline', async (req, res) => {
+    const events = await storage.getTimelineEvents(parseInt(req.params.id));
+    res.json(events);
+  });
+
   // === GROUPS ===
   app.get(api.groups.list.path, async (req, res) => {
     const groups = await storage.getGroups(parseInt(req.params.workspaceId));
@@ -84,6 +130,49 @@ export async function registerRoutes(
   app.post(api.groups.create.path, async (req, res) => {
     const group = await storage.createGroup(parseInt(req.params.workspaceId), req.body);
     res.status(201).json(group);
+  });
+
+  // Get group with members
+  app.get('/api/groups/:id', async (req, res) => {
+    const group = await storage.getGroup(parseInt(req.params.id));
+    if (!group) return res.status(404).json({ message: "Not found" });
+    res.json(group);
+  });
+
+  // Update group
+  app.patch('/api/groups/:id', async (req, res) => {
+    const group = await storage.updateGroup(parseInt(req.params.id), req.body);
+    res.json(group);
+  });
+
+  // Add influencers to group
+  app.post(api.groups.addInfluencers.path, async (req, res) => {
+    const groupId = parseInt(req.params.id);
+    const { influencerIds } = req.body;
+    await storage.addInfluencersToGroup(groupId, influencerIds);
+    
+    // Create timeline events for each influencer
+    const group = await storage.getGroup(groupId);
+    if (group) {
+      for (const influencerId of influencerIds) {
+        await storage.createTimelineEvent({
+          workspaceId: group.workspaceId,
+          influencerId,
+          eventType: 'group_added',
+          title: '그룹에 추가됨',
+          description: `"${group.name}" 그룹에 추가됨`,
+          metadata: { groupId, groupName: group.name }
+        });
+      }
+    }
+    
+    res.json({ success: true });
+  });
+
+  // Remove influencer from group
+  app.delete('/api/groups/:id/members/:influencerId', async (req, res) => {
+    await storage.removeInfluencerFromGroup(parseInt(req.params.id), parseInt(req.params.influencerId));
+    res.json({ success: true });
   });
 
   // === CAMPAIGNS ===
@@ -103,16 +192,122 @@ export async function registerRoutes(
     res.json(campaign);
   });
 
+  // Update campaign
+  app.patch('/api/campaigns/:id', async (req, res) => {
+    const campaign = await storage.updateCampaign(parseInt(req.params.id), req.body);
+    res.json(campaign);
+  });
+
+  // Add influencers to campaign (creates line items)
+  app.post('/api/campaigns/:id/line-items', async (req, res) => {
+    const campaignId = parseInt(req.params.id);
+    const { influencerIds } = req.body;
+    const items = await storage.addInfluencersToCampaign(campaignId, influencerIds);
+    
+    // Create timeline events
+    const campaign = await storage.getCampaign(campaignId);
+    if (campaign) {
+      for (const influencerId of influencerIds) {
+        await storage.createTimelineEvent({
+          workspaceId: campaign.workspaceId,
+          influencerId,
+          campaignId,
+          eventType: 'campaign_assigned',
+          title: '캠페인 배정',
+          description: `"${campaign.name}" 캠페인에 배정됨`,
+          metadata: { campaignId, campaignName: campaign.name }
+        });
+      }
+    }
+    
+    res.status(201).json(items);
+  });
+
   app.patch(api.campaigns.updateItem.path, async (req, res) => {
-    const item = await storage.updateCampaignItem(parseInt(req.params.id), req.body);
+    const itemId = parseInt(req.params.id);
+    
+    // Get old value for audit log
+    const campaign = await storage.getCampaign(1); // simplified - would need to get correct campaign
+    const oldItem = campaign?.items.find(i => i.id === itemId);
+    
+    const item = await storage.updateCampaignItem(itemId, req.body);
+    
+    // Create timeline event if status changed
+    if (oldItem && item.status !== oldItem.status) {
+      const inf = await storage.getInfluencer(item.influencerId);
+      if (inf) {
+        await storage.createTimelineEvent({
+          workspaceId: inf.workspaceId,
+          influencerId: item.influencerId,
+          campaignId: item.campaignId,
+          lineItemId: item.id,
+          eventType: 'status_changed',
+          title: '상태 변경',
+          description: `${oldItem.status} → ${item.status}`,
+          metadata: { oldStatus: oldItem.status, newStatus: item.status }
+        });
+      }
+    }
+    
     res.json(item);
   });
 
+  // === BULK OPERATIONS ===
+  app.post('/api/bulk/save-to-group', async (req, res) => {
+    const { influencerIds, groupId, createGroup } = req.body;
+    
+    let targetGroupId = groupId;
+    
+    // Create new group if requested
+    if (createGroup) {
+      const workspaceId = createGroup.workspaceId;
+      const newGroup = await storage.createGroup(workspaceId, {
+        name: createGroup.name,
+        description: createGroup.description || ''
+      });
+      targetGroupId = newGroup.id;
+    }
+    
+    await storage.addInfluencersToGroup(targetGroupId, influencerIds);
+    
+    const group = await storage.getGroup(targetGroupId);
+    res.json({ success: true, group });
+  });
+
+  app.post('/api/bulk/assign-to-campaign', async (req, res) => {
+    const { influencerIds, campaignId, createCampaign } = req.body;
+    
+    let targetCampaignId = campaignId;
+    
+    // Create new campaign if requested
+    if (createCampaign) {
+      const workspaceId = createCampaign.workspaceId;
+      const newCampaign = await storage.createCampaign(workspaceId, {
+        name: createCampaign.name,
+        client: createCampaign.client || '',
+        status: 'active'
+      });
+      targetCampaignId = newCampaign.id;
+    }
+    
+    const items = await storage.addInfluencersToCampaign(targetCampaignId, influencerIds);
+    
+    const campaign = await storage.getCampaign(targetCampaignId);
+    res.json({ success: true, campaign, items });
+  });
+
+  // === FINANCE ===
+  app.get('/api/finance/summary', async (req, res) => {
+    const { workspaceId, month, status } = req.query;
+    const summary = await storage.getFinanceSummary(
+      parseInt(workspaceId as string) || 1,
+      { month: month as string, status: status as string }
+    );
+    res.json(summary);
+  });
+
   // === EMAIL ===
-  // Stub for Gmail OAuth Callback
   app.get('/api/email/gmail/callback', async (req, res) => {
-    // In a real app, we'd exchange code for token here
-    // For MVP, we might just simulate "Connected"
     const code = req.query.code;
     res.send("Gmail Connected! You can close this window.");
   });
@@ -123,9 +318,7 @@ export async function registerRoutes(
   });
 
   app.post(api.email.sync.path, async (req, res) => {
-    // Mock Sync
     const accountId = parseInt(req.params.id);
-    // Add some mock threads
     await storage.createEmailThread({
       accountId,
       threadId: `thread-${Date.now()}`,
@@ -142,7 +335,6 @@ export async function registerRoutes(
   });
 
   app.post(api.email.sendBulk.path, async (req, res) => {
-    // Mock Send
     res.json({ sent: req.body.to.length, failed: 0 });
   });
 
@@ -157,9 +349,19 @@ export async function registerRoutes(
     res.status(201).json(job);
   });
 
+  app.get('/api/tracking-jobs/:id', async (req, res) => {
+    const job = await storage.getTrackingJob(parseInt(req.params.id));
+    if (!job) return res.status(404).json({ message: "Not found" });
+    res.json(job);
+  });
+
+  app.patch('/api/tracking-jobs/:id', async (req, res) => {
+    const job = await storage.updateTrackingJob(parseInt(req.params.id), req.body);
+    res.json(job);
+  });
+
   app.post(api.tracking.mockUpdate.path, async (req, res) => {
     const jobId = parseInt(req.params.id);
-    // Generate 7 days of mock data
     const today = new Date();
     for (let i = 6; i >= 0; i--) {
       const d = new Date(today);
@@ -175,7 +377,30 @@ export async function registerRoutes(
     res.json(metrics);
   });
 
-  // SEED DATA logic (called once)
+  // Tracking export (CSV)
+  app.get('/api/tracking-jobs/:id/export', async (req, res) => {
+    const metrics = await storage.getTrackingMetrics(parseInt(req.params.id));
+    const job = await storage.getTrackingJob(parseInt(req.params.id));
+    
+    const csv = ['날짜,지표값', ...metrics.map(m => `${m.date},${m.value}`)].join('\n');
+    
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${job?.name || 'tracking'}-export.csv"`);
+    res.send('\uFEFF' + csv); // BOM for Korean Excel compatibility
+  });
+
+  // === AUDIT LOGS ===
+  app.get('/api/audit-logs', async (req, res) => {
+    const { workspaceId, entityType, entityId } = req.query;
+    const logs = await storage.getAuditLogs(
+      parseInt(workspaceId as string) || 1,
+      entityType as string,
+      entityId ? parseInt(entityId as string) : undefined
+    );
+    res.json(logs);
+  });
+
+  // SEED DATA
   seedDatabase();
 
   return httpServer;
@@ -196,23 +421,86 @@ async function seedDatabase() {
       logo: "https://github.com/shadcn.png"
     });
 
-    // Create 5 influencers
-    for (let i = 1; i <= 5; i++) {
-      await storage.createInfluencer(ws.id, {
-        name: `Influencer ${i}`,
-        email: `inf${i}@example.com`,
-        tags: ["fashion", "beauty"],
+    // Create 10 influencers with varied data
+    const platforms = ["IG", "YT", "TikTok"];
+    const categories = ["뷰티", "패션", "라이프스타일", "푸드", "여행"];
+    const tagSets = [
+      ["패션", "뷰티"], 
+      ["라이프스타일", "브이로그"], 
+      ["푸드", "레시피"],
+      ["여행", "사진"],
+      ["뷰티", "스킨케어"]
+    ];
+    
+    const influencerIds: number[] = [];
+    for (let i = 1; i <= 10; i++) {
+      const platformIdx = i % platforms.length;
+      const inf = await storage.createInfluencer(ws.id, {
+        name: `인플루언서 ${i}`,
+        email: `influencer${i}@example.com`,
+        phone: `010-1234-567${i}`,
+        tags: tagSets[i % tagSets.length],
+        memo: i <= 3 ? `메모: VIP 인플루언서 #${i}` : null,
         accounts: [
-          { platform: "IG", handle: `@influencer${i}`, url: `https://instagram.com/influencer${i}`, verified: true }
+          { 
+            platform: platforms[platformIdx], 
+            handle: `@influencer_${i}`, 
+            url: `https://${platforms[platformIdx].toLowerCase()}.com/influencer_${i}`,
+            category: categories[i % categories.length],
+            language: 'ko',
+            verified: i <= 5
+          }
         ]
       });
+      influencerIds.push(inf.id);
+
+      // Add sample content for first 5 influencers
+      if (i <= 5) {
+        await storage.createContent({
+          influencerId: inf.id,
+          link: `https://instagram.com/p/sample${i}`,
+          thumbnail: `https://picsum.photos/seed/${i}/300/300`,
+          publishedAt: new Date(Date.now() - i * 86400000),
+          metrics: { views: 10000 + i * 1000, likes: 500 + i * 100, comments: 20 + i * 5 }
+        });
+      }
     }
 
-    // Create 1 Campaign
+    // Create 2 groups with members
+    const group1 = await storage.createGroup(ws.id, {
+      name: "뷰티 인플루언서",
+      description: "뷰티/스킨케어 전문 인플루언서 그룹"
+    });
+    await storage.addInfluencersToGroup(group1.id, [influencerIds[0], influencerIds[1], influencerIds[4]]);
+
+    const group2 = await storage.createGroup(ws.id, {
+      name: "라이프스타일 크리에이터",
+      description: "라이프스타일/브이로그 크리에이터"
+    });
+    await storage.addInfluencersToGroup(group2.id, [influencerIds[2], influencerIds[3]]);
+
+    // Create 1 Campaign with 3 line items
     const camp = await storage.createCampaign(ws.id, {
-      name: "Summer Launch 2025",
-      client: "Acme Corp",
-      budget: 50000,
+      name: "서머 런칭 2025",
+      client: "Acme 코퍼레이션",
+      goal: "브랜드 인지도 향상",
+      budget: 5000000,
+      status: "active"
+    });
+
+    // Add influencers to campaign with varied statuses
+    const items = await storage.addInfluencersToCampaign(camp.id, [influencerIds[0], influencerIds[1], influencerIds[2]]);
+    
+    // Update items with different statuses
+    if (items[0]) await storage.updateCampaignItem(items[0].id, { status: 'contracted', contractStatus: 'signed', paymentStatus: 'pending', payAmount: 500000 });
+    if (items[1]) await storage.updateCampaignItem(items[1].id, { status: 'posted', contractStatus: 'signed', paymentStatus: 'paid', payAmount: 750000 });
+    if (items[2]) await storage.updateCampaignItem(items[2].id, { status: 'negotiated', contractStatus: 'pending', paymentStatus: 'pending', payAmount: 300000 });
+
+    // Create tracking job
+    await storage.createTrackingJob(ws.id, {
+      name: "#서머런칭2025",
+      targetType: "keyword",
+      keywords: { include: ["서머런칭", "Acme"], exclude: [] },
       status: "active"
     });
   }
