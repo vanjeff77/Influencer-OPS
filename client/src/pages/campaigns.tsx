@@ -11,6 +11,7 @@ import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { format } from "date-fns";
+import { KO } from "@/i18n/ko";
 
 export default function Campaigns() {
   const { data: workspaces } = useWorkspaces();
@@ -31,9 +32,18 @@ export default function Campaigns() {
       onSuccess: () => {
         setIsCreateOpen(false);
         setNewCampaign({ name: "", client: "", goal: "", budget: 0 });
-        toast({ title: "Campaign Created", description: "You can now add influencers." });
+        toast({ title: KO.pages.campaigns.campaignCreated, description: KO.pages.campaigns.campaignCreatedDesc });
       }
     });
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch(status) {
+      case 'active': return KO.status.active;
+      case 'completed': return KO.status.completed;
+      case 'draft': return KO.status.draft;
+      default: return status;
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -50,73 +60,73 @@ export default function Campaigns() {
       <div className="flex flex-col gap-8">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Campaigns</h1>
-            <p className="text-muted-foreground mt-1">Manage your active marketing campaigns.</p>
+            <h1 className="text-3xl font-bold tracking-tight">{KO.pages.campaigns.title}</h1>
+            <p className="text-muted-foreground mt-1">{KO.pages.campaigns.subtitle}</p>
           </div>
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
-              <Button size="lg" className="shadow-lg shadow-primary/20">
+              <Button size="lg" className="shadow-lg shadow-primary/20" data-testid="button-new-campaign">
                 <Plus className="w-5 h-5 mr-2" />
-                New Campaign
+                {KO.pages.campaigns.newCampaign}
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Create New Campaign</DialogTitle>
+                <DialogTitle>{KO.pages.campaigns.createNewCampaign}</DialogTitle>
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid gap-2">
-                  <label>Campaign Name</label>
-                  <Input value={newCampaign.name} onChange={e => setNewCampaign({...newCampaign, name: e.target.value})} placeholder="Summer Launch 2024" />
+                  <label>{KO.pages.campaigns.campaignName}</label>
+                  <Input value={newCampaign.name} onChange={e => setNewCampaign({...newCampaign, name: e.target.value})} placeholder="서머 런칭 2024" />
                 </div>
                 <div className="grid gap-2">
-                  <label>Client</label>
-                  <Input value={newCampaign.client} onChange={e => setNewCampaign({...newCampaign, client: e.target.value})} placeholder="Acme Corp" />
+                  <label>{KO.pages.campaigns.client}</label>
+                  <Input value={newCampaign.client} onChange={e => setNewCampaign({...newCampaign, client: e.target.value})} placeholder="ACME 코퍼레이션" />
                 </div>
                 <div className="grid gap-2">
-                  <label>Goal</label>
-                  <Input value={newCampaign.goal} onChange={e => setNewCampaign({...newCampaign, goal: e.target.value})} placeholder="Brand Awareness" />
+                  <label>{KO.pages.campaigns.goal}</label>
+                  <Input value={newCampaign.goal} onChange={e => setNewCampaign({...newCampaign, goal: e.target.value})} placeholder="브랜드 인지도 향상" />
                 </div>
                 <div className="grid gap-2">
-                  <label>Budget ($)</label>
-                  <Input type="number" value={newCampaign.budget} onChange={e => setNewCampaign({...newCampaign, budget: Number(e.target.value)})} placeholder="5000" />
+                  <label>{KO.pages.campaigns.budget} (원)</label>
+                  <Input type="number" value={newCampaign.budget} onChange={e => setNewCampaign({...newCampaign, budget: Number(e.target.value)})} placeholder="5000000" />
                 </div>
               </div>
-              <Button onClick={handleCreate} disabled={createCampaign.isPending}>
-                {createCampaign.isPending ? "Creating..." : "Create Campaign"}
+              <Button onClick={handleCreate} disabled={createCampaign.isPending} data-testid="button-submit-campaign">
+                {createCampaign.isPending ? KO.pages.campaigns.creating : KO.pages.campaigns.createCampaign}
               </Button>
             </DialogContent>
           </Dialog>
         </div>
 
         {isLoading ? (
-          <div>Loading campaigns...</div>
+          <div>{KO.common.loading}</div>
         ) : (
           <div className="grid gap-6">
             {campaigns?.map((campaign) => (
               <Link key={campaign.id} href={`/campaigns/${campaign.id}`} className="block">
-                <Card className="hover:border-primary/50 transition-all hover:shadow-md cursor-pointer group">
+                <Card className="hover:border-primary/50 transition-all hover:shadow-md cursor-pointer group" data-testid={`card-campaign-${campaign.id}`}>
                   <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
                     <div className="space-y-1">
                       <CardTitle className="text-xl group-hover:text-primary transition-colors">{campaign.name}</CardTitle>
-                      <CardDescription>{campaign.client} • Created {format(new Date(campaign.createdAt || new Date()), 'MMM d, yyyy')}</CardDescription>
+                      <CardDescription>{campaign.client} • {KO.pages.campaigns.created} {format(new Date(campaign.createdAt || new Date()), 'yyyy.MM.dd')}</CardDescription>
                     </div>
                     <Badge variant="outline" className={`capitalize border-0 ${getStatusColor(campaign.status || 'draft')}`}>
-                      {campaign.status}
+                      {getStatusLabel(campaign.status || 'draft')}
                     </Badge>
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <DollarSign className="w-4 h-4" />
-                        <span>Budget: <span className="text-foreground font-medium">${campaign.budget?.toLocaleString()}</span></span>
+                        <span>{KO.pages.campaigns.budget}: <span className="text-foreground font-medium">{campaign.budget?.toLocaleString()}원</span></span>
                       </div>
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Calendar className="w-4 h-4" />
-                        <span>Goal: <span className="text-foreground font-medium">{campaign.goal || "Not set"}</span></span>
+                        <span>{KO.pages.campaigns.goal}: <span className="text-foreground font-medium">{campaign.goal || KO.pages.campaigns.notSet}</span></span>
                       </div>
                       <div className="flex items-center justify-end text-primary text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-                        View Details <ArrowRight className="w-4 h-4 ml-1" />
+                        {KO.common.viewDetails} <ArrowRight className="w-4 h-4 ml-1" />
                       </div>
                     </div>
                   </CardContent>
@@ -126,7 +136,7 @@ export default function Campaigns() {
             
             {campaigns?.length === 0 && (
               <div className="text-center py-20 bg-muted/10 rounded-xl border border-dashed border-border">
-                <p className="text-muted-foreground">No campaigns yet. Create your first one!</p>
+                <p className="text-muted-foreground">{KO.pages.campaigns.noCampaigns}</p>
               </div>
             )}
           </div>

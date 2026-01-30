@@ -1,0 +1,663 @@
+✅ Replit 원샷 프롬프트 (MVP 구현 지시문)
+0) 목표
+
+우리는 전사 사내 통합 인플루언서 관리 플랫폼 MVP를 만든다.
+핵심 플로우는 Discover → Manage(그룹/캠페인/계약/정산) → Email Center(이메일 발신/수신) → Tracking → Analyze 이다.
+
+중요 제약
+
+인스타그램 DM 기능은 MVP에서 제외한다.
+
+외부 인플루언서 자동 수집/크롤링은 MVP에서 제외한다. (Discover는 내부 DB에 저장된 인플루언서 기반 검색/필터링)
+
+이메일은 “발신/수신”까지 내재화한다. (Gmail OAuth 또는 SMTP/IMAP)
+
+계약/정산은 우리(에이전시)가 직접 처리하므로 상태/파일/대시보드까지 한 번에 관리되어야 한다.
+
+1) 기술 스택(권장) & 프로젝트 구조
+
+Frontend: Next.js (App Router) + React + TypeScript
+
+UI: Tailwind + shadcn/ui + lucide icons
+
+Backend: Next.js Route Handlers(API)
+
+DB: PostgreSQL + Prisma ORM
+
+Auth: 간단 MVP로 이메일+비번 로그인(세션/JWT) 또는 NextAuth(가능하면)
+
+File storage: MVP는 **로컬 업로드(서버 파일)**로 시작하되, 구조는 S3/Supabase로 쉽게 교체 가능하게 설계
+
+Background jobs: MVP는 수동 Sync 버튼 + 서버 크론(가능하면) / 최소는 “Sync” 버튼으로 동기화
+
+2) UI 레이아웃(스크린샷 스타일 모방)
+공통 Layout
+
+좌측 사이드바 고정
+
+PLATFORM: Overview, Discover, Campaigns, Groups
+
+OPERATIONS: Email Center, Finance, Tracking
+
+상단 페이지 타이틀 + 서브타이틀 + 우측 CTA 버튼(예: Add Influencer, New Campaign, Compose 등)
+
+본문은 카드 기반(rounded, soft shadow) + 테이블/카드뷰 토글
+
+페이지별 UI 요구사항
+
+Discover
+
+상단 Search bar + 우측 Filters 버튼 + 우측 상단 Add Influencer 버튼
+
+기본은 “카드 리스트 그리드” (인플루언서 카드에 이름/이메일/태그/Top Account/플랫폼 아이콘)
+
+기능: 검색/필터/정렬(팔로워, ER, 업로드일 등은 MVP에선 DB 필드로)
+
+다중 선택 → “Save to Group”, “Assign to Campaign” 액션 (모달로 그룹/캠페인 선택)
+
+Campaigns
+
+캠페인 리스트 카드(상태 배지 Active 등)
+
+New Campaign 버튼
+
+캠페인 상세:
+
+KPI 카드(총 인플루언서 수, 예산, 예상 도달, 계약완료 n, 정산완료 n, 지급대기 총액 등)
+
+탭 구조: Influencers(라인아이템 테이블) / Schedule(캘린더) / Content(갤러리) / Report(다운로드)
+
+Groups
+
+좌측 그룹 목록 + 우측 그룹 인플루언서 테이블(2패널 느낌)
+
+그룹 생성/수정/삭제
+
+대량 추가: CSV 업로드 / 검색 결과에서 추가 / 링크로 추가(선택)
+
+그룹 링크 공유: 읽기 전용 링크 발급/회수/만료
+
+컬럼 설정: 기본 컬럼 on/off + 순서 변경
+
+커스텀 컬럼: 텍스트/숫자/날짜/셀렉트
+
+Email Center (3-pane)
+
+좌측: Accounts 패널
+
+중앙: Inbox(스레드 리스트)
+
+우측: Reader(스레드 본문)
+
+우측 상단: Sync 버튼 + Compose 버튼
+
+필수 추가: Accounts 패널 상단에 [+ Connect Account] 버튼 (현재 없는 문제를 반드시 해결)
+
+계정 0개일 때 중앙/우측에 “계정을 연결하세요” CTA 표시
+
+Finance
+
+계약/정산 대시보드(월별/담당자/상태 필터)
+
+KPI: 지급대기 총액, 이번달 지급완료, 증빙 미수집 등
+
+Tracking / Analyze
+
+Tracking 리스트: KPI + 차트 + 테이블
+
+Tracking 생성 Wizard(3-step):
+
+Step1 대상 추가(그룹/캠페인/링크)
+
+Step2 키워드 조건(AND/OR/제외)
+
+Step3 기간(지정기간 vs 최근 N일)
+
+Analyze는 MVP에서 “수동 콘텐츠 링크 입력 + 성과 수치 입력/업데이트”로 시작하고, 그래프/다운로드 제공
+
+3) 권한/로그/알림 (MVP)
+
+Roles: MASTER / EDITOR / VIEWER
+
+VIEWER는 편집/발송/다운로드/공유 제한 옵션 제공
+
+Audit Log: 상태 변경(계약/정산/캠페인 단계), 파일 업로드, 이메일 발송/동기화 기록
+
+Notification: 발송 실패, 정산 D-3, 트래킹 오류(수동 등록 가능)
+
+4) 데이터 모델 핵심 원칙 (중요)
+
+캠페인 운영의 최소 단위는 CampaignLineItem = 캠페인 참여 인플루언서 1명(또는 1채널) 이다.
+
+Contract/Settlement는 CampaignLineItem에 연결된다.
+
+Email Thread/Message는 Influencer 또는 CampaignLineItem에 연결 가능해야 한다(자동/수동 링크).
+
+5) 기능 요구사항(실제 구현 체크리스트)
+Common
+
+Workspace 생성/설정(이름/로고)
+
+팀원 초대/역할/권한 제한
+
+알림 + 감사 로그
+
+Influencer(기본 엔티티)
+
+프로필(플랫폼/핸들/URL/카테고리/언어)
+
+핵심 지표(팔로워/ER/평균 조회/좋아요)
+
+콘텐츠 목록(썸네일/링크/게시일)
+
+연락처/메모/태그
+
+협업 이력 타임라인(캠페인/이메일/계약/정산 이벤트)
+
+Discover
+
+검색/필터/정렬
+
+다중 선택 → 그룹 저장 / 캠페인 배정
+
+Manage
+
+그룹 CRM + 공유/엑셀/컬럼/커스텀컬럼
+
+인플루언서 상세 드로어(2패널)
+
+캠페인 운영(단계/콘텐츠/리포트)
+
+계약 관리(라인아이템 기준)
+
+정산 관리(라인아이템 기준)
+
+Email Center (이메일만)
+
+이메일 계정 연결:
+
+Gmail(OAuth 가능하면) / SMTP-IMAP(앱 비밀번호)
+
+계정 연결/해제, 기본 발신 계정 지정
+
+수신 동기화(Sync): 스레드 리스트 표시
+
+발신(Compose): 템플릿 + 변수 삽입, 발송 로그 저장
+
+캠페인/인플루언서와 이메일을 연결(최소: 수동 링크 UI 제공)
+
+Tracking/Analyze
+
+Tracking 생성 Wizard + 리스트/상세
+
+콘텐츠 성과 그래프(일/주/월) + 카드뷰/리스트뷰 토글
+
+엑셀/CSV 다운로드(필드 선택)
+
+6) Prisma 스키마
+
+DB는 Prisma(Postgres)로 설계하고, 아래 스키마를 기반으로 마이그레이션/CRUD/API/페이지를 생성해라.
+(만약 이미 프로젝트에 schema.prisma를 넣었다면, 이 섹션은 생략해도 된다.)
+
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  MASTER
+  EDITOR
+  VIEWER
+}
+
+enum Platform {
+  INSTAGRAM
+  YOUTUBE
+  TIKTOK
+  X
+  NAVER_BLOG
+  OTHER
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum CampaignStage {
+  PROPOSED
+  WAITING_REPLY
+  NEGOTIATING
+  CONTRACTING
+  PRODUCING_CONTENT
+  DONE
+}
+
+enum ContractStatus {
+  NOT_CREATED
+  SENT
+  WAITING_SIGNATURE
+  REVISING
+  SIGNED
+  ON_HOLD
+}
+
+enum SettlementStatus {
+  INFO_MISSING
+  REQUESTING_PROOF
+  PROOF_RECEIVED
+  READY_TO_PAY
+  PAID
+  ON_HOLD
+}
+
+enum EmailProvider {
+  GMAIL_OAUTH
+  SMTP_IMAP
+}
+
+enum EmailSendStatus {
+  QUEUED
+  SENT
+  FAILED
+}
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  logoUrl   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members   WorkspaceMember[]
+  influencers Influencer[]
+  groups    Group[]
+  campaigns Campaign[]
+  emailAccounts EmailAccount[]
+  trackingJobs TrackingJob[]
+  auditLogs AuditLog[]
+  notifications Notification[]
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  passwordHash String? // MVP simple auth
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships WorkspaceMember[]
+  auditLogs   AuditLog[] @relation("AuditByUser")
+}
+
+model WorkspaceMember {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        Role     @default(EDITOR)
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@unique([workspaceId, userId])
+}
+
+model Influencer {
+  id          String   @id @default(cuid())
+  workspaceId String
+  displayName String
+  primaryEmail String?
+  platforms   Json?    // [{platform, handle, url}]
+  categories  String[] @default([])
+  languages   String[] @default([])
+  tags        String[] @default([])
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  metrics     InfluencerMetric?
+  contents    ContentPost[]
+  groupLinks  GroupInfluencer[]
+  campaignLinks CampaignLineItem[]
+  emails      EmailParticipant[]
+  timeline    TimelineEvent[]
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+}
+
+model InfluencerMetric {
+  id            String @id @default(cuid())
+  influencerId  String @unique
+  followers     Int?
+  engagementRate Float?
+  avgViews      Int?
+  avgLikes      Int?
+  updatedAt     DateTime @updatedAt
+
+  influencer Influencer @relation(fields: [influencerId], references: [id])
+}
+
+model ContentPost {
+  id           String   @id @default(cuid())
+  influencerId String
+  platform     Platform
+  url          String
+  thumbnailUrl String?
+  postedAt     DateTime?
+  title        String?
+
+  // MVP metrics (manual or later automated)
+  views        Int?
+  likes        Int?
+  comments     Int?
+  shares       Int?
+  saves        Int?
+
+  influencer Influencer @relation(fields: [influencerId], references: [id])
+}
+
+model Group {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  platform    Platform?
+  isArchived  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members   GroupInfluencer[]
+  shareLinks ShareLink[]
+  customFields CustomField[]
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+}
+
+model GroupInfluencer {
+  id          String @id @default(cuid())
+  groupId     String
+  influencerId String
+  createdAt   DateTime @default(now())
+
+  group      Group      @relation(fields: [groupId], references: [id])
+  influencer Influencer @relation(fields: [influencerId], references: [id])
+
+  @@unique([groupId, influencerId])
+}
+
+model ShareLink {
+  id          String   @id @default(cuid())
+  groupId     String
+  token       String   @unique
+  isRevoked   Boolean  @default(false)
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+
+  group Group @relation(fields: [groupId], references: [id])
+}
+
+model CustomField {
+  id        String   @id @default(cuid())
+  groupId   String
+  name      String
+  type      String   // text|number|date|select
+  options   String[] @default([])
+  createdAt DateTime @default(now())
+
+  group Group @relation(fields: [groupId], references: [id])
+}
+
+model Campaign {
+  id          String   @id @default(cuid())
+  workspaceId String
+  clientName  String?
+  name        String
+  goal        String?
+  budget      Int?
+  startDate   DateTime?
+  endDate     DateTime?
+  status      CampaignStatus @default(ACTIVE)
+  stage       CampaignStage  @default(PROPOSED)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  lineItems CampaignLineItem[]
+  scheduleItems ScheduleItem[]
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+}
+
+model CampaignLineItem {
+  id          String   @id @default(cuid())
+  campaignId  String
+  influencerId String
+  platform    Platform?
+  stage       CampaignStage @default(PROPOSED)
+  담당자      String? // MVP quick field; later normalize
+  expectedFee Int?     // supply price (optional)
+  vatIncluded Boolean? @default(true)
+
+  contract   Contract?
+  settlement Settlement?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  campaign   Campaign   @relation(fields: [campaignId], references: [id])
+  influencer Influencer @relation(fields: [influencerId], references: [id])
+
+  @@unique([campaignId, influencerId])
+}
+
+model ScheduleItem {
+  id         String   @id @default(cuid())
+  campaignId String
+  title      String
+  date       DateTime
+  notes      String?
+
+  campaign Campaign @relation(fields: [campaignId], references: [id])
+}
+
+model Contract {
+  id            String   @id @default(cuid())
+  lineItemId    String   @unique
+  status        ContractStatus @default(NOT_CREATED)
+  finalDocUrl   String?
+  signedAt      DateTime?
+  담당자        String?
+  termsJson     Json? // 콘텐츠/2차활용/경쟁배제/납기 등 구조화
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  lineItem CampaignLineItem @relation(fields: [lineItemId], references: [id])
+}
+
+model Settlement {
+  id            String   @id @default(cuid())
+  lineItemId    String   @unique
+  status        SettlementStatus @default(INFO_MISSING)
+
+  baseFee       Int? // 진행비(공급가)
+  reuseFee      Int? // 2차활용비
+  extraFee      Int? // 추가옵션
+  deduction     Int? // 차감
+  vat           Int?
+  totalAmount   Int?
+
+  invoiceDocUrl String?
+  invoiceNumber String?
+  invoiceIssuedAt DateTime?
+
+  dueDate       DateTime?
+  paidAt        DateTime?
+  paymentProofUrl String?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  lineItem CampaignLineItem @relation(fields: [lineItemId], references: [id])
+}
+
+model EmailAccount {
+  id          String   @id @default(cuid())
+  workspaceId String
+  provider    EmailProvider
+  displayName String?
+  email       String
+  // store encrypted credentials or oauth tokens
+  encryptedSecret String?
+  metaJson    Json?
+  isDefault   Boolean @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  threads     EmailThread[]
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+}
+
+model EmailThread {
+  id            String   @id @default(cuid())
+  emailAccountId String
+  subject       String?
+  lastMessageAt DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  messages      EmailMessage[]
+  participants  EmailParticipant[]
+
+  emailAccount EmailAccount @relation(fields: [emailAccountId], references: [id])
+}
+
+model EmailMessage {
+  id          String   @id @default(cuid())
+  threadId    String
+  fromEmail   String
+  toEmails    String[]
+  ccEmails    String[] @default([])
+  direction   String   // inbound|outbound
+  sendStatus  EmailSendStatus? // outbound only
+  sentAt      DateTime?
+  bodyText    String?
+  bodyHtml    String?
+  createdAt   DateTime @default(now())
+
+  attachments Attachment[]
+  thread      EmailThread @relation(fields: [threadId], references: [id])
+}
+
+model EmailParticipant {
+  id           String @id @default(cuid())
+  threadId     String
+  influencerId String? // link if matched
+  email        String
+
+  thread      EmailThread @relation(fields: [threadId], references: [id])
+  influencer  Influencer? @relation(fields: [influencerId], references: [id])
+}
+
+model Attachment {
+  id        String @id @default(cuid())
+  messageId String
+  fileName  String
+  fileUrl   String
+  mimeType  String?
+  sizeBytes Int?
+  createdAt DateTime @default(now())
+
+  message EmailMessage @relation(fields: [messageId], references: [id])
+}
+
+model TrackingJob {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  isEnabled   Boolean @default(true)
+  schedule    String? // e.g. "0 1 * * *"
+  configJson  Json    // step1-3 config
+  status      String? // normal|warning|error
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+}
+
+model TimelineEvent {
+  id           String   @id @default(cuid())
+  influencerId String
+  type         String   // campaign|email|contract|settlement|note
+  payloadJson  Json
+  occurredAt   DateTime @default(now())
+
+  influencer Influencer @relation(fields: [influencerId], references: [id])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  workspaceId String
+  actorUserId String?
+  action      String
+  targetType  String?
+  targetId    String?
+  metaJson    Json?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  actor     User?     @relation("AuditByUser", fields: [actorUserId], references: [id])
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  workspaceId String
+  type        String
+  message     String
+  isRead      Boolean  @default(false)
+  metaJson    Json?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+}
+
+7) 구현 순서(중요: “작동하는 MVP”를 먼저)
+
+프로젝트 스캐폴딩 + DB 연결 + Prisma migrate
+
+Auth(간단) + Workspace/Role 기반 접근제어
+
+CRUD: Influencer / Group / Campaign / LineItem / Contract / Settlement
+
+UI: Sidebar layout + Discover/Campaigns/Groups 페이지
+
+Email Center:
+
+Connect Account UI 반드시 추가
+
+SMTP/IMAP 연결 + Inbox Sync(최소) + Compose(발신) + 로그 저장
+
+Finance 대시보드(정산 KPI)
+
+Tracking Wizard + Analyze 기본 그래프/다운로드
+
+필수: seed 데이터(데모 워크스페이스/유저/인플루언서 5명/캠페인 1개) 넣어서 화면이 바로 보이게 할 것.
+
+8) 완료 조건(테스트 시나리오)
+
+Discover에서 인플루언서 검색/필터 후 그룹 저장, 캠페인 배정 가능
+
+Campaign 상세에서 라인아이템별 계약 상태/정산 상태가 테이블로 보임
+
+계약서/세금계산서/지급증빙 파일 업로드 가능
+
+Email Center에서 Connect Account로 계정 연결 가능(CTA 필수)
+
+Sync로 수신 메일 스레드가 보이고, Compose로 발신 가능(로그 저장)
+
+Finance에서 지급대기 총액 KPI가 계산됨
+
+Tracking 생성 → 리스트/상세 → 그래프/다운로드가 동작

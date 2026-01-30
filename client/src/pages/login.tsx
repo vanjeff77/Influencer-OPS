@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import { KO } from "@/i18n/ko";
 
 export default function Login() {
   const [username, setUsername] = useState("");
@@ -24,7 +25,7 @@ export default function Login() {
       onError: (err) => {
         toast({ 
           variant: "destructive",
-          title: "Login Failed", 
+          title: KO.pages.login.loginFailed, 
           description: err.message 
         });
       }
@@ -35,39 +36,42 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-muted/20 p-4">
       <Card className="w-full max-w-md shadow-xl border-border/50">
         <CardHeader className="space-y-1 text-center">
-          <CardTitle className="text-3xl font-display font-bold text-primary">InfluencerOps</CardTitle>
-          <CardDescription>Enter your credentials to access the platform</CardDescription>
+          <CardTitle className="text-3xl font-display font-bold text-primary">{KO.pages.login.title}</CardTitle>
+          <CardDescription>{KO.pages.login.subtitle}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Username</label>
+              <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{KO.pages.login.username}</label>
               <Input 
                 value={username} 
                 onChange={(e) => setUsername(e.target.value)} 
-                placeholder="admin"
+                placeholder="demo@example.com"
                 className="bg-background"
+                data-testid="input-username"
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Password</label>
+              <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{KO.pages.login.password}</label>
               <Input 
                 type="password" 
                 value={password} 
                 onChange={(e) => setPassword(e.target.value)} 
                 placeholder="••••••"
                 className="bg-background"
+                data-testid="input-password"
               />
             </div>
             <Button 
               type="submit" 
               className="w-full font-semibold" 
               disabled={login.isPending}
+              data-testid="button-login"
             >
-              {login.isPending ? "Authenticating..." : "Sign In"}
+              {login.isPending ? KO.pages.login.authenticating : KO.pages.login.signIn}
             </Button>
             <div className="text-center text-xs text-muted-foreground mt-4">
-              Use username: <strong>admin</strong> and password: <strong>password</strong>
+              {KO.pages.login.demoCredentials}
             </div>
           </form>
         </CardContent>

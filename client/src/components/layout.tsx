@@ -27,6 +27,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { KO } from "@/i18n/ko";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
@@ -63,7 +64,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         setIsCreateOpen(false);
         setNewWorkspaceName("");
         setActiveWorkspaceId(data.id);
-        toast({ title: "Workspace created", description: "You are now in your new workspace." });
+        toast({ title: KO.nav.workspaceCreated, description: KO.nav.workspaceCreatedDesc });
       }
     });
   };
@@ -80,7 +81,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
-      {/* Sidebar */}
       <aside className="w-64 border-r border-border bg-card flex flex-col shadow-sm z-10">
         <div className="p-4 border-b border-border">
           <DropdownMenu>
@@ -90,13 +90,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   <div className="w-6 h-6 rounded bg-primary flex items-center justify-center text-primary-foreground font-bold text-xs shrink-0">
                     {currentWorkspace?.name.substring(0, 1) || "W"}
                   </div>
-                  <span className="truncate font-medium">{currentWorkspace?.name || "Select Workspace"}</span>
+                  <span className="truncate font-medium">{currentWorkspace?.name || KO.nav.selectWorkspace}</span>
                 </div>
                 <ChevronsUpDown className="w-4 h-4 text-muted-foreground opacity-50" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56" align="start">
-              <DropdownMenuLabel>My Workspaces</DropdownMenuLabel>
+              <DropdownMenuLabel>{KO.nav.myWorkspaces}</DropdownMenuLabel>
               <DropdownMenuSeparator />
               {workspaces?.map(w => (
                 <DropdownMenuItem key={w.id} onClick={() => setActiveWorkspaceId(w.id)}>
@@ -108,23 +108,23 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 <DialogTrigger asChild>
                   <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-primary cursor-pointer">
                     <Plus className="w-4 h-4 mr-2" />
-                    Create New Workspace
+                    {KO.nav.createWorkspace}
                   </DropdownMenuItem>
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>Create Workspace</DialogTitle>
+                    <DialogTitle>{KO.nav.createWorkspace}</DialogTitle>
                   </DialogHeader>
                   <div className="py-4">
                     <Input 
-                      placeholder="Workspace Name" 
+                      placeholder={KO.nav.workspaceName} 
                       value={newWorkspaceName} 
                       onChange={(e) => setNewWorkspaceName(e.target.value)} 
                     />
                   </div>
                   <div className="flex justify-end">
                     <Button onClick={handleCreateWorkspace} disabled={createWorkspace.isPending}>
-                      {createWorkspace.isPending ? "Creating..." : "Create"}
+                      {createWorkspace.isPending ? KO.nav.creating : KO.nav.create}
                     </Button>
                   </div>
                 </DialogContent>
@@ -134,16 +134,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
 
         <div className="flex-1 overflow-y-auto py-6 px-3 space-y-1">
-          <div className="px-3 mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Platform</div>
-          <NavItem href="/" icon={LayoutDashboard} label="Overview" />
-          <NavItem href="/discover" icon={Search} label="Discover" />
-          <NavItem href="/campaigns" icon={Megaphone} label="Campaigns" />
-          <NavItem href="/groups" icon={Users} label="Groups" />
+          <div className="px-3 mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">{KO.nav.platform}</div>
+          <NavItem href="/" icon={LayoutDashboard} label={KO.nav.overview} />
+          <NavItem href="/discover" icon={Search} label={KO.nav.discover} />
+          <NavItem href="/campaigns" icon={Megaphone} label={KO.nav.campaigns} />
+          <NavItem href="/groups" icon={Users} label={KO.nav.groups} />
           
-          <div className="px-3 mt-8 mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Operations</div>
-          <NavItem href="/email" icon={Mail} label="Email Center" />
-          <NavItem href="/finance" icon={Briefcase} label="Finance" />
-          <NavItem href="/tracking" icon={LineChart} label="Tracking" />
+          <div className="px-3 mt-8 mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">{KO.nav.operations}</div>
+          <NavItem href="/email" icon={Mail} label={KO.nav.emailCenter} />
+          <NavItem href="/finance" icon={Briefcase} label={KO.nav.finance} />
+          <NavItem href="/tracking" icon={LineChart} label={KO.nav.tracking} />
         </div>
 
         <div className="p-4 border-t border-border">
@@ -162,12 +162,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             onClick={() => logout.mutate()}
           >
             <LogOut className="w-4 h-4 mr-2" />
-            Sign Out
+            {KO.nav.signOut}
           </Button>
         </div>
       </aside>
 
-      {/* Main Content */}
       <main className="flex-1 overflow-auto bg-muted/20 relative">
         <div className="max-w-[1600px] mx-auto p-4 md:p-8">
            {children}
@@ -177,4 +176,4 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   );
 }
 
-export { useWorkspaces }; // Re-export for convenience
+export { useWorkspaces };

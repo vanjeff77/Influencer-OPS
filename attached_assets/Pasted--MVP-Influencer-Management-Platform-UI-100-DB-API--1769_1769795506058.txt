@@ -1,0 +1,194 @@
+당신은 기존 MVP 웹앱(Influencer Management Platform)을 “사용자 노출 UI는 100% 한국어”로 전환하는 작업을 한다.
+중요: DB/변수명/API 필드명은 영문 그대로 유지해도 되지만, 화면에 보이는 텍스트(사이드바/페이지 타이틀/버튼/라벨/플레이스홀더/빈 상태/상태 배지/토스트)는 모두 한국어로 출력되어야 한다.
+예외(영문 허용): 이메일 주소, URL, 날짜 포맷(YYYY-MM-DD), 외부 고유명(회사명 등 데이터값), 코드 변수명.
+또한 Email Center에는 “신규 이메일 계정 연결” 버튼(+ 계정 연결)이 반드시 있어야 하며, Gmail OAuth 또는 IMAP/SMTP 방식으로 계정을 추가할 수 있는 모달/플로우를 구현한다.
+DM 발송은 MVP에서 제외하고, 이메일 발신/수신(Email Center)만 내재화한다.
+
+────────────────────────────────────────────────────────
+[0] 목표(What to deliver)
+1) UI 전수 한국어화: 기존 영문 UI 텍스트 전부 치환(하단 워터마크 등 외부 제공 요소는 가능하면 숨기거나 무시 가능).
+2) i18n-lite 구조: 번역 라이브러리 없이 /src/i18n/ko.ts 상수 파일로 UI 문자열을 분리하고, 모든 컴포넌트에서 상수 참조로만 UI 텍스트를 렌더링.
+3) Email Center 개선: “+ 계정 연결” 버튼 추가 + 계정 연결 모달( Gmail OAuth / 기타 IMAP/SMTP ) + 빈 상태 UX 보강.
+4) 치환 작업 후, 코드베이스에서 하드코딩된 영문 UI 텍스트가 남지 않도록 최종 점검(검색어 리스트 제공).
+
+────────────────────────────────────────────────────────
+[1] 용어 표준(Glossary) - 반드시 아래 매핑을 UI 전체에 일관 적용
+(사이드바)
+- Overview → 개요
+- Discover → 탐색
+- Campaigns → 캠페인
+- Groups → 그룹
+- Email Center → 이메일 센터
+- Finance → 정산
+- Tracking → 트래킹
+- PLATFORM → 플랫폼
+- OPERATIONS → 운영
+- Workspace/Demo Workspace → 워크스페이스
+- Demo User/My Account → 내 계정
+- Sign Out → 로그아웃
+
+(공통 버튼/액션)
+- Add Influencer → 인플루언서 추가
+- New Campaign → 캠페인 생성
+- Filters → 필터
+- Save → 저장
+- Cancel → 취소
+- Edit → 수정
+- Delete → 삭제
+- Close → 닫기
+- Apply → 적용
+- Reset → 초기화
+- Download → 다운로드
+- Export CSV → CSV 내보내기
+- Export Excel → 엑셀 내보내기
+- Share Link → 링크 공유
+- Copy Link → 링크 복사
+- Revoke Link → 링크 회수
+- View Details → 상세 보기
+- Sync → 동기화
+- Compose → 작성
+- Send → 발송
+- Reply → 답장
+- Refresh → 새로고침
+
+(상태/배지 예시)
+- Active → 진행 중
+- Inactive → 중지
+- Draft → 임시저장
+- Success → 성공
+- Failed → 실패
+
+────────────────────────────────────────────────────────
+[2] 페이지별 한국어 문구(헤더/빈 상태/라벨) - 화면 UX 기준으로 아래 문구를 사용
+(탐색/Discover)
+- Title: 탐색
+- Subtitle: 캠페인에 적합한 인플루언서를 찾고 관리하세요.
+- Search placeholder: 이름 또는 핸들로 검색…
+- Empty state(검색 결과 없음): 조건에 맞는 인플루언서가 없습니다.
+- 카드/리스트 라벨: 대표 계정(Top Account), 카테고리, 플랫폼, 핸들, URL, 언어
+
+(캠페인/Campaigns)
+- Title: 캠페인
+- Subtitle: 진행 중인 캠페인을 관리하세요.
+- New Campaign 버튼: 캠페인 생성
+- 카드 필드:
+  - Budget → 예산
+  - Goal → 목표
+  - Created → 생성일
+  - Active badge → 진행 중
+
+(이메일 센터/Email Center)
+- Title: 이메일 센터
+- Subtitle: 발신 계정을 연결하고 이메일을 보내고/받으세요.
+- 좌측 패널 제목: 발신 계정
+- 좌측 빈 상태: 연결된 이메일 계정이 없습니다.
+- 좌측 CTA 버튼: + 계정 연결
+- 중앙 패널:
+  - Inbox → 받은편지함
+  - Sent → 보낸편지함
+  - Drafts → 임시보관함
+  - 안내 문구: 이메일을 보려면 계정을 선택하세요.
+- 우측 패널 안내 문구: 읽을 메일을 선택하세요.
+- 상단 버튼: 동기화 / 작성
+
+(계정 연결 모달)
+- Title: 이메일 계정 연결
+- 옵션:
+  - Gmail 연결(OAuth) / 기타 이메일(IMAP/SMTP)
+- 폼 라벨:
+  - 이메일 주소, 비밀번호(또는 앱 비밀번호), IMAP 서버/포트, SMTP 서버/포트
+- 버튼:
+  - 연결 테스트, 연결하기, 취소
+- 오류 메시지:
+  - 연결에 실패했습니다. 설정 값을 확인해주세요.
+  - (Gmail) 인증이 취소되었습니다. 다시 시도해주세요.
+
+────────────────────────────────────────────────────────
+[3] “전수 치환”을 위한 검색/치환 대상(영문 UI 스트링 리스트)
+아래 문자열이 코드베이스에 남아있다면 모두 한국어로 바꿔야 한다(부분 일치 포함).
+
+[사이드바/레이아웃]
+- "PLATFORM", "OPERATIONS"
+- "Overview", "Discover", "Campaigns", "Groups", "Email Center", "Finance", "Tracking"
+- "Demo Workspace", "Workspace"
+- "Demo User", "My Account"
+- "Sign Out", "Logout"
+- "Made with Replit" (가능하면 숨김 처리 or 무시 가능(외부 워터마크라면))
+
+[탐색(Discover)]
+- "Find and manage influencers for your campaigns."
+- "Search influencers by name or handle"
+- "Filters"
+- "Add Influencer"
+- "Top Account"
+
+[캠페인(Campaigns)]
+- "Manage your active marketing campaigns."
+- "New Campaign"
+- "Budget", "Goal", "Created"
+- "Active"
+
+[이메일 센터(Email Center)]
+- "No email accounts connected."
+- "Select an account to view emails."
+- "Select a thread to read"
+- "Inbox", "Sent", "Drafts"
+- "Sync", "Compose"
+- "Accounts" 또는 "ACCOUNTS"
+
+[공통 버튼/상태]
+- "Save", "Cancel", "Edit", "Delete", "Close", "Apply", "Reset"
+- "Download", "Export"
+- "Send", "Reply", "Refresh"
+- "Success", "Failed"
+
+최종적으로 “영문 UI 텍스트가 남지 않도록” 전체 검색 점검을 수행하고, 남아있는 영문은 모두 상수화/치환한다.
+
+────────────────────────────────────────────────────────
+[4] i18n-lite(한국어 상수화) 구현 방식 - 반드시 이 구조로 적용
+번역 라이브러리 없이 다음 파일을 만든다:
+- /src/i18n/ko.ts
+
+ko.ts는 중첩 객체로 구성한다(예: nav, pages, common, empty, email 등).
+그리고 컴포넌트에서는 문자열을 하드코딩하지 말고 반드시 ko.ts에서 import해서 사용한다.
+
+예시 구조(가이드):
+export const KO = {
+  nav: { overview: "개요", discover: "탐색", campaigns: "캠페인", groups: "그룹", emailCenter: "이메일 센터", finance: "정산", tracking: "트래킹", platform: "플랫폼", operations: "운영", signOut: "로그아웃", workspace: "워크스페이스", myAccount: "내 계정" },
+  common: { save:"저장", cancel:"취소", edit:"수정", delete:"삭제", close:"닫기", apply:"적용", reset:"초기화", download:"다운로드", sync:"동기화", compose:"작성", send:"발송", reply:"답장", filters:"필터" },
+  pages: {
+    discover: { title:"탐색", subtitle:"캠페인에 적합한 인플루언서를 찾고 관리하세요.", searchPlaceholder:"이름 또는 핸들로 검색…", addInfluencer:"인플루언서 추가", topAccount:"대표 계정", noResults:"조건에 맞는 인플루언서가 없습니다." },
+    campaigns: { title:"캠페인", subtitle:"진행 중인 캠페인을 관리하세요.", newCampaign:"캠페인 생성", budget:"예산", goal:"목표", created:"생성일", active:"진행 중" },
+    email: { title:"이메일 센터", subtitle:"발신 계정을 연결하고 이메일을 보내고/받으세요.", accounts:"발신 계정", addAccount:"+ 계정 연결", noAccounts:"연결된 이메일 계정이 없습니다.", selectAccount:"이메일을 보려면 계정을 선택하세요.", selectThread:"읽을 메일을 선택하세요.", inbox:"받은편지함", sent:"보낸편지함", drafts:"임시보관함" }
+  },
+  toast: { saved:"저장되었습니다.", saveFailed:"저장에 실패했습니다.", sent:"이메일을 발송했습니다.", sendFailed:"이메일 발송에 실패했습니다.", syncDone:"동기화가 완료되었습니다.", syncFailed:"동기화에 실패했습니다." }
+};
+
+컴포넌트별 적용 규칙:
+- Sidebar(네비게이션): nav/ common만 사용, 메뉴 라벨은 KO.nav.*로만 출력
+- PageHeader(타이틀/서브타이틀): KO.pages[page].title / subtitle 사용
+- Buttons: KO.common.* 사용
+- EmptyState(빈 상태 문구): KO.pages.*.noResults / noAccounts / selectAccount 등 사용
+- Toast/Alert: KO.toast.* 사용
+즉, UI에 표시되는 모든 텍스트는 KO에서만 오도록 한다.
+
+────────────────────────────────────────────────────────
+[5] Email Center “계정 연결 버튼” 및 연결 플로우(필수)
+현재 Email Center 화면에 신규 계정 연결 버튼이 없어 보이므로 반드시 추가한다.
+- 좌측 Accounts 패널 상단 또는 우측 상단에 “+ 계정 연결” 버튼을 배치
+- 버튼 클릭 시 모달:
+  - 옵션 1) Gmail 연결(OAuth): 연결 완료 시 계정 리스트에 추가
+  - 옵션 2) 기타 이메일(IMAP/SMTP): 이메일/앱비밀번호/서버/포트 입력 → 연결 테스트 → 연결
+- 계정이 연결되면:
+  - 중앙 패널에서 해당 계정 선택 시 받은편지함 목록 표시
+  - 우측 패널에서 스레드(메일) 상세 읽기
+- 상단 “동기화” 버튼은 현재 선택된 계정 기준으로 메일 동기화 수행(또는 전체 계정 동기화)
+- “작성” 버튼: 수신자/제목/본문 작성 후 발송(첨부는 MVP에서 선택)
+
+────────────────────────────────────────────────────────
+[6] 완료 기준(Definition of Done)
+1) 사용자 노출 UI에서 영문 텍스트가 남아있지 않다(예외 항목 제외).
+2) 모든 UI 문자열은 /src/i18n/ko.ts 상수로 분리되어 있고, 컴포넌트에는 하드코딩된 문구가 없다.
+3) Email Center에 “+ 계정 연결” 버튼 및 계정 연결 모달이 존재한다.
+4) Discover/Campaigns/Email Center 각 화면의 타이틀/버튼/빈 상태 문구가 모두 한국어로 자연스럽게 표시된다.
+5) 최종 점검으로 전체 검색을 수행하여, [3]의 영문 문자열이 더 이상 코드에서 발견되지 않도록 정리한다.

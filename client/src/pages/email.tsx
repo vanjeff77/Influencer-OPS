@@ -9,10 +9,13 @@ import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { RefreshCw, Send, Mail, User, Clock } from "lucide-react";
+import { RefreshCw, Send, Mail, User, Clock, Plus, ExternalLink } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { KO } from "@/i18n/ko";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SiGmail } from "react-icons/si";
 
 export default function EmailCenter() {
   const { data: workspaces } = useWorkspaces();
@@ -27,18 +30,20 @@ export default function EmailCenter() {
 
   const [selectedThread, setSelectedThread] = useState<any>(null);
   const [isComposeOpen, setIsComposeOpen] = useState(false);
+  const [isConnectOpen, setIsConnectOpen] = useState(false);
   const [composeData, setComposeData] = useState({ to: "", subject: "", body: "" });
+  const [connectType, setConnectType] = useState<"gmail" | "imap" | null>(null);
+  const [imapData, setImapData] = useState({ email: "", password: "", imapServer: "", imapPort: "993", smtpServer: "", smtpPort: "587" });
 
   const handleSync = () => {
     if (!selectedAccountId) return;
     syncEmail.mutate(undefined, {
-      onSuccess: (data) => toast({ title: "Sync Complete", description: `Synced ${data.syncedCount} new messages.` })
+      onSuccess: (data) => toast({ title: KO.pages.email.syncComplete, description: `${data.syncedCount}${KO.pages.email.syncCompleteDesc}` })
     });
   };
 
   const handleSend = () => {
     if (!selectedAccountId) return;
-    // Split emails by comma
     const recipients = composeData.to.split(',').map(e => e.trim());
     sendBulk.mutate({
       accountId: selectedAccountId,
@@ -49,55 +54,64 @@ export default function EmailCenter() {
       onSuccess: () => {
         setIsComposeOpen(false);
         setComposeData({ to: "", subject: "", body: "" });
-        toast({ title: "Emails Sent", description: "Your bulk campaign has started sending." });
+        toast({ title: KO.pages.email.emailsSent, description: KO.pages.email.emailsSentDesc });
       }
     });
+  };
+
+  const handleConnectGmail = () => {
+    window.open('/api/email/gmail/callback?code=mock', '_blank');
+    setIsConnectOpen(false);
+    toast({ title: "Gmail OAuth", description: "Gmail 연결이 시작되었습니다." });
   };
 
   return (
     <Layout>
       <div className="h-[calc(100vh-8rem)] flex flex-col">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold tracking-tight">Email Center</h1>
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">{KO.pages.email.title}</h1>
+            <p className="text-muted-foreground mt-1">{KO.pages.email.subtitle}</p>
+          </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={handleSync} disabled={!selectedAccountId || syncEmail.isPending}>
               <RefreshCw className={`w-4 h-4 mr-2 ${syncEmail.isPending ? 'animate-spin' : ''}`} />
-              Sync
+              {KO.common.sync}
             </Button>
             
             <Dialog open={isComposeOpen} onOpenChange={setIsComposeOpen}>
               <DialogTrigger asChild>
                 <Button disabled={!selectedAccountId}>
                   <Send className="w-4 h-4 mr-2" />
-                  Compose
+                  {KO.common.compose}
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-[600px]">
                 <DialogHeader>
-                  <DialogTitle>Send Email</DialogTitle>
+                  <DialogTitle>{KO.pages.email.sendEmail}</DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                   <div className="grid gap-2">
-                    <label>To (comma separated)</label>
+                    <label>{KO.pages.email.to}</label>
                     <Input value={composeData.to} onChange={e => setComposeData({...composeData, to: e.target.value})} placeholder="email1@example.com, email2@example.com" />
                   </div>
                   <div className="grid gap-2">
-                    <label>Subject</label>
-                    <Input value={composeData.subject} onChange={e => setComposeData({...composeData, subject: e.target.value})} placeholder="Campaign Opportunity" />
+                    <label>{KO.pages.email.subject}</label>
+                    <Input value={composeData.subject} onChange={e => setComposeData({...composeData, subject: e.target.value})} placeholder="협업 제안" />
                   </div>
                   <div className="grid gap-2">
-                    <label>Body</label>
+                    <label>{KO.pages.email.body}</label>
                     <Textarea 
                       value={composeData.body} 
                       onChange={e => setComposeData({...composeData, body: e.target.value})} 
-                      placeholder="Hi there, ..." 
+                      placeholder="안녕하세요, ..." 
                       className="min-h-[200px]"
                     />
                   </div>
                 </div>
                 <div className="flex justify-end">
                   <Button onClick={handleSend} disabled={sendBulk.isPending}>
-                    {sendBulk.isPending ? "Sending..." : "Send Emails"}
+                    {sendBulk.isPending ? KO.pages.email.sending : KO.pages.email.sendEmails}
                   </Button>
                 </div>
               </DialogContent>
@@ -106,14 +120,98 @@ export default function EmailCenter() {
         </div>
 
         <div className="flex-1 grid grid-cols-12 gap-6 min-h-0">
-          {/* Account Selector */}
           <div className="col-span-3 bg-card rounded-xl border border-border p-4 flex flex-col gap-2 overflow-y-auto">
-            <h3 className="font-semibold text-sm mb-2 px-2 text-muted-foreground uppercase">Accounts</h3>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-semibold text-sm px-2 text-muted-foreground uppercase">{KO.pages.email.accounts}</h3>
+              <Dialog open={isConnectOpen} onOpenChange={setIsConnectOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-8">
+                    <Plus className="w-3 h-3 mr-1" />
+                    {KO.pages.email.addAccount}
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[500px]">
+                  <DialogHeader>
+                    <DialogTitle>{KO.pages.email.connectAccount}</DialogTitle>
+                  </DialogHeader>
+                  
+                  {!connectType ? (
+                    <div className="grid gap-4 py-4">
+                      <Button 
+                        variant="outline" 
+                        className="h-16 justify-start gap-4"
+                        onClick={() => handleConnectGmail()}
+                      >
+                        <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                          <SiGmail className="w-5 h-5 text-red-500" />
+                        </div>
+                        <div className="text-left">
+                          <div className="font-medium">{KO.pages.email.connectGmail}</div>
+                          <div className="text-xs text-muted-foreground">Google 계정으로 안전하게 연결</div>
+                        </div>
+                        <ExternalLink className="w-4 h-4 ml-auto text-muted-foreground" />
+                      </Button>
+                      
+                      <Button 
+                        variant="outline" 
+                        className="h-16 justify-start gap-4"
+                        onClick={() => setConnectType("imap")}
+                      >
+                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                          <Mail className="w-5 h-5 text-blue-500" />
+                        </div>
+                        <div className="text-left">
+                          <div className="font-medium">{KO.pages.email.connectOther}</div>
+                          <div className="text-xs text-muted-foreground">IMAP/SMTP 설정으로 연결</div>
+                        </div>
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="grid gap-4 py-4">
+                      <div className="grid gap-2">
+                        <label>{KO.pages.email.emailAddress}</label>
+                        <Input value={imapData.email} onChange={e => setImapData({...imapData, email: e.target.value})} placeholder="you@company.com" />
+                      </div>
+                      <div className="grid gap-2">
+                        <label>{KO.pages.email.password}</label>
+                        <Input type="password" value={imapData.password} onChange={e => setImapData({...imapData, password: e.target.value})} />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2">
+                          <label>{KO.pages.email.imapServer}</label>
+                          <Input value={imapData.imapServer} onChange={e => setImapData({...imapData, imapServer: e.target.value})} placeholder="imap.gmail.com" />
+                        </div>
+                        <div className="grid gap-2">
+                          <label>{KO.pages.email.imapPort}</label>
+                          <Input value={imapData.imapPort} onChange={e => setImapData({...imapData, imapPort: e.target.value})} />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2">
+                          <label>{KO.pages.email.smtpServer}</label>
+                          <Input value={imapData.smtpServer} onChange={e => setImapData({...imapData, smtpServer: e.target.value})} placeholder="smtp.gmail.com" />
+                        </div>
+                        <div className="grid gap-2">
+                          <label>{KO.pages.email.smtpPort}</label>
+                          <Input value={imapData.smtpPort} onChange={e => setImapData({...imapData, smtpPort: e.target.value})} />
+                        </div>
+                      </div>
+                      <div className="flex gap-2 justify-end">
+                        <Button variant="outline" onClick={() => setConnectType(null)}>{KO.common.cancel}</Button>
+                        <Button>{KO.pages.email.connect}</Button>
+                      </div>
+                    </div>
+                  )}
+                </DialogContent>
+              </Dialog>
+            </div>
+            
             {accounts?.map(acc => (
               <button
                 key={acc.id}
                 onClick={() => { setSelectedAccountId(acc.id); setSelectedThread(null); }}
                 className={`flex items-center gap-3 p-3 rounded-lg text-left transition-all ${selectedAccountId === acc.id ? 'bg-primary text-primary-foreground shadow-md' : 'hover:bg-muted'}`}
+                data-testid={`button-account-${acc.id}`}
               >
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center ${selectedAccountId === acc.id ? 'bg-white/20' : 'bg-primary/10 text-primary'}`}>
                   <Mail className="w-4 h-4" />
@@ -124,13 +222,23 @@ export default function EmailCenter() {
                 </div>
               </button>
             ))}
-            {!accounts?.length && <div className="text-sm text-muted-foreground p-2">No email accounts connected.</div>}
+            {!accounts?.length && (
+              <div className="text-sm text-muted-foreground p-2 text-center py-8">
+                <Mail className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                {KO.pages.email.noAccounts}
+              </div>
+            )}
           </div>
 
-          {/* Thread List */}
           <div className="col-span-4 bg-card rounded-xl border border-border flex flex-col overflow-hidden">
              <div className="p-4 border-b border-border bg-muted/10">
-               <h3 className="font-semibold">Inbox</h3>
+               <Tabs defaultValue="inbox">
+                 <TabsList className="grid w-full grid-cols-3">
+                   <TabsTrigger value="inbox">{KO.pages.email.inbox}</TabsTrigger>
+                   <TabsTrigger value="sent">{KO.pages.email.sent}</TabsTrigger>
+                   <TabsTrigger value="drafts">{KO.pages.email.drafts}</TabsTrigger>
+                 </TabsList>
+               </Tabs>
              </div>
              <ScrollArea className="flex-1">
                <div className="flex flex-col">
@@ -139,9 +247,10 @@ export default function EmailCenter() {
                      key={thread.id}
                      onClick={() => setSelectedThread(thread)}
                      className={`p-4 border-b border-border text-left hover:bg-muted/50 transition-colors ${selectedThread?.id === thread.id ? 'bg-muted' : ''}`}
+                     data-testid={`button-thread-${thread.id}`}
                    >
                      <div className="flex justify-between mb-1">
-                       <span className="font-semibold text-sm truncate max-w-[70%]">{thread.subject || "(No Subject)"}</span>
+                       <span className="font-semibold text-sm truncate max-w-[70%]">{thread.subject || KO.pages.email.noSubject}</span>
                        <span className="text-xs text-muted-foreground whitespace-nowrap">
                          {thread.lastMessageDate ? format(new Date(thread.lastMessageDate), 'MMM d') : ''}
                        </span>
@@ -149,13 +258,17 @@ export default function EmailCenter() {
                      <p className="text-xs text-muted-foreground line-clamp-2">{thread.snippet}</p>
                    </button>
                  ))}
-                 {isLoadingThreads && <div className="p-8 text-center text-sm text-muted-foreground">Loading threads...</div>}
-                 {!selectedAccountId && <div className="p-8 text-center text-sm text-muted-foreground">Select an account to view emails.</div>}
+                 {isLoadingThreads && <div className="p-8 text-center text-sm text-muted-foreground">{KO.pages.email.loadingThreads}</div>}
+                 {!selectedAccountId && (
+                   <div className="p-8 text-center text-sm text-muted-foreground">
+                     <User className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                     {KO.pages.email.selectAccount}
+                   </div>
+                 )}
                </div>
              </ScrollArea>
           </div>
 
-          {/* Message View */}
           <div className="col-span-5 bg-card rounded-xl border border-border flex flex-col overflow-hidden">
             {selectedThread ? (
               <div className="flex flex-col h-full">
@@ -167,7 +280,6 @@ export default function EmailCenter() {
                   </div>
                 </div>
                 <ScrollArea className="flex-1 p-6">
-                  {/* Mock message display - in real app would fetch messages for thread */}
                   <div className="space-y-6">
                      <div className="flex gap-4">
                        <Avatar>
@@ -176,24 +288,27 @@ export default function EmailCenter() {
                        <div className="flex-1 space-y-2">
                          <div className="flex justify-between">
                             <span className="font-semibold">Jane Doe</span>
-                            <span className="text-xs text-muted-foreground">Yesterday</span>
+                            <span className="text-xs text-muted-foreground">{KO.pages.email.yesterday}</span>
                          </div>
                          <div className="text-sm leading-relaxed">
                             {selectedThread.snippet}
                             <br/><br/>
-                            Looking forward to hearing from you.
+                            감사합니다.
                          </div>
                        </div>
                      </div>
                   </div>
                 </ScrollArea>
                 <div className="p-4 border-t border-border bg-muted/10">
-                  <Button className="w-full">Reply</Button>
+                  <Button className="w-full">{KO.common.reply}</Button>
                 </div>
               </div>
             ) : (
               <div className="flex-1 flex items-center justify-center text-muted-foreground">
-                Select a thread to read
+                <div className="text-center">
+                  <Mail className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                  {KO.pages.email.selectThread}
+                </div>
               </div>
             )}
           </div>

@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Plus, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { KO } from "@/i18n/ko";
 
 export default function Groups() {
   const { data: workspaces } = useWorkspaces();
@@ -21,11 +22,11 @@ export default function Groups() {
 
   const handleCreate = () => {
     if (!newGroupName) return;
-    createGroup.mutate({ name: newGroupName, description: "Custom group" }, {
+    createGroup.mutate({ name: newGroupName, description: "커스텀 그룹" }, {
       onSuccess: () => {
         setIsCreateOpen(false);
         setNewGroupName("");
-        toast({ title: "Group Created" });
+        toast({ title: KO.pages.groups.groupCreated });
       }
     });
   };
@@ -35,31 +36,34 @@ export default function Groups() {
       <div className="flex flex-col gap-6">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Groups</h1>
-            <p className="text-muted-foreground mt-1">Organize influencers into custom lists.</p>
+            <h1 className="text-3xl font-bold tracking-tight">{KO.pages.groups.title}</h1>
+            <p className="text-muted-foreground mt-1">{KO.pages.groups.subtitle}</p>
           </div>
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
-              <Button>
+              <Button data-testid="button-create-group">
                 <Plus className="w-4 h-4 mr-2" />
-                Create Group
+                {KO.pages.groups.createGroup}
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>New Group</DialogTitle>
+                <DialogTitle>{KO.pages.groups.newGroup}</DialogTitle>
               </DialogHeader>
               <div className="py-4">
-                <Input value={newGroupName} onChange={e => setNewGroupName(e.target.value)} placeholder="e.g. Beauty Vloggers 2024" />
+                <label className="text-sm font-medium mb-2 block">{KO.pages.groups.groupName}</label>
+                <Input value={newGroupName} onChange={e => setNewGroupName(e.target.value)} placeholder="예: 뷰티 블로거 2024" />
               </div>
-              <Button onClick={handleCreate} disabled={createGroup.isPending}>Create</Button>
+              <Button onClick={handleCreate} disabled={createGroup.isPending} data-testid="button-submit-group">
+                {createGroup.isPending ? KO.nav.creating : KO.common.create}
+              </Button>
             </DialogContent>
           </Dialog>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {groups?.map(group => (
-            <Card key={group.id} className="hover:shadow-md transition-shadow cursor-pointer">
+            <Card key={group.id} className="hover:shadow-md transition-shadow cursor-pointer" data-testid={`card-group-${group.id}`}>
               <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
                 <CardTitle className="text-lg font-medium">{group.name}</CardTitle>
                 <Users className="w-4 h-4 text-muted-foreground" />
@@ -67,14 +71,14 @@ export default function Groups() {
               <CardContent>
                 <p className="text-sm text-muted-foreground">{group.description}</p>
                 <div className="mt-4 text-xs text-muted-foreground">
-                  Created recently
+                  {KO.common.recentlyCreated}
                 </div>
               </CardContent>
             </Card>
           ))}
           {!groups?.length && !isLoading && (
             <div className="col-span-full text-center py-20 text-muted-foreground border border-dashed rounded-xl">
-              No groups found. Create one to organize influencers.
+              {KO.pages.groups.noGroups}
             </div>
           )}
         </div>
