@@ -21,7 +21,7 @@ export interface IStorage {
   // Influencers
   getInfluencers(workspaceId: number, search?: string, filters?: { platform?: string; tags?: string[] }): Promise<(Influencer & { accounts: InfluencerAccount[] })[]>;
   getInfluencer(id: number): Promise<(Influencer & { accounts: InfluencerAccount[]; contents: Content[]; timeline: TimelineEvent[] }) | undefined>;
-  createInfluencer(workspaceId: number, data: CreateInfluencerWithAccounts): Promise<Influencer & { accounts: InfluencerAccount[] }>;
+  createInfluencer(workspaceId: number, data: Omit<CreateInfluencerWithAccounts, 'workspaceId'>): Promise<Influencer & { accounts: InfluencerAccount[] }>;
   updateInfluencer(id: number, data: Partial<Influencer>): Promise<Influencer>;
 
   // Influencer Contents
@@ -58,7 +58,7 @@ export interface IStorage {
   // Tracking
   getTrackingJobs(workspaceId: number): Promise<TrackingJob[]>;
   getTrackingJob(id: number): Promise<TrackingJob | undefined>;
-  createTrackingJob(workspaceId: number, job: InsertTrackingJob): Promise<TrackingJob>;
+  createTrackingJob(workspaceId: number, job: Omit<InsertTrackingJob, 'workspaceId'>): Promise<TrackingJob>;
   updateTrackingJob(id: number, data: Partial<TrackingJob>): Promise<TrackingJob>;
   updateTrackingMetric(jobId: number, date: string, value: number): Promise<void>;
   getTrackingMetrics(jobId: number): Promise<{ date: string; value: number }[]>;
@@ -146,7 +146,7 @@ export class DatabaseStorage implements IStorage {
     return { ...inf, accounts, contents: contentList, timeline };
   }
 
-  async createInfluencer(workspaceId: number, data: CreateInfluencerWithAccounts): Promise<Influencer & { accounts: InfluencerAccount[] }> {
+  async createInfluencer(workspaceId: number, data: Omit<CreateInfluencerWithAccounts, 'workspaceId'>): Promise<Influencer & { accounts: InfluencerAccount[] }> {
     const { accounts, ...infData } = data;
     const [inf] = await db.insert(influencers).values({ ...infData, workspaceId }).returning();
     
@@ -348,7 +348,7 @@ export class DatabaseStorage implements IStorage {
     return job;
   }
 
-  async createTrackingJob(workspaceId: number, job: InsertTrackingJob): Promise<TrackingJob> {
+  async createTrackingJob(workspaceId: number, job: Omit<InsertTrackingJob, 'workspaceId'>): Promise<TrackingJob> {
     const [j] = await db.insert(trackingJobs).values({ ...job, workspaceId }).returning();
     return j;
   }
@@ -388,7 +388,7 @@ export class DatabaseStorage implements IStorage {
     }
     
     // Get influencer data
-    const influencerIds = [...new Set(items.map(i => i.influencerId))];
+    const influencerIds = Array.from(new Set(items.map(i => i.influencerId)));
     const influencerList = influencerIds.length > 0 
       ? await db.select().from(influencers).where(inArray(influencers.id, influencerIds))
       : [];

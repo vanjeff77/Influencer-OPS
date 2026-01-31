@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useState } from "react";
-import { Plus, RefreshCcw } from "lucide-react";
+import { Plus, RefreshCcw, Download } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
@@ -96,10 +96,39 @@ export default function Tracking() {
                 <CardDescription>{KO.pages.tracking.dailyMentions}</CardDescription>
               </div>
               {selectedJobId && (
-                <Button variant="outline" size="sm" onClick={() => mockUpdate.mutate()} disabled={mockUpdate.isPending} data-testid="button-update-data">
-                   <RefreshCcw className={`w-3 h-3 mr-2 ${mockUpdate.isPending ? 'animate-spin' : ''}`} />
-                   {KO.common.updateData}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => mockUpdate.mutate()} disabled={mockUpdate.isPending} data-testid="button-update-data">
+                     <RefreshCcw className={`w-3 h-3 mr-2 ${mockUpdate.isPending ? 'animate-spin' : ''}`} />
+                     {KO.common.updateData}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => {
+                      if (!metrics || metrics.length === 0) return;
+                      const selectedJob = jobs?.find(j => j.id === selectedJobId);
+                      const headers = ['날짜', '값', 'Job 이름'];
+                      const rows = metrics.map(m => [
+                        format(new Date(m.date), 'yyyy-MM-dd'),
+                        String(m.value),
+                        selectedJob?.name || ''
+                      ]);
+                      const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
+                      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `tracking_${selectedJob?.name || 'data'}_${format(new Date(), 'yyyyMMdd')}.csv`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                    disabled={!metrics || metrics.length === 0}
+                    data-testid="button-export-csv"
+                  >
+                    <Download className="w-3 h-3 mr-2" />
+                    CSV 내보내기
+                  </Button>
+                </div>
               )}
             </CardHeader>
             <CardContent>
