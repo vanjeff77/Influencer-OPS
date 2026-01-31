@@ -198,6 +198,16 @@ export async function registerRoutes(
     res.json(campaign);
   });
 
+  // Get all campaign influencer assignments for a workspace
+  app.get('/api/campaign-influencers', async (req, res) => {
+    const workspaceId = parseInt(req.query.workspaceId as string);
+    if (!workspaceId) {
+      return res.json([]);
+    }
+    const items = await storage.getAllCampaignInfluencers(workspaceId);
+    res.json(items);
+  });
+
   // Add influencers to campaign (creates line items)
   app.post('/api/campaigns/:id/line-items', async (req, res) => {
     const campaignId = parseInt(req.params.id);

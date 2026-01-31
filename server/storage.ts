@@ -48,6 +48,7 @@ export interface IStorage {
   updateCampaign(id: number, data: Partial<Campaign>): Promise<Campaign>;
   addInfluencersToCampaign(campaignId: number, influencerIds: number[]): Promise<CampaignInfluencer[]>;
   updateCampaignItem(id: number, updates: Partial<CampaignInfluencer>): Promise<CampaignInfluencer>;
+  getAllCampaignInfluencers(workspaceId: number): Promise<CampaignInfluencer[]>;
 
   // Email
   getEmailAccounts(workspaceId: number): Promise<EmailAccount[]>;
@@ -319,6 +320,13 @@ export class DatabaseStorage implements IStorage {
   async updateCampaignItem(id: number, updates: Partial<CampaignInfluencer>): Promise<CampaignInfluencer> {
     const [item] = await db.update(campaignInfluencers).set(updates).where(eq(campaignInfluencers.id, id)).returning();
     return item;
+  }
+
+  async getAllCampaignInfluencers(workspaceId: number): Promise<CampaignInfluencer[]> {
+    const workspaceCampaigns = await db.select({ id: campaigns.id }).from(campaigns).where(eq(campaigns.workspaceId, workspaceId));
+    const campaignIds = workspaceCampaigns.map(c => c.id);
+    if (campaignIds.length === 0) return [];
+    return await db.select().from(campaignInfluencers).where(inArray(campaignInfluencers.campaignId, campaignIds));
   }
 
   async getEmailAccounts(workspaceId: number): Promise<EmailAccount[]> {

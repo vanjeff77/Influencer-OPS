@@ -5,11 +5,10 @@ import { useGroups } from "@/hooks/use-groups";
 import { useCampaigns } from "@/hooks/use-campaigns";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useState, useEffect } from "react";
-import { Search, Filter, Plus, Instagram, Youtube, Twitter, X, Users, Megaphone, Save, Clock, Link, ExternalLink, Trash2 } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { Search, Plus, Instagram, Youtube, Twitter, X, Users, Megaphone, Save, Clock, ExternalLink } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -18,9 +17,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Card } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { KO } from "@/i18n/ko";
 import { format } from "date-fns";
 import { useLocation, useSearch } from "wouter";
+import { useQuery } from "@tanstack/react-query";
+import type { CampaignInfluencer } from "@shared/schema";
 
 export default function Discover() {
   const { data: workspaces } = useWorkspaces();
@@ -29,22 +32,25 @@ export default function Discover() {
   const [search, setSearch] = useState("");
   const [platformFilter, setPlatformFilter] = useState<string>("");
   const { data: influencers, isLoading } = useInfluencers(workspaceId || 0, { search, platform: platformFilter || undefined });
+  const { data: campaigns } = useCampaigns(workspaceId || 0);
   const createInfluencer = useCreateInfluencer(workspaceId || 0);
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const searchParams = useSearch();
 
-  // Selection state
+  const { data: allCampaignItems } = useQuery<CampaignInfluencer[]>({
+    queryKey: ['/api/campaign-influencers', workspaceId],
+    enabled: !!workspaceId
+  });
+
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [selectedInfluencerId, setSelectedInfluencerId] = useState<number | null>(null);
   
-  // Modal states
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
   const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
   const [newInfluencer, setNewInfluencer] = useState({ name: "", email: "", handle: "", platform: "IG" });
   
-  // URL-based selection
   useEffect(() => {
     const params = new URLSearchParams(searchParams);
     const selected = params.get('selected');
@@ -52,6 +58,45 @@ export default function Discover() {
       setSelectedInfluencerId(parseInt(selected));
     }
   }, [searchParams]);
+
+  const influencerCampaignData = useMemo(() => {
+    if (!allCampaignItems || !campaigns) return new Map();
+    
+    const dataMap = new Map<number, { 
+      campaigns: { id: number; name: string; client: string; status: string }[];
+      latestStatus: string;
+      totalCampaigns: number;
+      activeCampaigns: number;
+    }>();
+    
+    allCampaignItems.forEach(item => {
+      const campaign = campaigns.find(c => c.id === item.campaignId);
+      if (!campaign) return;
+      
+      const existing = dataMap.get(item.influencerId) || { 
+        campaigns: [], 
+        latestStatus: '', 
+        totalCampaigns: 0, 
+        activeCampaigns: 0 
+      };
+      
+      existing.campaigns.push({
+        id: campaign.id,
+        name: campaign.name,
+        client: campaign.client || '',
+        status: item.status || 'contacted'
+      });
+      existing.totalCampaigns++;
+      if (item.status !== 'paid') {
+        existing.activeCampaigns++;
+      }
+      existing.latestStatus = item.status || 'contacted';
+      
+      dataMap.set(item.influencerId, existing);
+    });
+    
+    return dataMap;
+  }, [allCampaignItems, campaigns]);
 
   const handleInfluencerClick = (id: number) => {
     setSelectedInfluencerId(id);
@@ -104,28 +149,57 @@ export default function Discover() {
     });
   };
 
+  const formatFollowers = (count: number | null | undefined) => {
+    if (!count) return "-";
+    if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
+    if (count >= 1000) return `${(count / 1000).toFixed(1)}K`;
+    return count.toString();
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch(status) {
+      case 'contacted': return '연락 완료';
+      case 'negotiated': return '협상 중';
+      case 'contracted': return '계약 완료';
+      case 'posted': return '게시 완료';
+      case 'paid': return '정산 완료';
+      default: return status;
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch(status) {
+      case 'contacted': return 'bg-gray-100 text-gray-700';
+      case 'negotiated': return 'bg-yellow-100 text-yellow-700';
+      case 'contracted': return 'bg-blue-100 text-blue-700';
+      case 'posted': return 'bg-green-100 text-green-700';
+      case 'paid': return 'bg-purple-100 text-purple-700';
+      default: return 'bg-gray-100 text-gray-700';
+    }
+  };
+
   const PlatformIcon = ({ p }: { p: string }) => {
     switch(p) {
-      case 'IG': return <Instagram className="w-4 h-4 text-pink-600" />;
-      case 'YT': return <Youtube className="w-4 h-4 text-red-600" />;
-      case 'X': return <Twitter className="w-4 h-4 text-blue-400" />;
-      default: return <span className="text-xs font-bold">{p}</span>;
+      case 'IG': return <Instagram className="w-3 h-3 text-pink-600" />;
+      case 'YT': return <Youtube className="w-3 h-3 text-red-600" />;
+      case 'X': return <Twitter className="w-3 h-3 text-blue-400" />;
+      default: return <span className="text-[10px] font-bold">{p}</span>;
     }
   };
 
   return (
     <Layout>
-      <div className="flex flex-col gap-6 h-full">
-        <div className="flex justify-between items-end">
+      <div className="flex flex-col gap-4 h-full">
+        <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">{KO.pages.discover.title}</h1>
-            <p className="text-muted-foreground mt-1">{KO.pages.discover.subtitle}</p>
+            <h1 className="text-2xl font-bold tracking-tight">{KO.pages.discover.title}</h1>
+            <p className="text-sm text-muted-foreground">{KO.pages.discover.subtitle}</p>
           </div>
           
           <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
             <DialogTrigger asChild>
-              <Button className="shadow-lg shadow-primary/20" data-testid="button-add-influencer">
-                <Plus className="w-4 h-4 mr-2" />
+              <Button size="sm" data-testid="button-add-influencer">
+                <Plus className="w-4 h-4 mr-1" />
                 {KO.pages.discover.addInfluencer}
               </Button>
             </DialogTrigger>
@@ -136,16 +210,16 @@ export default function Discover() {
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid gap-2">
-                  <label>{KO.pages.discover.name}</label>
+                  <label className="text-sm">{KO.pages.discover.name}</label>
                   <Input value={newInfluencer.name} onChange={e => setNewInfluencer({...newInfluencer, name: e.target.value})} placeholder="홍길동" />
                 </div>
                 <div className="grid gap-2">
-                  <label>{KO.pages.discover.email}</label>
+                  <label className="text-sm">{KO.pages.discover.email}</label>
                   <Input value={newInfluencer.email} onChange={e => setNewInfluencer({...newInfluencer, email: e.target.value})} placeholder="influencer@example.com" />
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   <div className="col-span-1">
-                     <label>{KO.pages.discover.platform}</label>
+                     <label className="text-sm">{KO.pages.discover.platform}</label>
                      <Select value={newInfluencer.platform} onValueChange={v => setNewInfluencer({...newInfluencer, platform: v})}>
                        <SelectTrigger><SelectValue /></SelectTrigger>
                        <SelectContent>
@@ -156,7 +230,7 @@ export default function Discover() {
                      </Select>
                   </div>
                   <div className="col-span-2">
-                     <label>{KO.pages.discover.handle}</label>
+                     <label className="text-sm">{KO.pages.discover.handle}</label>
                      <Input value={newInfluencer.handle} onChange={e => setNewInfluencer({...newInfluencer, handle: e.target.value})} placeholder="@username" />
                   </div>
                 </div>
@@ -168,44 +242,38 @@ export default function Discover() {
           </Dialog>
         </div>
 
-        {/* Action bar for multi-select */}
         {selectedIds.size > 0 && (
-          <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 flex items-center justify-between">
+          <div className="bg-primary/5 border border-primary/20 rounded-md px-3 py-2 flex items-center justify-between">
             <span className="text-sm font-medium">{selectedIds.size}명 선택됨</span>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={() => setIsGroupModalOpen(true)} data-testid="button-save-to-group">
-                <Users className="w-4 h-4 mr-2" />
+                <Users className="w-3 h-3 mr-1" />
                 그룹에 저장
               </Button>
               <Button variant="outline" size="sm" onClick={() => setIsCampaignModalOpen(true)} data-testid="button-assign-campaign">
-                <Megaphone className="w-4 h-4 mr-2" />
+                <Megaphone className="w-3 h-3 mr-1" />
                 캠페인에 배정
               </Button>
               <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
-                <X className="w-4 h-4" />
+                <X className="w-3 h-3" />
               </Button>
             </div>
           </div>
         )}
 
-        <div className="bg-card p-4 rounded-xl border border-border shadow-sm flex gap-4 items-center">
-          <Checkbox 
-            checked={influencers && selectedIds.size === influencers.length && influencers.length > 0}
-            onCheckedChange={selectAll}
-            data-testid="checkbox-select-all"
-          />
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <div className="flex gap-3 items-center">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input 
               placeholder={KO.pages.discover.searchPlaceholder}
-              className="pl-9 bg-muted/30 border-transparent focus:bg-background focus:border-primary transition-all"
+              className="pl-8 h-8 text-sm"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               data-testid="input-search"
             />
           </div>
           <Select value={platformFilter} onValueChange={setPlatformFilter}>
-            <SelectTrigger className="w-[150px]" data-testid="select-platform-filter">
+            <SelectTrigger className="w-[120px] h-8 text-sm" data-testid="select-platform-filter">
               <SelectValue placeholder="플랫폼" />
             </SelectTrigger>
             <SelectContent>
@@ -220,75 +288,125 @@ export default function Discover() {
         {isLoading ? (
           <div className="text-center py-20 text-muted-foreground">{KO.common.loading}</div>
         ) : (
-          <Card className="overflow-hidden">
-            <div className="divide-y divide-border">
-              {influencers?.map((inf) => (
-                <div 
-                  key={inf.id} 
-                  className={`flex items-center gap-4 p-4 hover:bg-muted/50 transition-colors cursor-pointer ${selectedIds.has(inf.id) ? 'bg-primary/5' : ''}`}
-                  onClick={() => handleInfluencerClick(inf.id)}
-                  data-testid={`row-influencer-${inf.id}`}
-                >
-                  <Checkbox 
-                    checked={selectedIds.has(inf.id)}
-                    onClick={(e) => toggleSelection(inf.id, e)}
-                    data-testid={`checkbox-influencer-${inf.id}`}
-                  />
-                  <Avatar className="h-10 w-10 shrink-0">
-                    <AvatarFallback className="bg-gradient-to-br from-blue-100 to-blue-200 text-blue-700 font-bold text-sm">
-                      {inf.name.substring(0, 2).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium truncate">{inf.name}</span>
-                      {inf.accounts && inf.accounts.length > 0 && (
-                        <div className="flex gap-1">
-                          {inf.accounts.map(acc => (
-                            <PlatformIcon key={acc.id} p={acc.platform} />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <div className="text-sm text-muted-foreground truncate">
-                      {inf.email || KO.pages.discover.noEmail}
-                    </div>
-                  </div>
-                  <div className="hidden md:flex items-center gap-2 shrink-0">
-                    {inf.accounts?.[0]?.handle && (
-                      <span className="text-sm font-mono text-muted-foreground">{inf.accounts[0].handle}</span>
-                    )}
-                  </div>
-                  <div className="hidden lg:flex items-center gap-1 shrink-0 max-w-[200px]">
-                    {inf.tags?.slice(0, 3).map((tag, i) => (
-                      <Badge key={i} variant="secondary" className="font-normal text-xs">{tag}</Badge>
-                    ))}
-                    {(inf.tags?.length || 0) > 3 && (
-                      <span className="text-xs text-muted-foreground">+{(inf.tags?.length || 0) - 3}</span>
-                    )}
-                  </div>
-                </div>
-              ))}
-              
-              {influencers?.length === 0 && (
-                <div className="text-center py-20">
-                  <h3 className="text-lg font-medium text-muted-foreground">{KO.pages.discover.noResults}</h3>
-                  <p className="text-sm text-muted-foreground/60 mt-1">{KO.pages.discover.noResultsHint}</p>
-                </div>
-              )}
+          <div className="border rounded-md overflow-hidden flex-1">
+            <div className="overflow-auto h-full">
+              <Table>
+                <TableHeader className="bg-muted/50 sticky top-0">
+                  <TableRow className="h-8">
+                    <TableHead className="w-8 px-2">
+                      <Checkbox 
+                        checked={influencers && selectedIds.size === influencers.length && influencers.length > 0}
+                        onCheckedChange={selectAll}
+                        data-testid="checkbox-select-all"
+                      />
+                    </TableHead>
+                    <TableHead className="px-2 text-xs font-semibold">{KO.pages.discover.name}</TableHead>
+                    <TableHead className="px-2 text-xs font-semibold w-24">{KO.pages.discover.platform}</TableHead>
+                    <TableHead className="px-2 text-xs font-semibold w-20 text-right">{KO.pages.discover.followers}</TableHead>
+                    <TableHead className="px-2 text-xs font-semibold w-28">{KO.pages.discover.client}</TableHead>
+                    <TableHead className="px-2 text-xs font-semibold w-28">{KO.pages.discover.campaignStatus}</TableHead>
+                    <TableHead className="px-2 text-xs font-semibold w-24">{KO.pages.discover.collaboration}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {influencers?.map((inf) => {
+                    const campaignData = influencerCampaignData.get(inf.id);
+                    const mainAccount = inf.accounts?.[0];
+                    const clients = campaignData?.campaigns.map((c: { client: string }) => c.client).filter(Boolean) || [];
+                    const uniqueClients = Array.from(new Set(clients));
+                    
+                    return (
+                      <TableRow 
+                        key={inf.id} 
+                        className={`h-8 cursor-pointer hover:bg-muted/30 select-text ${selectedIds.has(inf.id) ? 'bg-primary/5' : ''}`}
+                        onClick={() => handleInfluencerClick(inf.id)}
+                        data-testid={`row-influencer-${inf.id}`}
+                      >
+                        <TableCell className="px-2 py-1">
+                          <Checkbox 
+                            checked={selectedIds.has(inf.id)}
+                            onClick={(e) => toggleSelection(inf.id, e)}
+                            data-testid={`checkbox-influencer-${inf.id}`}
+                          />
+                        </TableCell>
+                        <TableCell className="px-2 py-1">
+                          <div className="flex items-center gap-2">
+                            <Avatar className="h-6 w-6 shrink-0">
+                              <AvatarFallback className="text-[10px] bg-gradient-to-br from-blue-100 to-blue-200 text-blue-700 font-medium">
+                                {inf.name.substring(0, 2)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="text-sm font-medium truncate select-text">{inf.name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="px-2 py-1">
+                          {mainAccount && (
+                            <div className="flex items-center gap-1">
+                              <PlatformIcon p={mainAccount.platform} />
+                              <span className="text-xs text-muted-foreground truncate select-text">{mainAccount.handle}</span>
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="px-2 py-1 text-right">
+                          <span className="text-xs font-mono select-text">
+                            {formatFollowers((mainAccount as any)?.followers)}
+                          </span>
+                        </TableCell>
+                        <TableCell className="px-2 py-1">
+                          <span className="text-xs truncate select-text">
+                            {uniqueClients.length > 0 ? uniqueClients.slice(0, 2).join(', ') : KO.pages.discover.noClient}
+                            {uniqueClients.length > 2 && ` +${uniqueClients.length - 2}`}
+                          </span>
+                        </TableCell>
+                        <TableCell className="px-2 py-1">
+                          {campaignData ? (
+                            <span className="text-xs select-text">
+                              {campaignData.activeCampaigns > 0 && (
+                                <span className="text-blue-600">{campaignData.activeCampaigns} {KO.pages.discover.activeCampaigns}</span>
+                              )}
+                              {campaignData.activeCampaigns > 0 && (campaignData.totalCampaigns - campaignData.activeCampaigns) > 0 && ' / '}
+                              {(campaignData.totalCampaigns - campaignData.activeCampaigns) > 0 && (
+                                <span className="text-muted-foreground">{campaignData.totalCampaigns - campaignData.activeCampaigns} {KO.pages.discover.completedCampaigns}</span>
+                              )}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">{KO.pages.discover.noCampaign}</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="px-2 py-1">
+                          {campaignData?.latestStatus ? (
+                            <Badge variant="secondary" className={`text-[10px] px-1.5 py-0 h-5 ${getStatusColor(campaignData.latestStatus)}`}>
+                              {getStatusLabel(campaignData.latestStatus)}
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  
+                  {influencers?.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-12">
+                        <h3 className="text-sm font-medium text-muted-foreground">{KO.pages.discover.noResults}</h3>
+                        <p className="text-xs text-muted-foreground/60 mt-1">{KO.pages.discover.noResultsHint}</p>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
             </div>
-          </Card>
+          </div>
         )}
       </div>
 
-      {/* Influencer Detail Drawer */}
       <InfluencerDetailDrawer 
         influencerId={selectedInfluencerId} 
         onClose={handleCloseDetail}
         workspaceId={workspaceId || 0}
       />
 
-      {/* Group Modal */}
       <GroupSelectionModal 
         open={isGroupModalOpen}
         onOpenChange={setIsGroupModalOpen}
@@ -300,7 +418,6 @@ export default function Discover() {
         }}
       />
 
-      {/* Campaign Modal */}
       <CampaignSelectionModal 
         open={isCampaignModalOpen}
         onOpenChange={setIsCampaignModalOpen}
@@ -315,7 +432,6 @@ export default function Discover() {
   );
 }
 
-// Influencer Detail Drawer Component
 function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influencerId: number | null; onClose: () => void; workspaceId: number }) {
   const { data: influencer, isLoading } = useInfluencer(influencerId || 0);
   const updateInfluencer = useUpdateInfluencer();
@@ -530,7 +646,6 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
   );
 }
 
-// Group Selection Modal
 function GroupSelectionModal({ open, onOpenChange, workspaceId, selectedIds, onSuccess }: { 
   open: boolean; 
   onOpenChange: (open: boolean) => void; 
@@ -624,7 +739,6 @@ function GroupSelectionModal({ open, onOpenChange, workspaceId, selectedIds, onS
   );
 }
 
-// Campaign Selection Modal
 function CampaignSelectionModal({ open, onOpenChange, workspaceId, selectedIds, onSuccess }: { 
   open: boolean; 
   onOpenChange: (open: boolean) => void; 
