@@ -96,23 +96,29 @@ Preferred communication style: Simple, everyday language.
 - `xlsx`: Excel file generation for exports
 - `nodemailer`: Email sending capability
 
-## Recent Changes (2026-01-30)
+## Recent Changes (2026-01-31)
 
-### Implemented Interactive Features
+### Updates Today
+- **Finance Page**: Now fetches real data from `/api/finance/summary` endpoint - displays paid amounts, pending payments, and average cost per influencer from actual campaign line items
+- **Tracking Page**: Added CSV export button for metrics data (날짜, 값, Job 이름 headers with UTF-8 BOM support)
+- **Campaigns Page**: Added advertiser filter buttons (전체, 코딩밸리, Grab, Voye) for client-side filtering
+- **Type Safety**: Fixed type definitions for `createInfluencer` and `createTrackingJob` to properly exclude `workspaceId` from input (injected server-side)
+
+### Previously Implemented (2026-01-30)
 - **Discover Page**: Multi-select checkboxes, bulk actions (save to group, assign to campaign), influencer detail drawer with 4 tabs (info, content, timeline, memo)
 - **Groups Page**: Sidebar with group list and member counts, group detail view with member table, add/remove member functionality, CSV export
 - **Campaign Detail Page**: Summary cards showing influencer count and payment status, line item table with status dropdowns, add influencer modal, line item detail drawer with contract/settlement tabs
 
-### Database Updates
-- Added `timeline_events` table for tracking influencer history (campaign assignments, group additions, status changes)
-- Added `audit_logs` table for tracking all data changes
-- Added `notifications` table for in-app notifications
+### Database Tables
+- `timeline_events`: Tracking influencer history (campaign assignments, group additions, status changes)
+- `audit_logs`: Tracking all data changes
+- `notifications`: In-app notifications
 
-### API Endpoints Added
+### API Endpoints
 - Bulk operations: `/api/bulk/save-to-group`, `/api/bulk/assign-to-campaign`
 - Group management: `/api/groups/:id`, `/api/groups/:id/influencers`, `/api/groups/:id/members/:influencerId`
 - Campaign management: `/api/campaigns/:id/line-items`
-- Finance: `/api/finance/summary`
+- Finance: `/api/finance/summary` (returns pendingTotal, paidThisMonth, pendingCount, items)
 - Timeline: `/api/influencers/:id/timeline`
 
 ### Demo Credentials
@@ -120,6 +126,7 @@ Preferred communication style: Simple, everyday language.
 - Password: password
 
 ### Seeded Test Data
-- 5 influencers with Korean names (인플루언서 1-5)
+- 10 influencers with Korean names (인플루언서 1-10)
 - 2 groups: 뷰티 인플루언서 (3 members), 라이프스타일 크리에이터 (2 members)
 - 1 campaign: 서머 런칭 2025 with 3 line items at various stages
+- Sample content for first 5 influencers with thumbnail images
