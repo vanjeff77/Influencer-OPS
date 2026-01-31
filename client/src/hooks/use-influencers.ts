@@ -40,12 +40,12 @@ export function useInfluencer(id: number) {
 export function useCreateInfluencer(workspaceId: number) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (data: CreateInfluencerWithAccounts) => {
+    mutationFn: async (data: Omit<CreateInfluencerWithAccounts, 'workspaceId'>) => {
       const url = buildUrl(api.influencers.create.path, { workspaceId });
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, workspaceId }),
       });
       if (!res.ok) throw new Error("Failed to create influencer");
       return res.json();

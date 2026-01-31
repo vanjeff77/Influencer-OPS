@@ -28,16 +28,7 @@ export default function Discover() {
   
   const [search, setSearch] = useState("");
   const [platformFilter, setPlatformFilter] = useState<string>("");
-  const [advertiserFilter, setAdvertiserFilter] = useState<string>("all");
   const { data: influencers, isLoading } = useInfluencers(workspaceId || 0, { search, platform: platformFilter || undefined });
-  
-  // Example advertisers for filtering
-  const advertisers = [
-    { id: "all", name: "전체" },
-    { id: "codingvalley", name: "코딩밸리" },
-    { id: "grab", name: "Grab" },
-    { id: "voye", name: "Voye" },
-  ];
   const createInfluencer = useCreateInfluencer(workspaceId || 0);
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -229,67 +220,64 @@ export default function Discover() {
         {isLoading ? (
           <div className="text-center py-20 text-muted-foreground">{KO.common.loading}</div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {influencers?.map((inf) => (
-              <Card 
-                key={inf.id} 
-                className={`p-5 hover:shadow-md transition-shadow cursor-pointer group border-border/60 ${selectedIds.has(inf.id) ? 'ring-2 ring-primary' : ''}`}
-                onClick={() => handleInfluencerClick(inf.id)}
-                data-testid={`card-influencer-${inf.id}`}
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <Checkbox 
-                      checked={selectedIds.has(inf.id)}
-                      onClick={(e) => toggleSelection(inf.id, e)}
-                      data-testid={`checkbox-influencer-${inf.id}`}
-                    />
-                    <Avatar className="h-12 w-12 border-2 border-background shadow-sm">
-                      <AvatarFallback className="bg-gradient-to-br from-blue-100 to-blue-200 text-blue-700 font-bold">
-                        {inf.name.substring(0, 2).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <h3 className="font-semibold text-lg leading-none group-hover:text-primary transition-colors">{inf.name}</h3>
-                      <p className="text-sm text-muted-foreground mt-1 truncate max-w-[150px]">{inf.email || KO.pages.discover.noEmail}</p>
+          <Card className="overflow-hidden">
+            <div className="divide-y divide-border">
+              {influencers?.map((inf) => (
+                <div 
+                  key={inf.id} 
+                  className={`flex items-center gap-4 p-4 hover:bg-muted/50 transition-colors cursor-pointer ${selectedIds.has(inf.id) ? 'bg-primary/5' : ''}`}
+                  onClick={() => handleInfluencerClick(inf.id)}
+                  data-testid={`row-influencer-${inf.id}`}
+                >
+                  <Checkbox 
+                    checked={selectedIds.has(inf.id)}
+                    onClick={(e) => toggleSelection(inf.id, e)}
+                    data-testid={`checkbox-influencer-${inf.id}`}
+                  />
+                  <Avatar className="h-10 w-10 shrink-0">
+                    <AvatarFallback className="bg-gradient-to-br from-blue-100 to-blue-200 text-blue-700 font-bold text-sm">
+                      {inf.name.substring(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium truncate">{inf.name}</span>
+                      {inf.accounts && inf.accounts.length > 0 && (
+                        <div className="flex gap-1">
+                          {inf.accounts.map(acc => (
+                            <PlatformIcon key={acc.id} p={acc.platform} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-sm text-muted-foreground truncate">
+                      {inf.email || KO.pages.discover.noEmail}
                     </div>
                   </div>
-                  {inf.accounts && inf.accounts.length > 0 && (
-                    <div className="flex gap-1">
-                      {inf.accounts.map(acc => (
-                        <div key={acc.id} className="p-1.5 bg-muted rounded-full">
-                          <PlatformIcon p={acc.platform} />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                
-                <div className="space-y-3">
-                  <div className="flex flex-wrap gap-2">
-                    {inf.tags?.map((tag, i) => (
+                  <div className="hidden md:flex items-center gap-2 shrink-0">
+                    {inf.accounts?.[0]?.handle && (
+                      <span className="text-sm font-mono text-muted-foreground">{inf.accounts[0].handle}</span>
+                    )}
+                  </div>
+                  <div className="hidden lg:flex items-center gap-1 shrink-0 max-w-[200px]">
+                    {inf.tags?.slice(0, 3).map((tag, i) => (
                       <Badge key={i} variant="secondary" className="font-normal text-xs">{tag}</Badge>
                     ))}
-                    {!inf.tags?.length && <span className="text-xs text-muted-foreground italic">{KO.pages.discover.noTags}</span>}
+                    {(inf.tags?.length || 0) > 3 && (
+                      <span className="text-xs text-muted-foreground">+{(inf.tags?.length || 0) - 3}</span>
+                    )}
                   </div>
-                  
-                  {inf.accounts && inf.accounts.length > 0 && (
-                     <div className="bg-muted/30 rounded-lg p-3 text-sm flex justify-between items-center">
-                        <span className="text-muted-foreground">{KO.pages.discover.topAccount}</span>
-                        <span className="font-mono font-medium">{inf.accounts[0].handle}</span>
-                     </div>
-                  )}
                 </div>
-              </Card>
-            ))}
-            
-            {influencers?.length === 0 && (
-              <div className="col-span-full text-center py-20 bg-muted/10 rounded-xl border border-dashed border-border">
-                <h3 className="text-lg font-medium text-muted-foreground">{KO.pages.discover.noResults}</h3>
-                <p className="text-sm text-muted-foreground/60 mt-1">{KO.pages.discover.noResultsHint}</p>
-              </div>
-            )}
-          </div>
+              ))}
+              
+              {influencers?.length === 0 && (
+                <div className="text-center py-20">
+                  <h3 className="text-lg font-medium text-muted-foreground">{KO.pages.discover.noResults}</h3>
+                  <p className="text-sm text-muted-foreground/60 mt-1">{KO.pages.discover.noResultsHint}</p>
+                </div>
+              )}
+            </div>
+          </Card>
         )}
       </div>
 

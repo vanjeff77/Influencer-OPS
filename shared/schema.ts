@@ -288,6 +288,9 @@ export type InsertContent = z.infer<typeof insertContentSchema>;
 export type InsertTimelineEvent = z.infer<typeof insertTimelineEventSchema>;
 export type InsertTrackingJob = z.infer<typeof insertTrackingJobSchema>;
 
+// Account type without influencerId (assigned server-side)
+export type CreateAccountInput = Omit<z.infer<typeof insertInfluencerAccountSchema>, 'influencerId'>;
+
 export type CreateInfluencerWithAccounts = z.infer<typeof insertInfluencerSchema> & {
-  accounts?: z.infer<typeof insertInfluencerAccountSchema>[];
+  accounts?: CreateAccountInput[];
 };

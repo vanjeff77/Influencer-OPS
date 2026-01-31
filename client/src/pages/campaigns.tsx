@@ -5,9 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Calendar, DollarSign, ArrowRight } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { format } from "date-fns";
@@ -22,6 +22,24 @@ export default function Campaigns() {
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newCampaign, setNewCampaign] = useState({ name: "", client: "", goal: "", budget: 0 });
+  const [advertiserFilter, setAdvertiserFilter] = useState<string>("all");
+
+  // Advertiser filter options
+  const advertisers = [
+    { id: "all", name: "전체" },
+    { id: "codingvalley", name: "코딩밸리" },
+    { id: "grab", name: "Grab" },
+    { id: "voye", name: "Voye" },
+  ];
+
+  // Filter campaigns by advertiser
+  const filteredCampaigns = useMemo(() => {
+    if (!campaigns) return [];
+    if (advertiserFilter === "all") return campaigns;
+    return campaigns.filter(c => 
+      c.client?.toLowerCase().includes(advertisers.find(a => a.id === advertiserFilter)?.name.toLowerCase() || "")
+    );
+  }, [campaigns, advertiserFilter]);
 
   const handleCreate = () => {
     if (!newCampaign.name) return;
@@ -99,11 +117,27 @@ export default function Campaigns() {
           </Dialog>
         </div>
 
+        {/* Advertiser Filter Buttons */}
+        <div className="flex items-center gap-2">
+          {advertisers.map((adv) => (
+            <Button
+              key={adv.id}
+              variant={advertiserFilter === adv.id ? "default" : "outline"}
+              size="sm"
+              onClick={() => setAdvertiserFilter(adv.id)}
+              data-testid={`button-advertiser-${adv.id}`}
+              className={advertiserFilter === adv.id ? "" : "bg-background"}
+            >
+              {adv.name}
+            </Button>
+          ))}
+        </div>
+
         {isLoading ? (
           <div>{KO.common.loading}</div>
         ) : (
           <div className="grid gap-6">
-            {campaigns?.map((campaign) => (
+            {filteredCampaigns?.map((campaign) => (
               <Link key={campaign.id} href={`/campaigns/${campaign.id}`} className="block">
                 <Card className="hover:border-primary/50 transition-all hover:shadow-md cursor-pointer group" data-testid={`card-campaign-${campaign.id}`}>
                   <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
@@ -134,9 +168,11 @@ export default function Campaigns() {
               </Link>
             ))}
             
-            {campaigns?.length === 0 && (
+            {filteredCampaigns?.length === 0 && (
               <div className="text-center py-20 bg-muted/10 rounded-xl border border-dashed border-border">
-                <p className="text-muted-foreground">{KO.pages.campaigns.noCampaigns}</p>
+                <p className="text-muted-foreground">
+                  {advertiserFilter === "all" ? KO.pages.campaigns.noCampaigns : "선택한 광고주의 캠페인이 없습니다."}
+                </p>
               </div>
             )}
           </div>
