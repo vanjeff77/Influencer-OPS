@@ -266,6 +266,65 @@ export async function registerRoutes(
     res.json(item);
   });
 
+  // === CAMPAIGN CONTENTS ===
+  app.get('/api/campaigns/:id/contents', async (req, res) => {
+    const campaignId = parseInt(req.params.id);
+    const contents = await storage.getCampaignContents(campaignId);
+    res.json(contents);
+  });
+
+  app.post('/api/campaigns/:id/contents', async (req, res) => {
+    const campaignId = parseInt(req.params.id);
+    const { lineItemId, influencerId, platform, contentUrl, thumbnailUrl, publishedAt, views, likes, comments, shares, engagementRate, memo, status } = req.body;
+    
+    const content = await storage.createCampaignContent({
+      campaignId,
+      lineItemId,
+      influencerId,
+      platform,
+      contentUrl,
+      thumbnailUrl,
+      publishedAt: publishedAt ? new Date(publishedAt) : null,
+      views: views || 0,
+      likes: likes || 0,
+      comments: comments || 0,
+      shares: shares || 0,
+      engagementRate,
+      memo,
+      status: status || 'published'
+    });
+    
+    // Create timeline event
+    const influencer = await storage.getInfluencer(influencerId);
+    const campaign = await storage.getCampaign(campaignId);
+    if (influencer && campaign) {
+      await storage.createTimelineEvent({
+        workspaceId: campaign.workspaceId,
+        influencerId,
+        campaignId,
+        lineItemId,
+        eventType: 'content_added',
+        title: '콘텐츠 등록',
+        description: `"${campaign.name}" 캠페인에 콘텐츠 등록`,
+        metadata: { contentUrl, platform }
+      });
+    }
+    
+    res.status(201).json(content);
+  });
+
+  app.patch('/api/campaign-contents/:id', async (req, res) => {
+    const contentId = parseInt(req.params.id);
+    const updated = await storage.updateCampaignContent(contentId, req.body);
+    res.json(updated);
+  });
+
+  app.delete('/api/campaign-contents/:id', async (req, res) => {
+    const contentId = parseInt(req.params.id);
+    await storage.deleteCampaignContent(contentId);
+    res.status(204).send();
+  });
+
   // === BULK OPERATIONS ===
   app.post('/api/bulk/save-to-group', async (req, res) => {
     const { influencerIds, groupId, createGroup } = req.body;

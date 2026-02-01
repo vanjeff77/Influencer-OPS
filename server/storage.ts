@@ -2,7 +2,7 @@ import { db } from "./db";
 import {
   users, workspaces, workspaceMembers, influencers, influencerAccounts, groups, groupInfluencers, campaigns, campaignInfluencers,
   emailAccounts, emailThreads, trackingJobs, trackingMetrics, contents, timelineEvents, auditLogs, notifications,
-  conversations, conversationMessages, emailTemplates, bulkEmailJobs, bulkEmailQueueItems,
+  conversations, conversationMessages, emailTemplates, bulkEmailJobs, bulkEmailQueueItems, campaignContents,
   type User, type InsertUser, type Workspace, type InsertWorkspace,
   type Influencer, type CreateInfluencerWithAccounts, type InfluencerAccount,
   type Group, type GroupInfluencer, type Campaign, type CampaignInfluencer, type Content,
@@ -10,7 +10,8 @@ import {
   type TimelineEvent, type InsertTimelineEvent, type AuditLog, type Notification,
   type Conversation, type ConversationMessage, type EmailTemplate,
   type InsertConversation, type InsertConversationMessage, type InsertEmailTemplate,
-  type BulkEmailJob, type BulkEmailQueueItem, type InsertBulkEmailJob, type InsertBulkEmailQueueItem
+  type BulkEmailJob, type BulkEmailQueueItem, type InsertBulkEmailJob, type InsertBulkEmailQueueItem,
+  type CampaignContent, type InsertCampaignContent
 } from "@shared/schema";
 import { eq, like, or, and, sql, inArray, desc } from "drizzle-orm";
 
@@ -94,6 +95,12 @@ export interface IStorage {
   getNextPendingQueueItem(jobId: number): Promise<BulkEmailQueueItem | undefined>;
   updateBulkEmailQueueItem(id: number, data: Partial<BulkEmailQueueItem>): Promise<BulkEmailQueueItem>;
   getSentEmailsForCampaign(campaignId: number): Promise<{ influencerId: number; email: string }[]>;
+
+  // Campaign Contents
+  getCampaignContents(campaignId: number): Promise<(CampaignContent & { influencer?: Influencer })[]>;
+  createCampaignContent(content: InsertCampaignContent): Promise<CampaignContent>;
+  updateCampaignContent(id: number, data: Partial<CampaignContent>): Promise<CampaignContent>;
+  deleteCampaignContent(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -625,6 +632,39 @@ export class DatabaseStorage implements IStorage {
         eq(bulkEmailQueueItems.campaignId, campaignId),
         eq(bulkEmailQueueItems.status, 'sent')
       ));
+  }
+
+  async getCampaignContents(campaignId: number): Promise<(CampaignContent & { influencer?: Influencer })[]> {
+    const rows = await db.select({
+      content: campaignContents,
+      influencer: influencers
+    })
+      .from(campaignContents)
+      .leftJoin(influencers, eq(campaignContents.influencerId, influencers.id))
+      .where(eq(campaignContents.campaignId, campaignId))
+      .orderBy(desc(campaignContents.createdAt));
+    
+    return rows.map(row => ({
+      ...row.content,
+      influencer: row.influencer || undefined
+    }));
+  }
+
+  async createCampaignContent(content: InsertCampaignContent): Promise<CampaignContent> {
+    const [created] = await db.insert(campaignContents).values(content).returning();
+    return created;
+  }
+
+  async updateCampaignContent(id: number, data: Partial<CampaignContent>): Promise<CampaignContent> {
+    const [updated] = await db.update(campaignContents)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(campaignContents.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteCampaignContent(id: number): Promise<void> {
+    await db.delete(campaignContents).where(eq(campaignContents.id, id));
   }
 }
 

@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, buildUrl } from "@shared/routes";
-import type { Campaign, CampaignInfluencer, Influencer, InfluencerAccount } from "@shared/schema";
+import type { Campaign, CampaignInfluencer, Influencer, InfluencerAccount, CampaignContent } from "@shared/schema";
 
 export type CampaignLineItem = CampaignInfluencer & { influencer?: Influencer & { accounts: InfluencerAccount[] } };
 export type CampaignDetail = Campaign & { items: CampaignLineItem[] };
@@ -132,5 +132,71 @@ export function useFinanceSummary(workspaceId: number, filters?: { month?: strin
       }>;
     },
     enabled: !!workspaceId,
+  });
+}
+
+// Campaign Contents hooks
+export type CampaignContentWithInfluencer = CampaignContent & { influencer?: Influencer };
+
+export function useCampaignContents(campaignId: number) {
+  return useQuery<CampaignContentWithInfluencer[]>({
+    queryKey: ['/api/campaigns', campaignId, 'contents'],
+    queryFn: async () => {
+      const res = await fetch(`/api/campaigns/${campaignId}/contents`);
+      if (!res.ok) throw new Error("Failed to fetch campaign contents");
+      return res.json();
+    },
+    enabled: !!campaignId,
+  });
+}
+
+export function useCreateCampaignContent(campaignId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: Partial<CampaignContent>) => {
+      const res = await fetch(`/api/campaigns/${campaignId}/contents`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to create campaign content");
+      return res.json() as Promise<CampaignContent>;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/campaigns', campaignId, 'contents'] });
+    },
+  });
+}
+
+export function useUpdateCampaignContent(campaignId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...data }: Partial<CampaignContent> & { id: number }) => {
+      const res = await fetch(`/api/campaign-contents/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to update campaign content");
+      return res.json() as Promise<CampaignContent>;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/campaigns', campaignId, 'contents'] });
+    },
+  });
+}
+
+export function useDeleteCampaignContent(campaignId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/campaign-contents/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete campaign content");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/campaigns', campaignId, 'contents'] });
+    },
   });
 }

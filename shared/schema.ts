@@ -227,6 +227,27 @@ export const emailMessages = pgTable("email_messages", {
   date: timestamp("date"),
 });
 
+// === CAMPAIGN CONTENTS ===
+export const campaignContents = pgTable("campaign_contents", {
+  id: serial("id").primaryKey(),
+  campaignId: integer("campaign_id").notNull(),
+  lineItemId: integer("line_item_id").notNull(),
+  influencerId: integer("influencer_id").notNull(),
+  platform: text("platform").notNull(), // IG, YT, TikTok, X, Blog
+  contentUrl: text("content_url").notNull(),
+  thumbnailUrl: text("thumbnail_url"),
+  publishedAt: timestamp("published_at"),
+  views: integer("views").default(0),
+  likes: integer("likes").default(0),
+  comments: integer("comments").default(0),
+  shares: integer("shares").default(0),
+  engagementRate: text("engagement_rate"), // stored as string like "3.5%"
+  status: text("status").default("published"), // published, scheduled, draft
+  memo: text("memo"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // === TRACKING JOBS ===
 export const trackingJobs = pgTable("tracking_jobs", {
   id: serial("id").primaryKey(),
@@ -341,6 +362,12 @@ export const conversationMessageRelations = relations(conversationMessages, ({ o
   conversation: one(conversations, { fields: [conversationMessages.conversationId], references: [conversations.id] }),
 }));
 
+export const campaignContentRelations = relations(campaignContents, ({ one }) => ({
+  campaign: one(campaigns, { fields: [campaignContents.campaignId], references: [campaigns.id] }),
+  lineItem: one(campaignInfluencers, { fields: [campaignContents.lineItemId], references: [campaignInfluencers.id] }),
+  influencer: one(influencers, { fields: [campaignContents.influencerId], references: [influencers.id] }),
+}));
+
 // === SCHEMAS ===
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export const insertWorkspaceSchema = createInsertSchema(workspaces).omit({ id: true, createdAt: true });
@@ -358,6 +385,7 @@ export const insertTimelineEventSchema = createInsertSchema(timelineEvents).omit
 export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({ id: true, createdAt: true });
 export const insertBulkEmailJobSchema = createInsertSchema(bulkEmailJobs).omit({ id: true, createdAt: true, completedAt: true });
 export const insertBulkEmailQueueItemSchema = createInsertSchema(bulkEmailQueueItems).omit({ id: true, createdAt: true });
+export const insertCampaignContentSchema = createInsertSchema(campaignContents).omit({ id: true, createdAt: true, updatedAt: true });
 
 // === TYPES ===
 export type User = typeof users.$inferSelect;
@@ -381,6 +409,8 @@ export type EmailTemplate = typeof emailTemplates.$inferSelect;
 export type TrackingJob = typeof trackingJobs.$inferSelect;
 export type BulkEmailJob = typeof bulkEmailJobs.$inferSelect;
 export type BulkEmailQueueItem = typeof bulkEmailQueueItems.$inferSelect;
+export type CampaignContent = typeof campaignContents.$inferSelect;
+export type InsertCampaignContent = z.infer<typeof insertCampaignContentSchema>;
 
 export type InsertConversation = z.infer<typeof insertConversationSchema>;
 export type InsertConversationMessage = z.infer<typeof insertConversationMessageSchema>;
