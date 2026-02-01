@@ -182,6 +182,7 @@ export function useAssignToCampaign() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/campaigns'] });
+      queryClient.invalidateQueries({ queryKey: [api.campaigns.list.path] });
     },
   });
 }
