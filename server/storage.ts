@@ -27,7 +27,7 @@ export interface IStorage {
   getInfluencers(workspaceId: number, search?: string, filters?: { platform?: string; tags?: string[] }): Promise<(Influencer & { accounts: InfluencerAccount[] })[]>;
   getInfluencer(id: number): Promise<(Influencer & { accounts: InfluencerAccount[]; contents: Content[]; timeline: TimelineEvent[] }) | undefined>;
   createInfluencer(workspaceId: number, data: Omit<CreateInfluencerWithAccounts, 'workspaceId'>): Promise<Influencer & { accounts: InfluencerAccount[] }>;
-  updateInfluencer(id: number, data: Partial<Influencer>): Promise<Influencer>;
+  updateInfluencer(id: number, data: Partial<Influencer> & { accounts?: Array<{ platform: string; handle: string; url?: string }> }): Promise<Influencer & { accounts?: InfluencerAccount[] }>;
 
   // Influencer Contents
   getInfluencerContents(influencerId: number): Promise<Content[]>;
@@ -186,8 +186,25 @@ export class DatabaseStorage implements IStorage {
     return { ...inf, accounts: createdAccounts };
   }
 
-  async updateInfluencer(id: number, data: Partial<Influencer>): Promise<Influencer> {
-    const [inf] = await db.update(influencers).set(data).where(eq(influencers.id, id)).returning();
+  async updateInfluencer(id: number, data: Partial<Influencer> & { accounts?: Array<{ platform: string; handle: string; url?: string }> }): Promise<Influencer & { accounts?: InfluencerAccount[] }> {
+    const { accounts: newAccounts, ...influencerData } = data as any;
+    const [inf] = await db.update(influencers).set(influencerData).where(eq(influencers.id, id)).returning();
+    
+    if (newAccounts !== undefined) {
+      await db.delete(influencerAccounts).where(eq(influencerAccounts.influencerId, id));
+      const createdAccounts: InfluencerAccount[] = [];
+      for (const acc of newAccounts) {
+        const [account] = await db.insert(influencerAccounts).values({
+          influencerId: id,
+          platform: acc.platform,
+          handle: acc.handle,
+          url: acc.url || null
+        }).returning();
+        createdAccounts.push(account);
+      }
+      return { ...inf, accounts: createdAccounts };
+    }
+    
     return inf;
   }
 

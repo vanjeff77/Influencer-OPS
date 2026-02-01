@@ -518,7 +518,17 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
   const [tags, setTags] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [name, setName] = useState("");
+  const [accounts, setAccounts] = useState<{ platform: string; handle: string }[]>([]);
   const [newContentLink, setNewContentLink] = useState("");
+
+  const platformUrlMap: Record<string, string> = {
+    IG: 'instagram.com',
+    YT: 'youtube.com/@',
+    TikTok: 'tiktok.com/@',
+    X: 'x.com',
+    Blog: 'blog.naver.com',
+  };
 
   useEffect(() => {
     if (influencer) {
@@ -526,22 +536,47 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
       setTags(influencer.tags?.join(", ") || "");
       setEmail(influencer.email || "");
       setPhone(influencer.phone || "");
+      setName(influencer.name || "");
+      setAccounts(influencer.accounts?.map(acc => ({ platform: acc.platform, handle: acc.handle })) || []);
     }
   }, [influencer]);
 
   const handleSave = () => {
     if (!influencerId) return;
+    const validAccounts = accounts
+      .filter(acc => acc.handle.trim())
+      .map(acc => ({
+        platform: acc.platform,
+        handle: acc.handle,
+        url: `https://${platformUrlMap[acc.platform] || ''}${acc.handle.replace('@', '')}`
+      }));
     updateInfluencer.mutate({
       id: influencerId,
       data: {
+        name,
         memo,
         tags: tags.split(",").map(t => t.trim()).filter(Boolean),
         email,
-        phone
+        phone,
+        accounts: validAccounts
       }
     }, {
       onSuccess: () => toast({ title: "저장되었습니다." })
     });
+  };
+
+  const addAccount = () => {
+    setAccounts([...accounts, { platform: "IG", handle: "" }]);
+  };
+
+  const removeAccount = (index: number) => {
+    setAccounts(accounts.filter((_, i) => i !== index));
+  };
+
+  const updateAccount = (index: number, field: 'platform' | 'handle', value: string) => {
+    const newAccounts = [...accounts];
+    newAccounts[index] = { ...newAccounts[index], [field]: value };
+    setAccounts(newAccounts);
   };
 
   const handleAddContent = () => {
@@ -602,6 +637,10 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
               <TabsContent value="info" className="space-y-4 mt-4">
                 <div className="space-y-3">
                   <div>
+                    <label className="text-sm font-medium">이름</label>
+                    <Input value={name} onChange={e => setName(e.target.value)} data-testid="input-influencer-name" />
+                  </div>
+                  <div>
                     <label className="text-sm font-medium">이메일</label>
                     <Input value={email} onChange={e => setEmail(e.target.value)} data-testid="input-influencer-email" />
                   </div>
@@ -613,28 +652,56 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
                     <label className="text-sm font-medium">태그 (쉼표로 구분)</label>
                     <Input value={tags} onChange={e => setTags(e.target.value)} placeholder="뷰티, 패션, 라이프스타일" data-testid="input-influencer-tags" />
                   </div>
-                  <Button onClick={handleSave} disabled={updateInfluencer.isPending} className="w-full" data-testid="button-save-info">
-                    <Save className="w-4 h-4 mr-2" />
-                    {updateInfluencer.isPending ? "저장 중..." : "저장"}
-                  </Button>
                 </div>
 
-                {influencer.accounts?.map(acc => (
-                  <Card key={acc.id} className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <PlatformIcon p={acc.platform} />
-                        <div>
-                          <div className="font-medium">{acc.handle}</div>
-                          <div className="text-xs text-muted-foreground">{acc.category || '카테고리 없음'}</div>
-                        </div>
-                      </div>
-                      <a href={acc.url} target="_blank" rel="noopener noreferrer">
-                        <Button variant="ghost" size="icon"><ExternalLink className="w-4 h-4" /></Button>
-                      </a>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">플랫폼 계정</label>
+                    <Button variant="outline" size="sm" onClick={addAccount} data-testid="button-add-account">
+                      <Plus className="w-3 h-3 mr-1" />
+                      추가
+                    </Button>
+                  </div>
+                  {accounts.map((acc, index) => (
+                    <div key={index} className="flex gap-2 items-center">
+                      <Select value={acc.platform} onValueChange={v => updateAccount(index, 'platform', v)}>
+                        <SelectTrigger className="w-28" data-testid={`select-account-platform-${index}`}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="IG">Instagram</SelectItem>
+                          <SelectItem value="YT">YouTube</SelectItem>
+                          <SelectItem value="TikTok">TikTok</SelectItem>
+                          <SelectItem value="X">X</SelectItem>
+                          <SelectItem value="Blog">네이버 블로그</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input 
+                        value={acc.handle} 
+                        onChange={e => updateAccount(index, 'handle', e.target.value)} 
+                        placeholder="@handle" 
+                        className="flex-1"
+                        data-testid={`input-account-handle-${index}`}
+                      />
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => removeAccount(index)}
+                        data-testid={`button-remove-account-${index}`}
+                      >
+                        <X className="w-4 h-4 text-destructive" />
+                      </Button>
                     </div>
-                  </Card>
-                ))}
+                  ))}
+                  {accounts.length === 0 && (
+                    <div className="text-sm text-muted-foreground text-center py-2">등록된 플랫폼 계정이 없습니다.</div>
+                  )}
+                </div>
+
+                <Button onClick={handleSave} disabled={updateInfluencer.isPending} className="w-full" data-testid="button-save-info">
+                  <Save className="w-4 h-4 mr-2" />
+                  {updateInfluencer.isPending ? "저장 중..." : "저장"}
+                </Button>
               </TabsContent>
 
               <TabsContent value="content" className="mt-4 space-y-4">

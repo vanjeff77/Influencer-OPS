@@ -59,7 +59,7 @@ export function useCreateInfluencer(workspaceId: number) {
 export function useUpdateInfluencer() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: Partial<Influencer> }) => {
+    mutationFn: async ({ id, data }: { id: number; data: Partial<Influencer> & { accounts?: Array<{ platform: string; handle: string; url?: string }> } }) => {
       const res = await fetch(`/api/influencers/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
