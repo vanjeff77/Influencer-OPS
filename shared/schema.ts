@@ -127,6 +127,11 @@ export const emailAccounts = pgTable("email_accounts", {
   provider: text("provider").default("gmail"),
   accessToken: text("access_token"),
   refreshToken: text("refresh_token"),
+  imapHost: text("imap_host"),
+  imapPort: integer("imap_port"),
+  smtpHost: text("smtp_host"),
+  smtpPort: integer("smtp_port"),
+  imapPassword: text("imap_password"),
   lastSyncedAt: timestamp("last_synced_at"),
 });
 
