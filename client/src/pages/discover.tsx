@@ -420,6 +420,9 @@ export default function Discover() {
                     <TableHead className="px-2 text-xs font-semibold w-24">{KO.pages.discover.platform}</TableHead>
                     <TableHead className="px-2 text-xs font-semibold w-20 text-right">{KO.pages.discover.followers}</TableHead>
                     <TableHead className="px-2 text-xs font-semibold w-28">{KO.pages.discover.client}</TableHead>
+                    <TableHead className="px-2 text-xs font-semibold w-16 text-center">{KO.pages.discover.contactStatusLabel}</TableHead>
+                    <TableHead className="px-2 text-xs font-semibold w-16 text-center">{KO.pages.discover.replyStatusLabel}</TableHead>
+                    <TableHead className="px-2 text-xs font-semibold w-16 text-center">{KO.pages.discover.collabStatusLabel}</TableHead>
                     <TableHead className="px-2 text-xs font-semibold w-28">{KO.pages.discover.campaignStatus}</TableHead>
                     <TableHead className="px-2 text-xs font-semibold w-24">{KO.pages.discover.collaboration}</TableHead>
                   </TableRow>
@@ -474,6 +477,33 @@ export default function Discover() {
                             {uniqueClients.length > 2 && ` +${uniqueClients.length - 2}`}
                           </span>
                         </TableCell>
+                        <TableCell className="px-2 py-1 text-center">
+                          {inf.contactStatus === 'Y' ? (
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 bg-green-100 text-green-700">Y</Badge>
+                          ) : inf.contactStatus === 'N' ? (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5">N</Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="px-2 py-1 text-center">
+                          {inf.replyStatus === 'Y' ? (
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 bg-blue-100 text-blue-700">Y</Badge>
+                          ) : inf.replyStatus === 'N' ? (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5">N</Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="px-2 py-1 text-center">
+                          {inf.collabStatus === 'Y' ? (
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 bg-purple-100 text-purple-700">Y</Badge>
+                          ) : inf.collabStatus === 'N' ? (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5">N</Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
                         <TableCell className="px-2 py-1">
                           {campaignData ? (
                             <span className="text-xs select-text">
@@ -504,7 +534,7 @@ export default function Discover() {
                   
                   {influencers?.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-12">
+                      <TableCell colSpan={10} className="text-center py-12">
                         <h3 className="text-sm font-medium text-muted-foreground">{KO.pages.discover.noResults}</h3>
                         <p className="text-xs text-muted-foreground/60 mt-1">{KO.pages.discover.noResultsHint}</p>
                       </TableCell>
