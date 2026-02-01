@@ -59,8 +59,11 @@ export default function Discover() {
   });
 
   const TEMPLATE_HEADERS = '닉네임\t플랫폼\t플랫폼 계정\t채널 URL\t팔로워\t컨택포인트\t메모\t클라이언트\t세부유형\t컨택여부\t회신 여부\t협업 여부\t콘텐츠 완성본 링크';
+  const [isCopying, setIsCopying] = useState(false);
 
   const handleCopyTemplate = async () => {
+    if (isCopying) return;
+    setIsCopying(true);
     try {
       await navigator.clipboard.writeText(TEMPLATE_HEADERS);
       toast({
@@ -71,6 +74,8 @@ export default function Discover() {
         title: KO.pages.discover.copyFailed,
         variant: "destructive"
       });
+    } finally {
+      setTimeout(() => setIsCopying(false), 500);
     }
   };
 
@@ -235,7 +240,7 @@ export default function Discover() {
           </div>
           
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={handleCopyTemplate} data-testid="button-copy-template">
+            <Button variant="outline" size="sm" onClick={handleCopyTemplate} disabled={isCopying} data-testid="button-copy-template">
               <Copy className="w-3 h-3 mr-1" />
               {KO.pages.discover.copyTemplate}
             </Button>
