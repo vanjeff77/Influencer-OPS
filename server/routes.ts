@@ -5,6 +5,9 @@ import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
+import { db } from "./db";
+import { campaignInfluencers } from "@shared/schema";
+import { eq } from "drizzle-orm";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -346,6 +349,240 @@ export async function registerRoutes(
 
   app.post(api.email.sendBulk.path, async (req, res) => {
     res.json({ sent: req.body.to.length, failed: 0 });
+  });
+
+  // === GMAIL STATUS ===
+  app.get('/api/email/gmail/status', async (req, res) => {
+    try {
+      const { getGmailProfile } = await import('./gmail');
+      const profile = await getGmailProfile();
+      res.json({ connected: true, email: profile.emailAddress });
+    } catch (err) {
+      res.json({ connected: false, email: null });
+    }
+  });
+
+  // === CONVERSATIONS (Messenger-style email threads) ===
+  app.get('/api/conversations', async (req, res) => {
+    const campaignId = parseInt(req.query.campaignId as string);
+    if (!campaignId) return res.json([]);
+    const convs = await storage.getConversationsByCampaign(campaignId);
+    res.json(convs);
+  });
+
+  app.get('/api/conversations/:id', async (req, res) => {
+    const conv = await storage.getConversation(parseInt(req.params.id));
+    if (!conv) return res.status(404).json({ message: "Not found" });
+    res.json(conv);
+  });
+
+  app.post('/api/conversations', async (req, res) => {
+    const conv = await storage.createConversation(req.body);
+    res.status(201).json(conv);
+  });
+
+  app.patch('/api/conversations/:id', async (req, res) => {
+    const conv = await storage.updateConversation(parseInt(req.params.id), req.body);
+    res.json(conv);
+  });
+
+  // Send message in conversation (with Gmail integration)
+  app.post('/api/conversations/:id/messages', async (req, res) => {
+    try {
+      const conversationId = parseInt(req.params.id);
+      const conv = await storage.getConversation(conversationId);
+      if (!conv) return res.status(404).json({ message: "Conversation not found" });
+      
+      const { body, subject } = req.body;
+      const influencer = conv.lineItem.influencer;
+      const toEmail = influencer?.email;
+      
+      if (!toEmail) {
+        return res.status(400).json({ message: "인플루언서 이메일이 없습니다" });
+      }
+      
+      let gmailMessageId: string | undefined;
+      let gmailThreadId: string | undefined;
+      let sendStatus = 'sent';
+      
+      try {
+        const { sendEmail, generateSnippet } = await import('./gmail');
+        const finalSubject = conv.subjectPrefix ? `${conv.subjectPrefix} ${subject || ''}`.trim() : subject;
+        const result = await sendEmail(toEmail, finalSubject, body, conv.gmailThreadId || undefined);
+        gmailMessageId = result.id || undefined;
+        gmailThreadId = result.threadId || undefined;
+        
+        // Update conversation with Gmail thread ID if first message
+        if (!conv.gmailThreadId && gmailThreadId) {
+          await storage.updateConversation(conversationId, { gmailThreadId });
+        }
+      } catch (gmailErr) {
+        console.error('Gmail send failed:', gmailErr);
+        sendStatus = 'failed';
+      }
+      
+      const { generateSnippet } = await import('./gmail');
+      const snippet = generateSnippet(body);
+      
+      const message = await storage.createConversationMessage({
+        conversationId,
+        direction: 'outbound',
+        snippet,
+        bodyHtml: body,
+        bodyText: body.replace(/<[^>]*>/g, ''),
+        gmailMessageId,
+        gmailThreadId,
+        sendStatus,
+        sentAt: new Date()
+      });
+      
+      // Create timeline event
+      if (influencer) {
+        await storage.createTimelineEvent({
+          workspaceId: influencer.workspaceId,
+          influencerId: influencer.id,
+          lineItemId: conv.campaignLineItemId,
+          eventType: 'email_sent',
+          title: '이메일 발송',
+          description: subject || '(제목 없음)',
+          metadata: { conversationId, messageId: message.id, sendStatus }
+        });
+      }
+      
+      res.status(201).json(message);
+    } catch (err) {
+      console.error('Send message error:', err);
+      res.status(500).json({ message: "메시지 전송 실패" });
+    }
+  });
+
+  // Sync conversation (fetch new emails from Gmail)
+  app.post('/api/conversations/:id/sync', async (req, res) => {
+    try {
+      const conversationId = parseInt(req.params.id);
+      const conv = await storage.getConversation(conversationId);
+      if (!conv) return res.status(404).json({ message: "Conversation not found" });
+      
+      if (!conv.gmailThreadId) {
+        return res.json({ synced: 0, message: "아직 Gmail 스레드가 없습니다" });
+      }
+      
+      const { getThread, parseMessageHeaders, getMessageBody, generateSnippet } = await import('./gmail');
+      const thread = await getThread(conv.gmailThreadId);
+      
+      if (!thread.messages) {
+        return res.json({ synced: 0 });
+      }
+      
+      // Get existing message IDs to avoid duplicates
+      const existingMessages = await storage.getConversationMessages(conversationId);
+      const existingGmailIds = new Set(existingMessages.map(m => m.gmailMessageId).filter(Boolean));
+      
+      let syncedCount = 0;
+      const influencer = conv.lineItem.influencer;
+      
+      for (const msg of thread.messages) {
+        if (existingGmailIds.has(msg.id)) continue;
+        
+        const headers = parseMessageHeaders(msg);
+        const body = getMessageBody(msg);
+        const isInbound = influencer?.email ? headers.from.includes(influencer.email) : false;
+        
+        if (!isInbound) continue; // Only sync inbound messages
+        
+        await storage.createConversationMessage({
+          conversationId,
+          direction: 'inbound',
+          snippet: generateSnippet(body.text || body.html),
+          bodyHtml: body.html,
+          bodyText: body.text,
+          gmailMessageId: msg.id,
+          gmailThreadId: msg.threadId,
+          sendStatus: 'sent',
+          receivedAt: new Date(parseInt(msg.internalDate || '0'))
+        });
+        
+        syncedCount++;
+        
+        // Create timeline event
+        if (influencer) {
+          await storage.createTimelineEvent({
+            workspaceId: influencer.workspaceId,
+            influencerId: influencer.id,
+            lineItemId: conv.campaignLineItemId,
+            eventType: 'email_received',
+            title: '이메일 수신',
+            description: headers.subject,
+            metadata: { conversationId, gmailMessageId: msg.id }
+          });
+        }
+      }
+      
+      // Update conversation status if got reply
+      if (syncedCount > 0) {
+        await storage.updateConversation(conversationId, { status: 'replied' });
+      }
+      
+      res.json({ synced: syncedCount });
+    } catch (err) {
+      console.error('Sync error:', err);
+      res.status(500).json({ message: "동기화 실패" });
+    }
+  });
+
+  // Start a new conversation for a line item
+  app.post('/api/line-items/:id/start-conversation', async (req, res) => {
+    try {
+      const lineItemId = parseInt(req.params.id);
+      
+      // Check if conversation already exists
+      const existing = await storage.getConversationByLineItem(lineItemId);
+      if (existing) {
+        const conv = await storage.getConversation(existing.id);
+        return res.json(conv);
+      }
+      
+      // Get line item and campaign for subject prefix
+      const [lineItem] = await db.select().from(campaignInfluencers).where(eq(campaignInfluencers.id, lineItemId));
+      if (!lineItem) return res.status(404).json({ message: "Line item not found" });
+      
+      const campaign = await storage.getCampaign(lineItem.campaignId);
+      const subjectPrefix = campaign ? `[${campaign.name}]` : '';
+      
+      const conv = await storage.createConversation({
+        campaignLineItemId: lineItemId,
+        subjectPrefix,
+        status: 'active',
+        lastMessageAt: new Date()
+      });
+      
+      res.status(201).json(conv);
+    } catch (err) {
+      console.error('Start conversation error:', err);
+      res.status(500).json({ message: "대화 시작 실패" });
+    }
+  });
+
+  // === EMAIL TEMPLATES ===
+  app.get('/api/email-templates', async (req, res) => {
+    const workspaceId = parseInt(req.query.workspaceId as string) || 1;
+    const templates = await storage.getEmailTemplates(workspaceId);
+    res.json(templates);
+  });
+
+  app.post('/api/email-templates', async (req, res) => {
+    const template = await storage.createEmailTemplate(req.body);
+    res.status(201).json(template);
+  });
+
+  app.patch('/api/email-templates/:id', async (req, res) => {
+    const template = await storage.updateEmailTemplate(parseInt(req.params.id), req.body);
+    res.json(template);
+  });
+
+  app.delete('/api/email-templates/:id', async (req, res) => {
+    await storage.deleteEmailTemplate(parseInt(req.params.id));
+    res.json({ success: true });
   });
 
   // === TRACKING ===

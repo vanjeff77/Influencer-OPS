@@ -2,11 +2,14 @@ import { db } from "./db";
 import {
   users, workspaces, influencers, influencerAccounts, groups, groupInfluencers, campaigns, campaignInfluencers,
   emailAccounts, emailThreads, trackingJobs, trackingMetrics, contents, timelineEvents, auditLogs, notifications,
+  conversations, conversationMessages, emailTemplates,
   type User, type InsertUser, type Workspace, type InsertWorkspace,
   type Influencer, type CreateInfluencerWithAccounts, type InfluencerAccount,
   type Group, type GroupInfluencer, type Campaign, type CampaignInfluencer, type Content,
   type EmailAccount, type EmailThread, type EmailMessage, type TrackingJob, type InsertTrackingJob,
-  type TimelineEvent, type InsertTimelineEvent, type AuditLog, type Notification
+  type TimelineEvent, type InsertTimelineEvent, type AuditLog, type Notification,
+  type Conversation, type ConversationMessage, type EmailTemplate,
+  type InsertConversation, type InsertConversationMessage, type InsertEmailTemplate
 } from "@shared/schema";
 import { eq, like, or, and, sql, inArray, desc } from "drizzle-orm";
 
@@ -425,8 +428,115 @@ export class DatabaseStorage implements IStorage {
 
   async getAuditLogs(workspaceId: number, entityType?: string, entityId?: number): Promise<AuditLog[]> {
     let query = db.select().from(auditLogs).where(eq(auditLogs.workspaceId, workspaceId));
-    // Note: filtering would need to be added if entityType/entityId are provided
     return await query.orderBy(desc(auditLogs.createdAt)).limit(100);
+  }
+
+  // === CONVERSATIONS ===
+  async getConversationsByCampaign(campaignId: number): Promise<(Conversation & { lineItem: CampaignInfluencer & { influencer?: Influencer }; messageCount: number; lastMessage?: ConversationMessage })[]> {
+    const campaign = await this.getCampaign(campaignId);
+    if (!campaign) return [];
+    
+    const lineItemIds = campaign.items.map(i => i.id);
+    if (lineItemIds.length === 0) return [];
+    
+    const convList = await db.select().from(conversations)
+      .where(inArray(conversations.campaignLineItemId, lineItemIds))
+      .orderBy(desc(conversations.lastMessageAt));
+    
+    // Get all messages for counts
+    const convIds = convList.map(c => c.id);
+    const allMessages = convIds.length > 0 
+      ? await db.select().from(conversationMessages)
+          .where(inArray(conversationMessages.conversationId, convIds))
+          .orderBy(desc(conversationMessages.createdAt))
+      : [];
+    
+    return convList.map(conv => {
+      const messages = allMessages.filter(m => m.conversationId === conv.id);
+      const lineItem = campaign.items.find(i => i.id === conv.campaignLineItemId);
+      return {
+        ...conv,
+        lineItem: lineItem!,
+        messageCount: messages.length,
+        lastMessage: messages[0]
+      };
+    });
+  }
+
+  async getConversation(id: number): Promise<(Conversation & { messages: ConversationMessage[]; lineItem: CampaignInfluencer & { influencer?: Influencer & { accounts: InfluencerAccount[] } } }) | undefined> {
+    const [conv] = await db.select().from(conversations).where(eq(conversations.id, id));
+    if (!conv) return undefined;
+    
+    const messages = await db.select().from(conversationMessages)
+      .where(eq(conversationMessages.conversationId, id))
+      .orderBy(conversationMessages.createdAt);
+    
+    const [lineItem] = await db.select().from(campaignInfluencers).where(eq(campaignInfluencers.id, conv.campaignLineItemId));
+    let influencer: (Influencer & { accounts: InfluencerAccount[] }) | undefined;
+    if (lineItem) {
+      const [inf] = await db.select().from(influencers).where(eq(influencers.id, lineItem.influencerId));
+      if (inf) {
+        const accounts = await db.select().from(influencerAccounts).where(eq(influencerAccounts.influencerId, inf.id));
+        influencer = { ...inf, accounts };
+      }
+    }
+    
+    return {
+      ...conv,
+      messages,
+      lineItem: { ...lineItem, influencer }
+    };
+  }
+
+  async getConversationByLineItem(lineItemId: number): Promise<Conversation | undefined> {
+    const [conv] = await db.select().from(conversations).where(eq(conversations.campaignLineItemId, lineItemId));
+    return conv;
+  }
+
+  async createConversation(data: InsertConversation): Promise<Conversation> {
+    const [conv] = await db.insert(conversations).values(data).returning();
+    return conv;
+  }
+
+  async updateConversation(id: number, data: Partial<Conversation>): Promise<Conversation> {
+    const [conv] = await db.update(conversations).set(data).where(eq(conversations.id, id)).returning();
+    return conv;
+  }
+
+  async createConversationMessage(data: InsertConversationMessage): Promise<ConversationMessage> {
+    const [msg] = await db.insert(conversationMessages).values(data).returning();
+    
+    // Update conversation's lastMessageAt
+    await db.update(conversations)
+      .set({ lastMessageAt: new Date() })
+      .where(eq(conversations.id, data.conversationId));
+    
+    return msg;
+  }
+
+  async getConversationMessages(conversationId: number): Promise<ConversationMessage[]> {
+    return await db.select().from(conversationMessages)
+      .where(eq(conversationMessages.conversationId, conversationId))
+      .orderBy(conversationMessages.createdAt);
+  }
+
+  // === EMAIL TEMPLATES ===
+  async getEmailTemplates(workspaceId: number): Promise<EmailTemplate[]> {
+    return await db.select().from(emailTemplates).where(eq(emailTemplates.workspaceId, workspaceId));
+  }
+
+  async createEmailTemplate(data: InsertEmailTemplate): Promise<EmailTemplate> {
+    const [template] = await db.insert(emailTemplates).values(data).returning();
+    return template;
+  }
+
+  async updateEmailTemplate(id: number, data: Partial<EmailTemplate>): Promise<EmailTemplate> {
+    const [template] = await db.update(emailTemplates).set(data).where(eq(emailTemplates.id, id)).returning();
+    return template;
+  }
+
+  async deleteEmailTemplate(id: number): Promise<void> {
+    await db.delete(emailTemplates).where(eq(emailTemplates.id, id));
   }
 }
 

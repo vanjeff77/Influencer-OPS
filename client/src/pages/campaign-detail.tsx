@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ArrowLeft, CheckCircle2, CircleDollarSign, FileText, Plus, Search, Users, Instagram, Youtube, Twitter, Save } from "lucide-react";
+import { ArrowLeft, CheckCircle2, CircleDollarSign, FileText, Plus, Search, Users, Instagram, Youtube, Twitter, Save, MessageCircle } from "lucide-react";
 import { Link } from "wouter";
 import { format } from "date-fns";
 import { KO } from "@/i18n/ko";
@@ -23,6 +23,7 @@ import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { CampaignLineItem } from "@/hooks/use-campaigns";
+import { CampaignCommunication } from "@/components/campaign-communication";
 
 export default function CampaignDetail() {
   const [, params] = useRoute("/campaigns/:id");
@@ -151,8 +152,12 @@ export default function CampaignDetail() {
         </div>
 
         <Tabs defaultValue="influencers" className="w-full">
-          <TabsList className="mb-4">
+          <TabsList className="mb-4 flex-wrap">
             <TabsTrigger value="influencers">인플루언서</TabsTrigger>
+            <TabsTrigger value="communication" className="flex items-center gap-1">
+              <MessageCircle className="w-4 h-4" />
+              {KO.pages.communication.title}
+            </TabsTrigger>
             <TabsTrigger value="content">콘텐츠</TabsTrigger>
             <TabsTrigger value="finance">정산</TabsTrigger>
           </TabsList>
@@ -258,6 +263,19 @@ export default function CampaignDetail() {
             </Card>
           </TabsContent>
           
+          <TabsContent value="communication">
+            <CampaignCommunication 
+              campaignId={id} 
+              lineItems={campaign.items?.map(item => ({
+                id: item.id,
+                campaignId: item.campaignId,
+                influencerId: item.influencerId,
+                status: item.status,
+                influencer: item.influencer
+              })) || []}
+            />
+          </TabsContent>
+
           <TabsContent value="content">
             <div className="py-12 text-center text-muted-foreground bg-muted/10 rounded-lg border border-dashed">
               콘텐츠 갤러리 (준비 중)

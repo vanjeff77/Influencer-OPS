@@ -98,6 +98,27 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (2026-02-01)
 
+### Campaign Communication System (Gmail-Integrated Messenger)
+- **3-Pane Messenger Layout**: Left panel (influencer list with search), center panel (message thread with bubbles), right panel (influencer details editor)
+- **Gmail Integration**: Status indicator, message sync from Gmail threads, send emails via Gmail API
+- **Message Thread UI**: Outbound messages (primary color, right-aligned), inbound messages (muted, left-aligned), timestamps, send status indicators
+- **Influencer Detail Editor**: Inline editing for email, phone, tags, memo with save functionality
+- **Security**: DOMPurify sanitization for HTML email content to prevent XSS
+- **Loading States**: Skeleton loaders for conversation list, spinner for message loading
+- **Search Filtering**: Real-time search by influencer name or email in left panel
+- **i18n Support**: Full Korean translations in `client/src/i18n/ko.ts` under `pages.communication`
+
+### Key Components
+- `client/src/components/campaign-communication.tsx`: Main 3-pane communication component
+- Communication tab added to campaign detail page (`/campaigns/:id`)
+
+### API Endpoints (Communication)
+- `GET /api/conversations?campaignId=X`: List conversations for a campaign
+- `GET /api/conversations/:id`: Get conversation with messages
+- `POST /api/line-items/:id/start-conversation`: Create new conversation for line item
+- `POST /api/conversations/:id/messages`: Send a message
+- `POST /api/conversations/:id/sync`: Sync messages from Gmail
+
 ### Mobile UI Optimization
 - **Responsive Sidebar**: Mobile-first navigation using Sheet component overlay with hamburger menu toggle
 - **All Pages Mobile-Optimized**: Responsive layouts using Tailwind breakpoints (md:, lg:)

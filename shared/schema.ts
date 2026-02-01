@@ -122,15 +122,56 @@ export const emailAccounts = pgTable("email_accounts", {
   workspaceId: integer("workspace_id").notNull(),
   email: text("email").notNull(),
   provider: text("provider").default("gmail"),
-  accessToken: text("access_token"), // Encrypted in logic
-  refreshToken: text("refresh_token"), // Encrypted in logic
+  accessToken: text("access_token"),
+  refreshToken: text("refresh_token"),
   lastSyncedAt: timestamp("last_synced_at"),
 });
 
+// Campaign-LineItem based Conversations (for messenger-style threads)
+export const conversations = pgTable("conversations", {
+  id: serial("id").primaryKey(),
+  campaignLineItemId: integer("campaign_line_item_id").notNull(),
+  emailAccountId: integer("email_account_id"),
+  subjectPrefix: text("subject_prefix"),
+  gmailThreadId: text("gmail_thread_id"),
+  lastMessageAt: timestamp("last_message_at"),
+  status: text("status").default("active"), // active, unread, replied, no_response
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const conversationMessages = pgTable("conversation_messages", {
+  id: serial("id").primaryKey(),
+  conversationId: integer("conversation_id").notNull(),
+  direction: text("direction").notNull(), // inbound, outbound
+  snippet: text("snippet"),
+  bodyHtml: text("body_html"),
+  bodyText: text("body_text"),
+  attachments: jsonb("attachments"),
+  gmailMessageId: text("gmail_message_id"),
+  gmailThreadId: text("gmail_thread_id"),
+  sendStatus: text("send_status").default("sent"), // queued, sent, failed
+  sentAt: timestamp("sent_at"),
+  receivedAt: timestamp("received_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Email templates for quick sending
+export const emailTemplates = pgTable("email_templates", {
+  id: serial("id").primaryKey(),
+  workspaceId: integer("workspace_id").notNull(),
+  name: text("name").notNull(),
+  type: text("type").notNull(), // first_contact, followup, contract_request, settlement_request
+  subject: text("subject").notNull(),
+  bodyHtml: text("body_html").notNull(),
+  variables: text("variables").array(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Legacy email tables (keeping for backwards compatibility)
 export const emailThreads = pgTable("email_threads", {
   id: serial("id").primaryKey(),
   accountId: integer("account_id").notNull(),
-  threadId: text("thread_id").notNull(), // Gmail Thread ID
+  threadId: text("thread_id").notNull(),
   subject: text("subject"),
   snippet: text("snippet"),
   lastMessageDate: timestamp("last_message_date"),
@@ -138,12 +179,12 @@ export const emailThreads = pgTable("email_threads", {
 
 export const emailMessages = pgTable("email_messages", {
   id: serial("id").primaryKey(),
-  threadId: integer("thread_id").notNull(), // FK to emailThreads.id (internal)
+  threadId: integer("thread_id").notNull(),
   gmailId: text("gmail_id").notNull(),
   from: text("from").notNull(),
   to: text("to").notNull(),
   subject: text("subject"),
-  body: text("body"), // HTML or Text
+  body: text("body"),
   date: timestamp("date"),
 });
 
@@ -239,6 +280,7 @@ export const campaignInfluencerRelations = relations(campaignInfluencers, ({ one
 export const emailAccountRelations = relations(emailAccounts, ({ one, many }) => ({
   workspace: one(workspaces, { fields: [emailAccounts.workspaceId], references: [workspaces.id] }),
   threads: many(emailThreads),
+  conversations: many(conversations),
 }));
 
 export const emailThreadRelations = relations(emailThreads, ({ one, many }) => ({
@@ -250,6 +292,16 @@ export const emailMessageRelations = relations(emailMessages, ({ one }) => ({
   thread: one(emailThreads, { fields: [emailMessages.threadId], references: [emailThreads.id] }),
 }));
 
+export const conversationRelations = relations(conversations, ({ one, many }) => ({
+  lineItem: one(campaignInfluencers, { fields: [conversations.campaignLineItemId], references: [campaignInfluencers.id] }),
+  emailAccount: one(emailAccounts, { fields: [conversations.emailAccountId], references: [emailAccounts.id] }),
+  messages: many(conversationMessages),
+}));
+
+export const conversationMessageRelations = relations(conversationMessages, ({ one }) => ({
+  conversation: one(conversations, { fields: [conversationMessages.conversationId], references: [conversations.id] }),
+}));
+
 // === SCHEMAS ===
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export const insertWorkspaceSchema = createInsertSchema(workspaces).omit({ id: true, createdAt: true });
@@ -258,6 +310,9 @@ export const insertInfluencerAccountSchema = createInsertSchema(influencerAccoun
 export const insertGroupSchema = createInsertSchema(groups).omit({ id: true, createdAt: true });
 export const insertCampaignSchema = createInsertSchema(campaigns).omit({ id: true, createdAt: true });
 export const insertEmailAccountSchema = createInsertSchema(emailAccounts).omit({ id: true, lastSyncedAt: true });
+export const insertConversationSchema = createInsertSchema(conversations).omit({ id: true, createdAt: true });
+export const insertConversationMessageSchema = createInsertSchema(conversationMessages).omit({ id: true, createdAt: true });
+export const insertEmailTemplateSchema = createInsertSchema(emailTemplates).omit({ id: true, createdAt: true });
 export const insertTrackingJobSchema = createInsertSchema(trackingJobs).omit({ id: true, lastRunAt: true, createdAt: true });
 export const insertContentSchema = createInsertSchema(contents).omit({ id: true });
 export const insertTimelineEventSchema = createInsertSchema(timelineEvents).omit({ id: true, createdAt: true });
@@ -279,8 +334,14 @@ export type Notification = typeof notifications.$inferSelect;
 export type EmailAccount = typeof emailAccounts.$inferSelect;
 export type EmailThread = typeof emailThreads.$inferSelect;
 export type EmailMessage = typeof emailMessages.$inferSelect;
+export type Conversation = typeof conversations.$inferSelect;
+export type ConversationMessage = typeof conversationMessages.$inferSelect;
+export type EmailTemplate = typeof emailTemplates.$inferSelect;
 export type TrackingJob = typeof trackingJobs.$inferSelect;
 
+export type InsertConversation = z.infer<typeof insertConversationSchema>;
+export type InsertConversationMessage = z.infer<typeof insertConversationMessageSchema>;
+export type InsertEmailTemplate = z.infer<typeof insertEmailTemplateSchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertWorkspace = z.infer<typeof insertWorkspaceSchema>;
 export type InsertInfluencer = z.infer<typeof insertInfluencerSchema>;
