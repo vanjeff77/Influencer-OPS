@@ -265,12 +265,14 @@ export default function CampaignDetail() {
           
           <TabsContent value="communication">
             <CampaignCommunication 
-              campaignId={id} 
+              campaignId={id}
+              campaignName={campaign.name}
               lineItems={campaign.items?.map(item => ({
                 id: item.id,
                 campaignId: item.campaignId,
                 influencerId: item.influencerId,
                 status: item.status,
+                firstContactCompleted: item.firstContactCompleted,
                 influencer: item.influencer
               })) || []}
             />

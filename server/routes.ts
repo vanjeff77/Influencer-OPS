@@ -811,6 +811,299 @@ export async function registerRoutes(
     res.json({ success: true });
   });
 
+  // === BULK EMAIL ===
+  
+  // Preview template with variable substitution
+  app.post('/api/bulk-email/preview', async (req, res) => {
+    try {
+      const { subject, body, influencerId, campaignId } = req.body;
+      const { renderTemplate, validateVariables } = await import('./smtp');
+      
+      const influencer = await storage.getInfluencer(influencerId);
+      const campaign = await storage.getCampaign(campaignId);
+      
+      if (!influencer) {
+        return res.status(404).json({ message: "인플루언서를 찾을 수 없습니다" });
+      }
+      
+      const variables: Record<string, string> = {
+        influencer_name: influencer.name || '',
+        campaign_name: campaign?.name || '',
+      };
+      
+      const subjectValidation = validateVariables(subject, variables);
+      const bodyValidation = validateVariables(body, variables);
+      
+      if (!subjectValidation.valid || !bodyValidation.valid) {
+        const allMissing = [...new Set([...subjectValidation.missingVars, ...bodyValidation.missingVars])];
+        return res.json({ 
+          valid: false, 
+          missingVars: allMissing,
+          message: `변수값 없음: ${allMissing.join(', ')}`
+        });
+      }
+      
+      const renderedSubject = renderTemplate(subject, variables);
+      const renderedBody = renderTemplate(body, variables);
+      
+      res.json({ 
+        valid: true,
+        renderedSubject, 
+        renderedBody,
+        variables 
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+  
+  // Send test email
+  app.post('/api/bulk-email/test', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      
+      const { subject, body, testEmail, emailAccountId, influencerId, campaignId } = req.body;
+      const { renderTemplate, createSmtpTransporter, sendEmail } = await import('./smtp');
+      const { decryptPassword } = await import('./imap');
+      
+      if (!testEmail) {
+        return res.status(400).json({ message: "테스트 이메일 주소를 입력하세요" });
+      }
+      
+      const influencer = await storage.getInfluencer(influencerId);
+      const campaign = await storage.getCampaign(campaignId);
+      const emailAccount = await storage.getEmailAccountById(emailAccountId);
+      
+      if (!emailAccount) {
+        return res.status(404).json({ message: "이메일 계정을 찾을 수 없습니다" });
+      }
+      
+      const variables: Record<string, string> = {
+        influencer_name: influencer?.name || '[인플루언서 이름]',
+        campaign_name: campaign?.name || '[캠페인 이름]',
+      };
+      
+      const renderedSubject = `[테스트] ${renderTemplate(subject, variables)}`;
+      const renderedBody = renderTemplate(body, variables);
+      
+      if (emailAccount.provider === 'imap' && emailAccount.accessToken) {
+        const config = JSON.parse(emailAccount.accessToken);
+        const decryptedPassword = decryptPassword(config.encryptedPassword);
+        
+        const transporter = createSmtpTransporter({
+          host: config.smtpServer,
+          port: parseInt(config.smtpPort) || 587,
+          secure: parseInt(config.smtpPort) === 465,
+          user: emailAccount.email,
+          password: decryptedPassword,
+        });
+        
+        const result = await sendEmail(transporter, {
+          from: emailAccount.email,
+          to: testEmail,
+          subject: renderedSubject,
+          html: renderedBody,
+        });
+        
+        if (result.success) {
+          res.json({ success: true, message: `테스트 메일이 ${testEmail}로 발송되었습니다` });
+        } else {
+          res.status(500).json({ success: false, message: result.error });
+        }
+      } else {
+        res.status(400).json({ message: "IMAP/SMTP 계정만 지원됩니다" });
+      }
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+  
+  // Validate recipients and get summary before sending
+  app.post('/api/bulk-email/validate', async (req, res) => {
+    try {
+      const { subject, body, campaignId, lineItemIds } = req.body;
+      const { validateVariables } = await import('./smtp');
+      
+      const campaign = await storage.getCampaign(campaignId);
+      if (!campaign) {
+        return res.status(404).json({ message: "캠페인을 찾을 수 없습니다" });
+      }
+      
+      const alreadySent = await storage.getSentEmailsForCampaign(campaignId);
+      const sentInfluencerIds = new Set(alreadySent.map(s => s.influencerId));
+      const sentEmails = new Set(alreadySent.map(s => s.email.toLowerCase()));
+      
+      const eligible: any[] = [];
+      const excluded: any[] = [];
+      const emailSet = new Map<string, any>();
+      
+      for (const lineItem of campaign.items || []) {
+        if (lineItemIds && !lineItemIds.includes(lineItem.id)) continue;
+        
+        const influencer = lineItem.influencer;
+        if (!influencer) continue;
+        
+        if (sentInfluencerIds.has(influencer.id)) {
+          excluded.push({
+            lineItemId: lineItem.id,
+            influencerId: influencer.id,
+            name: influencer.name,
+            email: influencer.email,
+            reason: '이미 발송됨',
+          });
+          continue;
+        }
+        
+        if (!influencer.email) {
+          excluded.push({
+            lineItemId: lineItem.id,
+            influencerId: influencer.id,
+            name: influencer.name,
+            email: null,
+            reason: '이메일 없음',
+          });
+          continue;
+        }
+        
+        const emailLower = influencer.email.toLowerCase();
+        if (emailSet.has(emailLower)) {
+          excluded.push({
+            lineItemId: lineItem.id,
+            influencerId: influencer.id,
+            name: influencer.name,
+            email: influencer.email,
+            reason: '중복 이메일',
+          });
+          continue;
+        }
+        
+        const variables: Record<string, string> = {
+          influencer_name: influencer.name || '',
+          campaign_name: campaign.name || '',
+        };
+        
+        const subjectValidation = validateVariables(subject, variables);
+        const bodyValidation = validateVariables(body, variables);
+        
+        if (!subjectValidation.valid || !bodyValidation.valid) {
+          const allMissing = [...new Set([...subjectValidation.missingVars, ...bodyValidation.missingVars])];
+          excluded.push({
+            lineItemId: lineItem.id,
+            influencerId: influencer.id,
+            name: influencer.name,
+            email: influencer.email,
+            reason: `변수값 누락: ${allMissing.join(', ')}`,
+          });
+          continue;
+        }
+        
+        emailSet.set(emailLower, true);
+        eligible.push({
+          lineItemId: lineItem.id,
+          influencerId: influencer.id,
+          name: influencer.name,
+          email: influencer.email,
+          variables,
+        });
+      }
+      
+      res.json({
+        totalSelected: (lineItemIds || campaign.items || []).length,
+        eligibleCount: eligible.length,
+        excludedCount: excluded.length,
+        eligible,
+        excluded,
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+  
+  // Start bulk email job
+  app.post('/api/bulk-email/start', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const user = req.user as any;
+      
+      const { subject, body, campaignId, emailAccountId, eligible } = req.body;
+      const { renderTemplate, startBulkEmailWorker } = await import('./smtp');
+      
+      const campaign = await storage.getCampaign(campaignId);
+      if (!campaign) {
+        return res.status(404).json({ message: "캠페인을 찾을 수 없습니다" });
+      }
+      
+      const job = await storage.createBulkEmailJob({
+        workspaceId: campaign.workspaceId,
+        campaignId,
+        emailAccountId,
+        templateSubject: subject,
+        templateBody: body,
+        totalCount: eligible.length,
+        sentCount: 0,
+        failedCount: 0,
+        skippedCount: 0,
+        status: 'pending',
+        createdBy: user.id,
+      });
+      
+      const queueItems = eligible.map((item: any) => ({
+        jobId: job.id,
+        campaignId,
+        lineItemId: item.lineItemId,
+        influencerId: item.influencerId,
+        email: item.email,
+        renderedSubject: renderTemplate(subject, item.variables),
+        renderedBody: renderTemplate(body, item.variables),
+        variables: item.variables,
+        status: 'queued' as const,
+      }));
+      
+      await storage.createBulkEmailQueueItems(queueItems);
+      
+      startBulkEmailWorker(job.id);
+      
+      res.status(201).json({ 
+        jobId: job.id, 
+        message: `${eligible.length}명에게 발송을 시작합니다` 
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+  
+  // Get bulk email jobs for a campaign
+  app.get('/api/bulk-email/jobs/:campaignId', async (req, res) => {
+    const jobs = await storage.getBulkEmailJobs(parseInt(req.params.campaignId));
+    res.json(jobs);
+  });
+  
+  // Get bulk email job details with queue items
+  app.get('/api/bulk-email/jobs/:campaignId/:jobId', async (req, res) => {
+    const job = await storage.getBulkEmailJob(parseInt(req.params.jobId));
+    if (!job) return res.status(404).json({ message: "Job not found" });
+    const items = await storage.getBulkEmailQueueItems(job.id);
+    res.json({ job, items });
+  });
+  
+  // Toggle first contact completed status
+  app.patch('/api/line-items/:id/first-contact', async (req, res) => {
+    try {
+      const lineItemId = parseInt(req.params.id);
+      const { firstContactCompleted } = req.body;
+      
+      const updated = await storage.updateCampaignItem(lineItemId, {
+        firstContactCompleted,
+        firstContactAt: firstContactCompleted ? new Date() : null,
+        firstContactMethod: 'manual',
+      });
+      
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   // === TRACKING ===
   app.get(api.tracking.list.path, async (req, res) => {
     const jobs = await storage.getTrackingJobs(parseInt(req.params.workspaceId));

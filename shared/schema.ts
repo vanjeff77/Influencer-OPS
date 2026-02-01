@@ -114,6 +114,9 @@ export const campaignInfluencers = pgTable("campaign_influencers", {
   payAmount: integer("pay_amount").default(0),
   docs: jsonb("docs"), // Array of { type: 'contract'|'invoice', url: string }
   contentLink: text("content_link"),
+  firstContactCompleted: boolean("first_contact_completed").default(false),
+  firstContactAt: timestamp("first_contact_at"),
+  firstContactMethod: text("first_contact_method"), // auto, manual
 });
 
 // === EMAIL INTERNALIZATION ===
@@ -164,6 +167,42 @@ export const emailTemplates = pgTable("email_templates", {
   subject: text("subject").notNull(),
   bodyHtml: text("body_html").notNull(),
   variables: text("variables").array(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// === BULK EMAIL SENDING ===
+export const bulkEmailJobs = pgTable("bulk_email_jobs", {
+  id: serial("id").primaryKey(),
+  workspaceId: integer("workspace_id").notNull(),
+  campaignId: integer("campaign_id").notNull(),
+  emailAccountId: integer("email_account_id").notNull(),
+  templateSubject: text("template_subject").notNull(),
+  templateBody: text("template_body").notNull(),
+  totalCount: integer("total_count").default(0),
+  sentCount: integer("sent_count").default(0),
+  failedCount: integer("failed_count").default(0),
+  skippedCount: integer("skipped_count").default(0),
+  status: text("status").default("pending"), // pending, processing, completed, cancelled
+  createdBy: integer("created_by").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  completedAt: timestamp("completed_at"),
+});
+
+export const bulkEmailQueueItems = pgTable("bulk_email_queue_items", {
+  id: serial("id").primaryKey(),
+  jobId: integer("job_id").notNull(),
+  campaignId: integer("campaign_id").notNull(),
+  lineItemId: integer("line_item_id").notNull(),
+  influencerId: integer("influencer_id").notNull(),
+  email: text("email").notNull(),
+  renderedSubject: text("rendered_subject").notNull(),
+  renderedBody: text("rendered_body").notNull(),
+  variables: jsonb("variables"), // { influencer_name, campaign_name, etc }
+  status: text("status").default("queued"), // queued, sending, sent, failed, skipped
+  reason: text("reason"), // skip/fail reason
+  attempts: integer("attempts").default(0),
+  lastAttemptAt: timestamp("last_attempt_at"),
+  sentAt: timestamp("sent_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -317,6 +356,8 @@ export const insertTrackingJobSchema = createInsertSchema(trackingJobs).omit({ i
 export const insertContentSchema = createInsertSchema(contents).omit({ id: true });
 export const insertTimelineEventSchema = createInsertSchema(timelineEvents).omit({ id: true, createdAt: true });
 export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({ id: true, createdAt: true });
+export const insertBulkEmailJobSchema = createInsertSchema(bulkEmailJobs).omit({ id: true, createdAt: true, completedAt: true });
+export const insertBulkEmailQueueItemSchema = createInsertSchema(bulkEmailQueueItems).omit({ id: true, createdAt: true });
 
 // === TYPES ===
 export type User = typeof users.$inferSelect;
@@ -338,6 +379,8 @@ export type Conversation = typeof conversations.$inferSelect;
 export type ConversationMessage = typeof conversationMessages.$inferSelect;
 export type EmailTemplate = typeof emailTemplates.$inferSelect;
 export type TrackingJob = typeof trackingJobs.$inferSelect;
+export type BulkEmailJob = typeof bulkEmailJobs.$inferSelect;
+export type BulkEmailQueueItem = typeof bulkEmailQueueItems.$inferSelect;
 
 export type InsertConversation = z.infer<typeof insertConversationSchema>;
 export type InsertConversationMessage = z.infer<typeof insertConversationMessageSchema>;
@@ -348,6 +391,8 @@ export type InsertInfluencer = z.infer<typeof insertInfluencerSchema>;
 export type InsertContent = z.infer<typeof insertContentSchema>;
 export type InsertTimelineEvent = z.infer<typeof insertTimelineEventSchema>;
 export type InsertTrackingJob = z.infer<typeof insertTrackingJobSchema>;
+export type InsertBulkEmailJob = z.infer<typeof insertBulkEmailJobSchema>;
+export type InsertBulkEmailQueueItem = z.infer<typeof insertBulkEmailQueueItemSchema>;
 
 // Account type without influencerId (assigned server-side)
 export type CreateAccountInput = Omit<z.infer<typeof insertInfluencerAccountSchema>, 'influencerId'>;

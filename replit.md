@@ -98,6 +98,29 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (2026-02-01)
 
+### Bulk Email Sending System (SMTP Queue-Based)
+- **Queue-Based Delivery**: Individual 1:1 emails (no BCC) with 5-second throttle + random jitter to avoid spam classification
+- **WYSIWYG Editor**: react-quill-new integration for rich HTML email templates
+- **Variable Substitution**: {{influencer_name}}, {{campaign_name}} tokens with extensible design
+- **4-Step Workflow**: Template editor → Preview → Test Send → Confirm → Start
+- **Validation Rules**: Duplicate email detection, already-sent check, missing variables warning
+- **First Contact Tracking**: Automatic status update (firstContactCompleted) on successful send
+- **Send Logs**: Filter by all/failed, job status tracking (pending/processing/completed)
+- **Retry Logic**: Transient errors retry up to 3 times with exponential backoff
+- **Database Tables**: `bulk_email_jobs` (job tracking), `bulk_email_queue_items` (individual sends)
+- **Key Components**: 
+  - `client/src/components/bulk-email-dialog.tsx`: 4-step send workflow
+  - `client/src/components/bulk-email-log-dialog.tsx`: Send history viewer
+  - `server/smtp.ts`: SMTP queue processor with nodemailer
+- **API Endpoints**:
+  - `POST /api/bulk-email/preview`: Preview template with variable substitution
+  - `POST /api/bulk-email/test-send`: Send test email to single address
+  - `POST /api/bulk-email/validate`: Get eligible/excluded recipient list
+  - `POST /api/bulk-email/start`: Create and start bulk email job
+  - `GET /api/bulk-email/jobs/:campaignId`: List jobs for campaign
+  - `GET /api/bulk-email/jobs/:campaignId/:jobId`: Get job details with items
+  - `PATCH /api/line-items/:id/first-contact`: Toggle first contact status
+
 ### Email Account Registration Security
 - **Gmail Registration**: Uses Replit's Google Mail connector to fetch profile and register account
 - **IMAP/SMTP Registration**: Manual email configuration with server settings

@@ -24,16 +24,23 @@ import {
   MoreHorizontal,
   Save,
   User,
-  Loader2
+  Loader2,
+  Users,
+  FileText
 } from "lucide-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
+import { BulkEmailDialog } from "./bulk-email-dialog";
+import { BulkEmailLogDialog } from "./bulk-email-log-dialog";
 
 interface CampaignLineItem {
   id: number;
   campaignId: number;
   influencerId: number;
   status: string | null;
+  firstContactCompleted?: boolean | null;
+  firstContactAt?: string | null;
+  firstContactMethod?: string | null;
   influencer?: {
     id: number;
     name: string;
@@ -79,11 +86,19 @@ interface ConversationDetail {
   lineItem: CampaignLineItem;
 }
 
-export function CampaignCommunication({ campaignId, lineItems }: { campaignId: number; lineItems: CampaignLineItem[] }) {
+interface CampaignCommunicationProps {
+  campaignId: number;
+  campaignName?: string;
+  lineItems: CampaignLineItem[];
+}
+
+export function CampaignCommunication({ campaignId, campaignName, lineItems }: CampaignCommunicationProps) {
   const { toast } = useToast();
   const [selectedLineItemId, setSelectedLineItemId] = useState<number | null>(null);
   const [showFullMessage, setShowFullMessage] = useState<ConversationMessage | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [bulkEmailOpen, setBulkEmailOpen] = useState(false);
+  const [bulkEmailLogOpen, setBulkEmailLogOpen] = useState(false);
   
   const { data: gmailStatus, isLoading: isLoadingGmail } = useQuery<{ connected: boolean; email?: string }>({
     queryKey: ['/api/email/gmail/status'],
@@ -130,12 +145,58 @@ export function CampaignCommunication({ campaignId, lineItems }: { campaignId: n
     }
   });
 
+  const toggleFirstContact = useMutation({
+    mutationFn: async ({ lineItemId, completed }: { lineItemId: number; completed: boolean }) => {
+      const res = await apiRequest('PATCH', `/api/line-items/${lineItemId}/first-contact`, {
+        firstContactCompleted: completed,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/campaigns'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/campaigns', campaignId.toString()] });
+      toast({ title: KO.pages.bulkEmail.toggleFirstContact });
+    },
+  });
+
   const handleSelectLineItem = (li: CampaignLineItem) => {
     setSelectedLineItemId(li.id);
     const conv = conversations?.find(c => c.campaignLineItemId === li.id);
     if (!conv) {
       startConversation.mutate(li.id);
     }
+  };
+
+  const getFirstContactBadge = (li: CampaignLineItem) => {
+    if (li.firstContactCompleted) {
+      return (
+        <Badge 
+          variant="outline" 
+          className="bg-blue-50 text-blue-700 border-blue-200 text-[10px] cursor-pointer"
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleFirstContact.mutate({ lineItemId: li.id, completed: false });
+          }}
+          data-testid={`badge-first-contact-${li.id}`}
+        >
+          <CheckCircle2 className="w-3 h-3 mr-1" />
+          {KO.pages.bulkEmail.firstContactCompleted}
+        </Badge>
+      );
+    }
+    return (
+      <Badge 
+        variant="outline" 
+        className="bg-gray-50 text-gray-500 border-gray-200 text-[10px] cursor-pointer"
+        onClick={(e) => {
+          e.stopPropagation();
+          toggleFirstContact.mutate({ lineItemId: li.id, completed: true });
+        }}
+        data-testid={`badge-first-contact-not-${li.id}`}
+      >
+        {KO.pages.bulkEmail.firstContactNotCompleted}
+      </Badge>
+    );
   };
 
   const getStatusBadge = (conv?: Conversation) => {
@@ -157,8 +218,31 @@ export function CampaignCommunication({ campaignId, lineItems }: { campaignId: n
       {/* Left Panel: Line Items List */}
       <div className="lg:col-span-3 border rounded-lg overflow-hidden flex flex-col" data-testid="panel-conversations-list">
         <div className="p-3 border-b bg-muted/30">
-          <div className="flex items-center justify-between mb-2 gap-2">
+          <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
             <span className="text-sm font-medium">인플루언서</span>
+            <div className="flex items-center gap-1">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs"
+                onClick={() => setBulkEmailOpen(true)}
+                data-testid="button-bulk-email"
+              >
+                <Users className="w-3 h-3 mr-1" />
+                {KO.pages.bulkEmail.title}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs"
+                onClick={() => setBulkEmailLogOpen(true)}
+                data-testid="button-bulk-email-log"
+              >
+                <FileText className="w-3 h-3" />
+              </Button>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
             {isLoadingGmail ? (
               <Skeleton className="h-5 w-20" />
             ) : (
@@ -211,7 +295,10 @@ export function CampaignCommunication({ campaignId, lineItems }: { campaignId: n
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-1">
                           <span className="font-medium text-sm truncate">{li.influencer?.name}</span>
-                          {getStatusBadge(conv)}
+                          <div className="flex items-center gap-1">
+                            {getFirstContactBadge(li)}
+                            {getStatusBadge(conv)}
+                          </div>
                         </div>
                         <div className="text-xs text-muted-foreground truncate">
                           {conv?.lastMessage?.snippet || li.influencer?.email || KO.pages.communication.noConversations}
@@ -323,6 +410,22 @@ export function CampaignCommunication({ campaignId, lineItems }: { campaignId: n
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* Bulk Email Dialog */}
+      <BulkEmailDialog
+        open={bulkEmailOpen}
+        onOpenChange={setBulkEmailOpen}
+        campaignId={campaignId}
+        campaignName={campaignName || ''}
+        lineItems={lineItems}
+      />
+
+      {/* Bulk Email Log Dialog */}
+      <BulkEmailLogDialog
+        open={bulkEmailLogOpen}
+        onOpenChange={setBulkEmailLogOpen}
+        campaignId={campaignId}
+      />
     </div>
   );
 }

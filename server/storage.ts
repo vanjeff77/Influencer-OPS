@@ -2,14 +2,15 @@ import { db } from "./db";
 import {
   users, workspaces, workspaceMembers, influencers, influencerAccounts, groups, groupInfluencers, campaigns, campaignInfluencers,
   emailAccounts, emailThreads, trackingJobs, trackingMetrics, contents, timelineEvents, auditLogs, notifications,
-  conversations, conversationMessages, emailTemplates,
+  conversations, conversationMessages, emailTemplates, bulkEmailJobs, bulkEmailQueueItems,
   type User, type InsertUser, type Workspace, type InsertWorkspace,
   type Influencer, type CreateInfluencerWithAccounts, type InfluencerAccount,
   type Group, type GroupInfluencer, type Campaign, type CampaignInfluencer, type Content,
   type EmailAccount, type EmailThread, type EmailMessage, type TrackingJob, type InsertTrackingJob,
   type TimelineEvent, type InsertTimelineEvent, type AuditLog, type Notification,
   type Conversation, type ConversationMessage, type EmailTemplate,
-  type InsertConversation, type InsertConversationMessage, type InsertEmailTemplate
+  type InsertConversation, type InsertConversationMessage, type InsertEmailTemplate,
+  type BulkEmailJob, type BulkEmailQueueItem, type InsertBulkEmailJob, type InsertBulkEmailQueueItem
 } from "@shared/schema";
 import { eq, like, or, and, sql, inArray, desc } from "drizzle-orm";
 
@@ -82,6 +83,17 @@ export interface IStorage {
   // Audit Logs
   createAuditLog(data: Partial<AuditLog>): Promise<AuditLog>;
   getAuditLogs(workspaceId: number, entityType?: string, entityId?: number): Promise<AuditLog[]>;
+
+  // Bulk Email
+  createBulkEmailJob(job: InsertBulkEmailJob): Promise<BulkEmailJob>;
+  getBulkEmailJob(id: number): Promise<BulkEmailJob | undefined>;
+  getBulkEmailJobs(campaignId: number): Promise<BulkEmailJob[]>;
+  updateBulkEmailJob(id: number, data: Partial<BulkEmailJob>): Promise<BulkEmailJob>;
+  createBulkEmailQueueItems(items: InsertBulkEmailQueueItem[]): Promise<BulkEmailQueueItem[]>;
+  getBulkEmailQueueItems(jobId: number): Promise<BulkEmailQueueItem[]>;
+  getNextPendingQueueItem(jobId: number): Promise<BulkEmailQueueItem | undefined>;
+  updateBulkEmailQueueItem(id: number, data: Partial<BulkEmailQueueItem>): Promise<BulkEmailQueueItem>;
+  getSentEmailsForCampaign(campaignId: number): Promise<{ influencerId: number; email: string }[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -553,6 +565,66 @@ export class DatabaseStorage implements IStorage {
 
   async deleteEmailTemplate(id: number): Promise<void> {
     await db.delete(emailTemplates).where(eq(emailTemplates.id, id));
+  }
+
+  // === BULK EMAIL ===
+  async createBulkEmailJob(job: InsertBulkEmailJob): Promise<BulkEmailJob> {
+    const [created] = await db.insert(bulkEmailJobs).values(job).returning();
+    return created;
+  }
+
+  async getBulkEmailJob(id: number): Promise<BulkEmailJob | undefined> {
+    const [job] = await db.select().from(bulkEmailJobs).where(eq(bulkEmailJobs.id, id));
+    return job;
+  }
+
+  async getBulkEmailJobs(campaignId: number): Promise<BulkEmailJob[]> {
+    return await db.select().from(bulkEmailJobs)
+      .where(eq(bulkEmailJobs.campaignId, campaignId))
+      .orderBy(desc(bulkEmailJobs.createdAt));
+  }
+
+  async updateBulkEmailJob(id: number, data: Partial<BulkEmailJob>): Promise<BulkEmailJob> {
+    const [job] = await db.update(bulkEmailJobs).set(data).where(eq(bulkEmailJobs.id, id)).returning();
+    return job;
+  }
+
+  async createBulkEmailQueueItems(items: InsertBulkEmailQueueItem[]): Promise<BulkEmailQueueItem[]> {
+    if (items.length === 0) return [];
+    return await db.insert(bulkEmailQueueItems).values(items).returning();
+  }
+
+  async getBulkEmailQueueItems(jobId: number): Promise<BulkEmailQueueItem[]> {
+    return await db.select().from(bulkEmailQueueItems)
+      .where(eq(bulkEmailQueueItems.jobId, jobId))
+      .orderBy(bulkEmailQueueItems.id);
+  }
+
+  async getNextPendingQueueItem(jobId: number): Promise<BulkEmailQueueItem | undefined> {
+    const [item] = await db.select().from(bulkEmailQueueItems)
+      .where(and(
+        eq(bulkEmailQueueItems.jobId, jobId),
+        eq(bulkEmailQueueItems.status, 'queued')
+      ))
+      .orderBy(bulkEmailQueueItems.id)
+      .limit(1);
+    return item;
+  }
+
+  async updateBulkEmailQueueItem(id: number, data: Partial<BulkEmailQueueItem>): Promise<BulkEmailQueueItem> {
+    const [item] = await db.update(bulkEmailQueueItems).set(data).where(eq(bulkEmailQueueItems.id, id)).returning();
+    return item;
+  }
+
+  async getSentEmailsForCampaign(campaignId: number): Promise<{ influencerId: number; email: string }[]> {
+    return await db.select({
+      influencerId: bulkEmailQueueItems.influencerId,
+      email: bulkEmailQueueItems.email
+    }).from(bulkEmailQueueItems)
+      .where(and(
+        eq(bulkEmailQueueItems.campaignId, campaignId),
+        eq(bulkEmailQueueItems.status, 'sent')
+      ));
   }
 }
 
