@@ -379,8 +379,29 @@ export async function registerRoutes(
 
   // === CAMPAIGNS ===
   app.get(api.campaigns.list.path, async (req, res) => {
-    const campaigns = await storage.getCampaigns(parseInt(req.params.workspaceId));
-    res.json(campaigns);
+    try {
+      const workspaceId = parseInt(req.params.workspaceId);
+      let campaigns = await storage.getCampaigns(workspaceId);
+      
+      // CLIENT role filtering: only show campaigns for assigned clients
+      if (req.isAuthenticated()) {
+        const userId = (req.user as any).id;
+        const member = await storage.getWorkspaceMember(userId, workspaceId);
+        
+        if (member?.role === 'CLIENT') {
+          const assignments = await storage.getUserClientAssignments(userId, workspaceId);
+          const assignedClientIds = new Set(assignments.map(a => a.clientId));
+          
+          campaigns = campaigns.filter(c => 
+            c.clientId && assignedClientIds.has(c.clientId)
+          );
+        }
+      }
+      
+      res.json(campaigns);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
   });
 
   app.post(api.campaigns.create.path, async (req, res) => {
@@ -389,9 +410,29 @@ export async function registerRoutes(
   });
 
   app.get(api.campaigns.get.path, async (req, res) => {
-    const campaign = await storage.getCampaign(parseInt(req.params.id));
-    if (!campaign) return res.status(404).json({ message: "Not found" });
-    res.json(campaign);
+    try {
+      const campaign = await storage.getCampaign(parseInt(req.params.id));
+      if (!campaign) return res.status(404).json({ message: "Not found" });
+      
+      // CLIENT role filtering: check if user has access to this campaign's client
+      if (req.isAuthenticated()) {
+        const userId = (req.user as any).id;
+        const member = await storage.getWorkspaceMember(userId, campaign.workspaceId);
+        
+        if (member?.role === 'CLIENT') {
+          const assignments = await storage.getUserClientAssignments(userId, campaign.workspaceId);
+          const assignedClientIds = new Set(assignments.map(a => a.clientId));
+          
+          if (!campaign.clientId || !assignedClientIds.has(campaign.clientId)) {
+            return res.status(403).json({ message: "이 캠페인에 대한 접근 권한이 없습니다" });
+          }
+        }
+      }
+      
+      res.json(campaign);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
   });
 
   // Update campaign
@@ -569,12 +610,38 @@ export async function registerRoutes(
 
   // === FINANCE ===
   app.get('/api/finance/summary', async (req, res) => {
-    const { workspaceId, month, status } = req.query;
-    const summary = await storage.getFinanceSummary(
-      parseInt(workspaceId as string) || 1,
-      { month: month as string, status: status as string }
-    );
-    res.json(summary);
+    try {
+      const { workspaceId, month, status } = req.query;
+      const wsId = parseInt(workspaceId as string) || 1;
+      let summary = await storage.getFinanceSummary(wsId, { month: month as string, status: status as string });
+      
+      // CLIENT role filtering: only show items for assigned clients' campaigns
+      if (req.isAuthenticated()) {
+        const userId = (req.user as any).id;
+        const member = await storage.getWorkspaceMember(userId, wsId);
+        
+        if (member?.role === 'CLIENT') {
+          const assignments = await storage.getUserClientAssignments(userId, wsId);
+          const assignedClientIds = new Set(assignments.map(a => a.clientId));
+          
+          const filteredItems = summary.items.filter(item => 
+            item.campaign?.clientId && assignedClientIds.has(item.campaign.clientId)
+          );
+          
+          summary = {
+            ...summary,
+            items: filteredItems,
+            pendingTotal: filteredItems.filter(i => i.paymentStatus !== 'paid').reduce((sum, i) => sum + (i.payAmount || 0), 0),
+            paidThisMonth: filteredItems.filter(i => i.paymentStatus === 'paid').reduce((sum, i) => sum + (i.payAmount || 0), 0),
+            pendingCount: filteredItems.filter(i => i.paymentStatus !== 'paid').length,
+          };
+        }
+      }
+      
+      res.json(summary);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
   });
 
   // === TODAY'S TASKS ===
@@ -1883,6 +1950,305 @@ export async function registerRoutes(
     res.json(logs);
   });
 
+  // === CLIENT MANAGEMENT (OWNER only) ===
+  const clientSchema = z.object({
+    workspaceId: z.number(),
+    name: z.string().min(1),
+    logoUrl: z.string().optional().nullable(),
+    memo: z.string().optional().nullable(),
+    status: z.enum(['active', 'inactive']).optional(),
+  });
+
+  // Helper to check if user is OWNER
+  async function isWorkspaceOwner(userId: number, workspaceId: number): Promise<boolean> {
+    const member = await storage.getWorkspaceMember(userId, workspaceId);
+    return member?.role === 'WORKSPACE_OWNER';
+  }
+
+  app.get('/api/clients', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const { workspaceId } = req.query;
+      if (!workspaceId) return res.status(400).json({ message: "workspaceId required" });
+      
+      const clients = await storage.getClients(parseInt(workspaceId as string));
+      res.json(clients);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post('/api/clients', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const parsed = clientSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "Invalid request", errors: parsed.error.errors });
+      
+      const userId = (req.user as any).id;
+      if (!await isWorkspaceOwner(userId, parsed.data.workspaceId)) {
+        return res.status(403).json({ message: "소유자만 클라이언트를 생성할 수 있습니다" });
+      }
+      
+      const client = await storage.createClient(parsed.data);
+      res.status(201).json(client);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.patch('/api/clients/:id', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const clientId = parseInt(req.params.id);
+      const existing = await storage.getClient(clientId);
+      if (!existing) return res.status(404).json({ message: "클라이언트를 찾을 수 없습니다" });
+      
+      const userId = (req.user as any).id;
+      if (!await isWorkspaceOwner(userId, existing.workspaceId)) {
+        return res.status(403).json({ message: "소유자만 클라이언트를 수정할 수 있습니다" });
+      }
+      
+      const updated = await storage.updateClient(clientId, req.body);
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete('/api/clients/:id', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const clientId = parseInt(req.params.id);
+      const existing = await storage.getClient(clientId);
+      if (!existing) return res.status(404).json({ message: "클라이언트를 찾을 수 없습니다" });
+      
+      const userId = (req.user as any).id;
+      if (!await isWorkspaceOwner(userId, existing.workspaceId)) {
+        return res.status(403).json({ message: "소유자만 클라이언트를 삭제할 수 있습니다" });
+      }
+      
+      await storage.deleteClient(clientId);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // === USER MANAGEMENT (OWNER only) ===
+  const createUserSchema = z.object({
+    workspaceId: z.number(),
+    email: z.string().email(),
+    password: z.string().min(6),
+    name: z.string().min(1),
+    role: z.enum(['WORKSPACE_OWNER', 'WORKSPACE_MEMBER', 'CLIENT']),
+    clientIds: z.array(z.number()).optional(),
+  });
+
+  const updateUserRoleSchema = z.object({
+    workspaceId: z.number(),
+    role: z.enum(['WORKSPACE_OWNER', 'WORKSPACE_MEMBER', 'CLIENT']),
+    clientIds: z.array(z.number()).optional(),
+  });
+
+  app.get('/api/workspace-users', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const { workspaceId } = req.query;
+      if (!workspaceId) return res.status(400).json({ message: "workspaceId required" });
+      
+      const users = await storage.getWorkspaceUsers(parseInt(workspaceId as string));
+      res.json(users);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post('/api/workspace-users', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const parsed = createUserSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "Invalid request", errors: parsed.error.errors });
+      
+      const currentUserId = (req.user as any).id;
+      if (!await isWorkspaceOwner(currentUserId, parsed.data.workspaceId)) {
+        return res.status(403).json({ message: "소유자만 사용자를 추가할 수 있습니다" });
+      }
+      
+      // Check if email already exists
+      const existingUser = await storage.getUserByEmail(parsed.data.email);
+      if (existingUser) {
+        // Check if already a member of this workspace
+        const existingMember = await storage.getWorkspaceMember(existingUser.id, parsed.data.workspaceId);
+        if (existingMember) {
+          return res.status(400).json({ message: "이미 워크스페이스 멤버입니다" });
+        }
+        // Add existing user to workspace
+        await storage.createWorkspaceMember(existingUser.id, parsed.data.workspaceId, parsed.data.role);
+        
+        // Assign clients if CLIENT role
+        if (parsed.data.role === 'CLIENT' && parsed.data.clientIds?.length) {
+          for (const clientId of parsed.data.clientIds) {
+            await storage.createClientUserAssignment({
+              clientId,
+              userId: existingUser.id,
+              workspaceId: parsed.data.workspaceId,
+            });
+          }
+        }
+        return res.status(201).json(existingUser);
+      }
+      
+      // Create new user with hashed password
+      const hashedPassword = await bcrypt.hash(parsed.data.password, 10);
+      const newUser = await storage.createUser({
+        email: parsed.data.email,
+        password: hashedPassword,
+        name: parsed.data.name,
+        isActive: true,
+      });
+      
+      await storage.createWorkspaceMember(newUser.id, parsed.data.workspaceId, parsed.data.role);
+      
+      // Assign clients if CLIENT role
+      if (parsed.data.role === 'CLIENT' && parsed.data.clientIds?.length) {
+        for (const clientId of parsed.data.clientIds) {
+          await storage.createClientUserAssignment({
+            clientId,
+            userId: newUser.id,
+            workspaceId: parsed.data.workspaceId,
+          });
+        }
+      }
+      
+      res.status(201).json(newUser);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.patch('/api/workspace-users/:userId/role', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const parsed = updateUserRoleSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "Invalid request", errors: parsed.error.errors });
+      
+      const targetUserId = parseInt(req.params.userId);
+      const currentUserId = (req.user as any).id;
+      
+      if (!await isWorkspaceOwner(currentUserId, parsed.data.workspaceId)) {
+        return res.status(403).json({ message: "소유자만 역할을 변경할 수 있습니다" });
+      }
+      
+      await storage.updateWorkspaceMemberRole(targetUserId, parsed.data.workspaceId, parsed.data.role);
+      
+      // Update client assignments if CLIENT role
+      await storage.deleteClientUserAssignmentsByUser(targetUserId, parsed.data.workspaceId);
+      if (parsed.data.role === 'CLIENT' && parsed.data.clientIds?.length) {
+        for (const clientId of parsed.data.clientIds) {
+          await storage.createClientUserAssignment({
+            clientId,
+            userId: targetUserId,
+            workspaceId: parsed.data.workspaceId,
+          });
+        }
+      }
+      
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.patch('/api/workspace-users/:userId/status', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const { workspaceId, isActive } = req.body;
+      const targetUserId = parseInt(req.params.userId);
+      const currentUserId = (req.user as any).id;
+      
+      if (!await isWorkspaceOwner(currentUserId, workspaceId)) {
+        return res.status(403).json({ message: "소유자만 사용자 상태를 변경할 수 있습니다" });
+      }
+      
+      const updated = await storage.updateUser(targetUserId, { isActive });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Get current user's role and assigned clients in workspace
+  app.get('/api/workspace-users/me', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const { workspaceId } = req.query;
+      if (!workspaceId) return res.status(400).json({ message: "workspaceId required" });
+      
+      const userId = (req.user as any).id;
+      const member = await storage.getWorkspaceMember(userId, parseInt(workspaceId as string));
+      if (!member) return res.status(404).json({ message: "워크스페이스 멤버가 아닙니다" });
+      
+      const assignments = await storage.getUserClientAssignments(userId, parseInt(workspaceId as string));
+      const clientIds = assignments.map(a => a.clientId);
+      
+      res.json({
+        userId,
+        role: member.role,
+        assignedClientIds: clientIds,
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // === CLIENT-USER ASSIGNMENTS ===
+  app.get('/api/client-user-assignments', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const { workspaceId } = req.query;
+      if (!workspaceId) return res.status(400).json({ message: "workspaceId required" });
+      
+      const assignments = await storage.getClientUserAssignments(parseInt(workspaceId as string));
+      res.json(assignments);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post('/api/client-user-assignments', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const { clientId, userId, workspaceId } = req.body;
+      
+      const currentUserId = (req.user as any).id;
+      if (!await isWorkspaceOwner(currentUserId, workspaceId)) {
+        return res.status(403).json({ message: "소유자만 클라이언트 할당을 변경할 수 있습니다" });
+      }
+      
+      const assignment = await storage.createClientUserAssignment({ clientId, userId, workspaceId });
+      res.status(201).json(assignment);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete('/api/client-user-assignments/:id', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const { workspaceId } = req.body;
+      
+      const currentUserId = (req.user as any).id;
+      if (!await isWorkspaceOwner(currentUserId, workspaceId)) {
+        return res.status(403).json({ message: "소유자만 클라이언트 할당을 변경할 수 있습니다" });
+      }
+      
+      await storage.deleteClientUserAssignment(parseInt(req.params.id));
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   // SEED DATA
   seedDatabase();
 
@@ -1903,6 +2269,9 @@ async function seedDatabase() {
       name: "Demo Workspace",
       logo: "https://github.com/shadcn.png"
     });
+
+    // Set demo user as workspace owner
+    await storage.createWorkspaceMember(user.id, ws.id, 'WORKSPACE_OWNER');
 
     // Create 10 influencers with varied data
     const platforms = ["IG", "YT", "TikTok"];

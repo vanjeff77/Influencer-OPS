@@ -3,7 +3,9 @@ import {
   users, workspaces, workspaceMembers, influencers, influencerAccounts, groups, groupInfluencers, campaigns, campaignInfluencers,
   emailAccounts, emailThreads, trackingJobs, trackingMetrics, contents, timelineEvents, auditLogs, notifications,
   conversations, conversationMessages, emailTemplates, bulkEmailJobs, bulkEmailQueueItems, campaignContents, feedbackNotes,
+  clients, clientUserAssignments,
   type User, type InsertUser, type Workspace, type InsertWorkspace,
+  type Client, type InsertClient, type ClientUserAssignment, type InsertClientUserAssignment,
   type Influencer, type CreateInfluencerWithAccounts, type InfluencerAccount,
   type Group, type GroupInfluencer, type Campaign, type CampaignInfluencer, type Content,
   type EmailAccount, type EmailThread, type EmailMessage, type TrackingJob, type InsertTrackingJob,
@@ -115,6 +117,28 @@ export interface IStorage {
     influencer?: Influencer & { accounts: InfluencerAccount[] };
     feedbackNotes?: (FeedbackNote & { author?: User })[];
   }) | undefined>;
+
+  // Clients
+  getClients(workspaceId: number): Promise<Client[]>;
+  getClient(id: number): Promise<Client | undefined>;
+  createClient(client: InsertClient): Promise<Client>;
+  updateClient(id: number, data: Partial<Client>): Promise<Client>;
+  deleteClient(id: number): Promise<void>;
+
+  // Client-User Assignments
+  getClientUserAssignments(workspaceId: number): Promise<(ClientUserAssignment & { client?: Client; user?: User })[]>;
+  getUserClientAssignments(userId: number, workspaceId: number): Promise<ClientUserAssignment[]>;
+  createClientUserAssignment(assignment: InsertClientUserAssignment): Promise<ClientUserAssignment>;
+  deleteClientUserAssignment(id: number): Promise<void>;
+  deleteClientUserAssignmentsByClient(clientId: number): Promise<void>;
+  deleteClientUserAssignmentsByUser(userId: number, workspaceId: number): Promise<void>;
+
+  // User Management
+  getWorkspaceUsers(workspaceId: number): Promise<(User & { role: string; assignedClients?: Client[] })[]>;
+  updateUser(id: number, data: Partial<User>): Promise<User>;
+  updateWorkspaceMemberRole(userId: number, workspaceId: number, role: string): Promise<void>;
+  createWorkspaceMember(userId: number, workspaceId: number, role: string): Promise<void>;
+  getWorkspaceMember(userId: number, workspaceId: number): Promise<{ userId: number; workspaceId: number; role: string } | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -891,6 +915,139 @@ export class DatabaseStorage implements IStorage {
       influencer: inf ? { ...inf, accounts } : undefined,
       feedbackNotes: notes
     };
+  }
+
+  // === CLIENTS ===
+  async getClients(workspaceId: number): Promise<Client[]> {
+    return await db.select().from(clients).where(eq(clients.workspaceId, workspaceId));
+  }
+
+  async getClient(id: number): Promise<Client | undefined> {
+    const [client] = await db.select().from(clients).where(eq(clients.id, id));
+    return client;
+  }
+
+  async createClient(client: InsertClient): Promise<Client> {
+    const [created] = await db.insert(clients).values(client).returning();
+    return created;
+  }
+
+  async updateClient(id: number, data: Partial<Client>): Promise<Client> {
+    const [updated] = await db.update(clients).set(data).where(eq(clients.id, id)).returning();
+    return updated;
+  }
+
+  async deleteClient(id: number): Promise<void> {
+    await db.delete(clientUserAssignments).where(eq(clientUserAssignments.clientId, id));
+    await db.delete(clients).where(eq(clients.id, id));
+  }
+
+  // === CLIENT-USER ASSIGNMENTS ===
+  async getClientUserAssignments(workspaceId: number): Promise<(ClientUserAssignment & { client?: Client; user?: User })[]> {
+    const assignments = await db.select().from(clientUserAssignments)
+      .where(eq(clientUserAssignments.workspaceId, workspaceId));
+    
+    if (assignments.length === 0) return [];
+
+    const clientIds = [...new Set(assignments.map(a => a.clientId))];
+    const userIds = [...new Set(assignments.map(a => a.userId))];
+    
+    const clientList = await db.select().from(clients).where(inArray(clients.id, clientIds));
+    const userList = await db.select().from(users).where(inArray(users.id, userIds));
+    
+    return assignments.map(a => ({
+      ...a,
+      client: clientList.find(c => c.id === a.clientId),
+      user: userList.find(u => u.id === a.userId)
+    }));
+  }
+
+  async getUserClientAssignments(userId: number, workspaceId: number): Promise<ClientUserAssignment[]> {
+    return await db.select().from(clientUserAssignments)
+      .where(and(
+        eq(clientUserAssignments.userId, userId),
+        eq(clientUserAssignments.workspaceId, workspaceId)
+      ));
+  }
+
+  async createClientUserAssignment(assignment: InsertClientUserAssignment): Promise<ClientUserAssignment> {
+    const [created] = await db.insert(clientUserAssignments).values(assignment).returning();
+    return created;
+  }
+
+  async deleteClientUserAssignment(id: number): Promise<void> {
+    await db.delete(clientUserAssignments).where(eq(clientUserAssignments.id, id));
+  }
+
+  async deleteClientUserAssignmentsByClient(clientId: number): Promise<void> {
+    await db.delete(clientUserAssignments).where(eq(clientUserAssignments.clientId, clientId));
+  }
+
+  async deleteClientUserAssignmentsByUser(userId: number, workspaceId: number): Promise<void> {
+    await db.delete(clientUserAssignments).where(and(
+      eq(clientUserAssignments.userId, userId),
+      eq(clientUserAssignments.workspaceId, workspaceId)
+    ));
+  }
+
+  // === USER MANAGEMENT ===
+  async getWorkspaceUsers(workspaceId: number): Promise<(User & { role: string; assignedClients?: Client[] })[]> {
+    const members = await db.select({
+      userId: workspaceMembers.userId,
+      role: workspaceMembers.role
+    }).from(workspaceMembers).where(eq(workspaceMembers.workspaceId, workspaceId));
+
+    if (members.length === 0) return [];
+
+    const userIds = members.map(m => m.userId);
+    const userList = await db.select().from(users).where(inArray(users.id, userIds));
+    
+    const assignments = await db.select().from(clientUserAssignments)
+      .where(eq(clientUserAssignments.workspaceId, workspaceId));
+    
+    const clientIds = [...new Set(assignments.map(a => a.clientId))];
+    const clientList = clientIds.length > 0 
+      ? await db.select().from(clients).where(inArray(clients.id, clientIds))
+      : [];
+
+    return userList.map(user => {
+      const member = members.find(m => m.userId === user.id);
+      const userAssignments = assignments.filter(a => a.userId === user.id);
+      const assignedClients = userAssignments.map(a => clientList.find(c => c.id === a.clientId)).filter(Boolean) as Client[];
+      
+      return {
+        ...user,
+        role: member?.role || 'WORKSPACE_MEMBER',
+        assignedClients
+      };
+    });
+  }
+
+  async updateUser(id: number, data: Partial<User>): Promise<User> {
+    const [updated] = await db.update(users).set(data).where(eq(users.id, id)).returning();
+    return updated;
+  }
+
+  async updateWorkspaceMemberRole(userId: number, workspaceId: number, role: string): Promise<void> {
+    await db.update(workspaceMembers)
+      .set({ role })
+      .where(and(
+        eq(workspaceMembers.userId, userId),
+        eq(workspaceMembers.workspaceId, workspaceId)
+      ));
+  }
+
+  async createWorkspaceMember(userId: number, workspaceId: number, role: string): Promise<void> {
+    await db.insert(workspaceMembers).values({ userId, workspaceId, role });
+  }
+
+  async getWorkspaceMember(userId: number, workspaceId: number): Promise<{ userId: number; workspaceId: number; role: string } | undefined> {
+    const [member] = await db.select().from(workspaceMembers)
+      .where(and(
+        eq(workspaceMembers.userId, userId),
+        eq(workspaceMembers.workspaceId, workspaceId)
+      ));
+    return member;
   }
 }
 

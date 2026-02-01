@@ -14,6 +14,7 @@ import EmailCenter from "@/pages/email";
 import Finance from "@/pages/finance";
 import Tracking from "@/pages/tracking";
 import Groups from "@/pages/groups";
+import Settings from "@/pages/settings";
 
 function Router() {
   return (
@@ -27,6 +28,7 @@ function Router() {
       <Route path="/email" component={EmailCenter} />
       <Route path="/finance" component={Finance} />
       <Route path="/tracking" component={Tracking} />
+      <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>
   );

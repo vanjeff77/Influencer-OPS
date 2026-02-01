@@ -1,4 +1,5 @@
 import { Link, useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { useUser, useLogout } from "@/hooks/use-auth";
 import { useWorkspaces, useCreateWorkspace } from "@/hooks/use-workspaces";
 import { Button } from "@/components/ui/button";
@@ -27,7 +28,8 @@ import {
   ChevronsUpDown,
   Search,
   Menu,
-  X
+  X,
+  Settings
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -55,6 +57,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const { data: myRoleData } = useQuery<{ userId: number; role: string; assignedClientIds: number[] }>({
+    queryKey: [`/api/workspace-users/me?workspaceId=${activeWorkspaceId}`],
+    enabled: !!activeWorkspaceId,
+  });
+
+  const isClientRole = myRoleData?.role === 'CLIENT';
+  const isOwner = myRoleData?.role === 'WORKSPACE_OWNER';
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -154,15 +164,22 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       <div className="flex-1 overflow-y-auto py-4 md:py-6 px-2 md:px-3 space-y-0.5 md:space-y-1">
         <div className="px-2 md:px-3 mb-1.5 md:mb-2 text-[10px] md:text-xs font-semibold text-muted-foreground uppercase tracking-wider">{KO.nav.platform}</div>
-        <NavItem href="/" icon={LayoutDashboard} label={KO.nav.overview} onClick={onNavClick} />
-        <NavItem href="/discover" icon={Search} label={KO.nav.discover} onClick={onNavClick} />
+        {!isClientRole && <NavItem href="/" icon={LayoutDashboard} label={KO.nav.overview} onClick={onNavClick} />}
+        {!isClientRole && <NavItem href="/discover" icon={Search} label={KO.nav.discover} onClick={onNavClick} />}
         <NavItem href="/campaigns" icon={Megaphone} label={KO.nav.campaigns} onClick={onNavClick} />
-        <NavItem href="/groups" icon={Users} label={KO.nav.groups} onClick={onNavClick} />
+        {!isClientRole && <NavItem href="/groups" icon={Users} label={KO.nav.groups} onClick={onNavClick} />}
         
         <div className="px-2 md:px-3 mt-6 md:mt-8 mb-1.5 md:mb-2 text-[10px] md:text-xs font-semibold text-muted-foreground uppercase tracking-wider">{KO.nav.operations}</div>
-        <NavItem href="/email" icon={Mail} label={KO.nav.emailCenter} onClick={onNavClick} />
+        {!isClientRole && <NavItem href="/email" icon={Mail} label={KO.nav.emailCenter} onClick={onNavClick} />}
         <NavItem href="/finance" icon={Briefcase} label={KO.nav.finance} onClick={onNavClick} />
-        <NavItem href="/tracking" icon={LineChart} label={KO.nav.tracking} onClick={onNavClick} />
+        {!isClientRole && <NavItem href="/tracking" icon={LineChart} label={KO.nav.tracking} onClick={onNavClick} />}
+        
+        {isOwner && (
+          <>
+            <div className="px-2 md:px-3 mt-6 md:mt-8 mb-1.5 md:mb-2 text-[10px] md:text-xs font-semibold text-muted-foreground uppercase tracking-wider">{KO.nav.management}</div>
+            <NavItem href="/settings" icon={Settings} label={KO.nav.settings} onClick={onNavClick} />
+          </>
+        )}
       </div>
 
       <div className="p-3 md:p-4 border-t border-border">
