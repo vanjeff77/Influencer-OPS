@@ -1,0 +1,110 @@
+────────────────────────────────────────
+[8] Gmail 연동 기반 “캠페인-인플루언서 메신저형 스레드” 내재화 (필수 추가 요구사항)
+목표: 인플루언서와의 이메일 커뮤니케이션(발신/수신)을 플랫폼 안에서 카카오톡처럼 “메신저형 스레드”로 운영할 수 있게 한다.
+단, 이메일은 본문이 길 수 있으므로 “버블은 요약(2줄)”로 보여주고 클릭 시에만 전문을 Drawer로 펼쳐 보여준다.
+또한 스레드 화면에서 인플루언서 세부정보(연락처/메모/태그/단가 등)를 즉시 수정할 수 있어야 한다.
+
+────────────────────────────────────────
+A) Gmail 계정 연동(백엔드)
+1) EmailAccount에 Gmail OAuth 연동 플로우를 구현한다.
+- UI: Email Center 또는 캠페인 상세의 커뮤니케이션 탭에서 “Gmail 연결” 버튼 제공
+- OAuth 완료 후 access_token/refresh_token을 서버 DB에 저장(반드시 암호화/보안 저장)
+- 권장 scope(최소): gmail.readonly + gmail.send (필요 시 gmail.modify)
+2) Gmail 수발신 API 연동
+- 발신: Gmail API(users.messages.send 또는 drafts.create/send)로 전송
+- 수신: Gmail API(users.messages.list/get)로 최신 메일 동기화(Sync)
+3) 토큰 갱신 처리
+- refresh_token을 이용한 자동 갱신 로직 구현(만료 시 자동 재인증 안내)
+
+────────────────────────────────────────
+B) “캠페인 단위” 커뮤니케이션 구조 (핵심)
+원칙: 커뮤니케이션은 CampaignLineItem(캠페인-인플루언서 단위)에 귀속되어야 한다.
+즉, 캠페인 상세 안에서 인플루언서별 대화가 트래킹 가능해야 한다.
+
+1) 데이터 모델(추가/확장)
+- Conversation(또는 EmailConversation) 엔티티를 추가한다:
+  - id
+  - campaignLineItemId (필수)
+  - emailAccountId (필수: 어떤 발신 계정으로 대화했는지)
+  - subjectPrefix (예: “[캠페인명]” 자동 생성)
+  - gmailThreadId (가능하면 저장)
+  - lastMessageAt
+- ConversationMessage 엔티티:
+  - conversationId
+  - direction(inbound|outbound)
+  - snippet(요약 1~2줄)
+  - bodyHtml/bodyText(전문)
+  - attachments
+  - gmailMessageId / gmailThreadId
+  - sendStatus(queued|sent|failed) (outbound)
+  - sentAt/receivedAt
+
+2) 매핑 규칙(수신 메일을 어떤 스레드에 붙일지)
+- 1순위: gmailThreadId가 이미 conversation.gmailThreadId와 일치하면 그 conversation에 append
+- 2순위: In-Reply-To / References 헤더 기반으로 기존 conversation 연결
+- 3순위: subjectPrefix + 인플루언서 이메일(to/from) 기반 휴리스틱 매칭
+- 매칭 불가 시: “미분류 수신함”에 적재하고 사용자가 conversation에 수동 연결(Assign)할 수 있게 한다.
+
+────────────────────────────────────────
+C) UI: 캠페인 상세 > “커뮤니케이션(대화)” 탭 (필수)
+캠페인 상세 페이지(/campaigns/[id])에 새 탭 “커뮤니케이션”을 추가하고, 아래 3-pane UI로 구현한다.
+- 좌측 패널: 캠페인 라인아이템(인플루언서) 리스트
+  - 배지: 최근 메시지 시간, 미응답, 실패, 응답됨 등
+  - 검색/필터: 미응답만 보기, 최근 7일 등
+- 중앙 패널: 메신저형 버블 타임라인(ConversationMessage)
+  - 기본 표시: 2줄 snippet만 노출 + (더보기) 표시
+  - 말풍선 클릭 시: 전문 Drawer(우측 또는 모달)로 본문 전체(HTML) 표시 + 첨부 목록
+  - 발신 실패 메시지는 빨간 배지 + 재시도 버튼
+- 우측 패널(매우 중요): “인플루언서 상세 편집 패널”
+  - 탐색(Discover) 상세와 동일한 편집 기능을 제공해야 한다:
+    - 연락처(이메일), 메모(단가/조건 기록), 태그
+    - 필요 시 단가/견적/조건 커스텀 필드(숫자/텍스트)
+    - 저장 시 즉시 반영 + AuditLog/TimelineEvent 기록
+  - 목적: 대화하면서 단가/조건을 들으면 바로 메모에 적을 수 있어야 함
+
+※ 이 우측 패널이 없으면, 사용자가 메일→탐색/관리로 왔다갔다해야 하므로 요구사항 불충족이다.
+
+────────────────────────────────────────
+D) 답장(수신)을 플랫폼에서 보는 방식 (필수)
+1) 캠페인 커뮤니케이션 탭 상단에 “동기화” 버튼 제공
+- 클릭 시 해당 캠페인에 연결된 EmailAccount 기준으로 수신 메일 동기화 수행
+- 성공/실패 토스트 한국어로 표시
+2) 자동 동기화(가능하면)
+- MVP는 10~30분 주기로 cron 동기화 또는 사용자가 Sync 누르면 갱신
+- 동기화 범위: lastSyncAt 이후의 메일만 incremental fetch
+3) 수신 메시지는 ConversationMessage(direction=inbound)로 저장하고 UI에 즉시 표시
+
+────────────────────────────────────────
+E) 최초 발송 이후 “편한 발신 UX” (필수)
+1) 하단 고정 입력창(메신저처럼)
+- 기본은 짧게 입력 → “발송”
+- 길게 쓰기 필요 시 “확장 작성” 버튼 → 리치 텍스트 에디터/전체 작성 모달 열기
+2) 템플릿 + 변수 자동 채움
+- 템플릿 예: 첫 컨택/팔로업/계약 요청/정산 증빙 요청
+- 변수: {이름}, {캠페인명}, {담당자명}, {마감일}, {브리프링크}
+- 캠페인/라인아이템 컨텍스트로 자동 치환
+3) 스레드 유지(대화형)
+- 첫 발송 시 Conversation 생성 + subjectPrefix 적용 + gmailThreadId 저장
+- 이후 발송은 동일 Conversation에서 “답장(Reply)” 형태로 보내 thread를 유지
+4) 재발송/팔로업 버튼
+- 미응답 상태에서 “팔로업 보내기” 1-click 제공(템플릿 자동 선택 가능)
+
+────────────────────────────────────────
+F) API 엔드포인트 추가(필수)
+- /api/email/connect/gmail (OAuth 시작)
+- /api/email/callback/gmail (OAuth 완료)
+- /api/conversations?campaignId=... (캠페인별 conversation 리스트)
+- /api/conversations/:id (GET: 상세 + 메시지)
+- /api/conversations/:id/messages (POST: 발신 메시지 작성/전송)
+- /api/conversations/:id/sync (POST: 해당 conversation 또는 account 기준 수신 동기화)
+- /api/influencers/:id (PATCH: 스레드 화면 우측 패널에서 메모/태그/연락처 수정 저장)
+- /api/line-items/:id (PATCH: 라인아이템 담당자/상태 등)
+
+────────────────────────────────────────
+G) 완료 기준(반드시 시나리오 통과)
+1) 캠페인 상세 > 커뮤니케이션 탭에서 인플루언서(라인아이템)를 클릭하면 대화창이 열린다.
+2) 하단 입력창에서 이메일 발송 → 버블로 표시되고 sendStatus가 저장된다.
+3) 인플루언서가 답장하면, Sync로 수신 메시지가 같은 스레드에 붙어서 버블로 표시된다.
+4) 버블은 2줄 요약만 보이고, 클릭하면 전문 Drawer로 전체 본문이 열린다.
+5) 대화 화면 우측 패널에서 인플루언서 메모/태그/연락처를 수정하고 저장하면 즉시 반영된다(단가 메모 작성 가능).
+6) 모든 발신/수신/수정/상태변경은 AuditLog + Influencer TimelineEvent에 기록된다.
