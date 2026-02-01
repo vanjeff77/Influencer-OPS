@@ -70,12 +70,12 @@ export default function SettingsPage() {
   const isOwner = myRoleData?.role === 'WORKSPACE_OWNER';
 
   const { data: clients = [], isLoading: loadingClients } = useQuery<Client[]>({
-    queryKey: ['/api/clients', workspaceId],
+    queryKey: [`/api/clients?workspaceId=${workspaceId}`],
     enabled: !!workspaceId,
   });
 
   const { data: users = [], isLoading: loadingUsers } = useQuery<WorkspaceUser[]>({
-    queryKey: ['/api/workspace-users', workspaceId],
+    queryKey: [`/api/workspace-users?workspaceId=${workspaceId}`],
     enabled: !!workspaceId,
   });
 
@@ -83,7 +83,7 @@ export default function SettingsPage() {
     mutationFn: (data: { workspaceId: number; name: string; memo?: string; status?: string }) =>
       apiRequest('POST', '/api/clients', data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/clients', workspaceId] });
+      queryClient.invalidateQueries({ queryKey: [`/api/clients?workspaceId=${workspaceId}`] });
       toast({ title: KO.settings.clientCreated });
       resetClientForm();
       setClientDialogOpen(false);
@@ -97,7 +97,7 @@ export default function SettingsPage() {
     mutationFn: ({ id, data }: { id: number; data: Partial<Client> }) =>
       apiRequest('PATCH', `/api/clients/${id}`, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/clients', workspaceId] });
+      queryClient.invalidateQueries({ queryKey: [`/api/clients?workspaceId=${workspaceId}`] });
       toast({ title: KO.settings.clientUpdated });
       resetClientForm();
       setClientDialogOpen(false);
@@ -111,7 +111,7 @@ export default function SettingsPage() {
     mutationFn: (id: number) =>
       apiRequest('DELETE', `/api/clients/${id}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/clients', workspaceId] });
+      queryClient.invalidateQueries({ queryKey: [`/api/clients?workspaceId=${workspaceId}`] });
       toast({ title: KO.settings.clientDeleted });
     },
     onError: (err: any) => {
@@ -123,7 +123,7 @@ export default function SettingsPage() {
     mutationFn: (data: { workspaceId: number; email: string; password: string; name: string; role: string; clientIds?: number[] }) =>
       apiRequest('POST', '/api/workspace-users', data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/workspace-users', workspaceId] });
+      queryClient.invalidateQueries({ queryKey: [`/api/workspace-users?workspaceId=${workspaceId}`] });
       toast({ title: KO.settings.userCreated });
       resetUserForm();
       setUserDialogOpen(false);
@@ -137,7 +137,7 @@ export default function SettingsPage() {
     mutationFn: ({ userId, data }: { userId: number; data: { workspaceId: number; role: string; clientIds?: number[] } }) =>
       apiRequest('PATCH', `/api/workspace-users/${userId}/role`, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/workspace-users', workspaceId] });
+      queryClient.invalidateQueries({ queryKey: [`/api/workspace-users?workspaceId=${workspaceId}`] });
       toast({ title: KO.settings.userUpdated });
       resetUserForm();
       setUserDialogOpen(false);
@@ -152,7 +152,7 @@ export default function SettingsPage() {
     mutationFn: ({ userId, isActive }: { userId: number; isActive: boolean }) =>
       apiRequest('PATCH', `/api/workspace-users/${userId}/status`, { workspaceId, isActive }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/workspace-users', workspaceId] });
+      queryClient.invalidateQueries({ queryKey: [`/api/workspace-users?workspaceId=${workspaceId}`] });
       toast({ title: KO.settings.userUpdated });
     },
     onError: (err: any) => {
