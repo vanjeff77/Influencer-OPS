@@ -60,6 +60,63 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
     }
   }, [open]);
 
+  const parseTsvWithQuotes = useCallback((text: string): string[][] => {
+    const rows: string[][] = [];
+    let currentRow: string[] = [];
+    let currentCell = '';
+    let inQuotes = false;
+    let i = 0;
+
+    while (i < text.length) {
+      const char = text[i];
+      const nextChar = text[i + 1];
+
+      if (inQuotes) {
+        if (char === '"' && nextChar === '"') {
+          currentCell += '"';
+          i += 2;
+        } else if (char === '"') {
+          inQuotes = false;
+          i++;
+        } else {
+          currentCell += char;
+          i++;
+        }
+      } else {
+        if (char === '"') {
+          inQuotes = true;
+          i++;
+        } else if (char === '\t') {
+          currentRow.push(currentCell);
+          currentCell = '';
+          i++;
+        } else if (char === '\r' && nextChar === '\n') {
+          currentRow.push(currentCell);
+          rows.push(currentRow);
+          currentRow = [];
+          currentCell = '';
+          i += 2;
+        } else if (char === '\n') {
+          currentRow.push(currentCell);
+          rows.push(currentRow);
+          currentRow = [];
+          currentCell = '';
+          i++;
+        } else {
+          currentCell += char;
+          i++;
+        }
+      }
+    }
+
+    if (currentCell || currentRow.length > 0) {
+      currentRow.push(currentCell);
+      rows.push(currentRow);
+    }
+
+    return rows.filter(row => row.some(cell => cell.trim()));
+  }, []);
+
   const parseData = useCallback((text: string) => {
     if (!text.trim()) {
       setGridData([]);
@@ -67,16 +124,15 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
       return;
     }
 
-    const lines = text.split(/\r?\n/).filter(line => line.trim());
-    if (lines.length === 0) return;
+    const rows = parseTsvWithQuotes(text);
+    if (rows.length === 0) return;
 
-    const rows = lines.map(line => line.split('\t'));
     const headerRow = rows[0] || [];
     const dataRows = rows.slice(1);
 
     setHeaders(headerRow);
     setGridData(dataRows);
-  }, []);
+  }, [parseTsvWithQuotes]);
 
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     const text = e.clipboardData.getData('text');
@@ -220,8 +276,10 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
                             <tr key={rowIdx} className="border-b hover:bg-muted/50">
                               <td className="px-2 py-1 text-muted-foreground border-r">{rowIdx + 1}</td>
                               {row.map((cell, cellIdx) => (
-                                <td key={cellIdx} className="px-2 py-1 border-r whitespace-nowrap max-w-[200px] truncate">
-                                  {cell || '-'}
+                                <td key={cellIdx} className="px-2 py-1 border-r max-w-[200px] align-top">
+                                  <div className="whitespace-pre-wrap break-words line-clamp-3" title={cell || ''}>
+                                    {cell || '-'}
+                                  </div>
                                 </td>
                               ))}
                             </tr>
