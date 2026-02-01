@@ -107,6 +107,27 @@ export async function registerRoutes(
     }
   });
 
+  // Bulk delete influencers
+  app.post('/api/influencers/bulk-delete', async (req, res) => {
+    try {
+      const { ids } = req.body as { ids: number[] };
+      if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ message: "삭제할 인플루언서 ID가 필요합니다." });
+      }
+      
+      let deleted = 0;
+      for (const id of ids) {
+        await storage.deleteInfluencer(id);
+        deleted++;
+      }
+      
+      res.json({ success: true, deleted });
+    } catch (err: any) {
+      console.error('Failed to bulk delete influencers:', err);
+      res.status(500).json({ message: "대량 삭제 실패", error: err.message });
+    }
+  });
+
   // === INFLUENCER IMPORT (PASTE/TSV) ===
   const ALLOWED_COLUMNS = [
     '닉네임', '플랫폼', '플랫폼 계정', '채널 URL', '팔로워', '컨택포인트',

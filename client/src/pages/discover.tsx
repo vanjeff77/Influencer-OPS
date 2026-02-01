@@ -1,6 +1,6 @@
 import Layout from "@/components/layout";
 import { useWorkspaces } from "@/hooks/use-workspaces";
-import { useInfluencers, useCreateInfluencer, useInfluencer, useUpdateInfluencer, useAddContent, useSaveToGroup, useAssignToCampaign, useDeleteInfluencer } from "@/hooks/use-influencers";
+import { useInfluencers, useCreateInfluencer, useInfluencer, useUpdateInfluencer, useAddContent, useSaveToGroup, useAssignToCampaign, useDeleteInfluencer, useBulkDeleteInfluencers } from "@/hooks/use-influencers";
 import { useGroups } from "@/hooks/use-groups";
 import { useCampaigns } from "@/hooks/use-campaigns";
 import { Input } from "@/components/ui/input";
@@ -53,6 +53,9 @@ export default function Discover() {
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
   const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
   const [isPasteImportOpen, setIsPasteImportOpen] = useState(false);
+  const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
+  const [bulkDeleteConfirmInput, setBulkDeleteConfirmInput] = useState("");
+  const bulkDeleteInfluencers = useBulkDeleteInfluencers();
   const queryClient = useQueryClient();
   const [newInfluencer, setNewInfluencer] = useState({ 
     name: "", 
@@ -394,12 +397,85 @@ export default function Discover() {
                 <Megaphone className="w-3 h-3 mr-1" />
                 캠페인에 배정
               </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-xs h-7 px-2 text-destructive border-destructive/50 hover:bg-destructive/10" 
+                onClick={() => {
+                  setBulkDeleteConfirmInput("");
+                  setIsBulkDeleteOpen(true);
+                }}
+                data-testid="button-bulk-delete"
+              >
+                <Trash2 className="w-3 h-3 mr-1" />
+                {KO.pages.discover.bulkDelete}
+              </Button>
               <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setSelectedIds(new Set())}>
                 <X className="w-3 h-3" />
               </Button>
             </div>
           </div>
         )}
+
+        {/* Bulk Delete Confirmation Dialog */}
+        <Dialog open={isBulkDeleteOpen} onOpenChange={setIsBulkDeleteOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-destructive">
+                {KO.pages.discover.bulkDeleteConfirm.replace('{count}', selectedIds.size.toString())}
+              </DialogTitle>
+              <DialogDescription>
+                {KO.pages.discover.bulkDeleteWarning}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4 space-y-4">
+              {selectedIds.size >= 5 && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    {KO.pages.discover.bulkDeleteCountPrompt}
+                  </label>
+                  <Input
+                    type="text"
+                    value={bulkDeleteConfirmInput}
+                    onChange={(e) => setBulkDeleteConfirmInput(e.target.value)}
+                    placeholder={KO.pages.discover.bulkDeleteCountPlaceholder}
+                    className="text-center text-lg font-mono"
+                    data-testid="input-bulk-delete-confirm"
+                  />
+                </div>
+              )}
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setIsBulkDeleteOpen(false)}>
+                {KO.common.cancel}
+              </Button>
+              <Button 
+                variant="destructive"
+                disabled={
+                  bulkDeleteInfluencers.isPending || 
+                  (selectedIds.size >= 5 && bulkDeleteConfirmInput !== selectedIds.size.toString())
+                }
+                onClick={() => {
+                  bulkDeleteInfluencers.mutate(Array.from(selectedIds), {
+                    onSuccess: (data) => {
+                      toast({ 
+                        title: KO.pages.discover.bulkDeleteSuccess.replace('{count}', data.deleted?.toString() || selectedIds.size.toString())
+                      });
+                      setSelectedIds(new Set());
+                      setIsBulkDeleteOpen(false);
+                    },
+                    onError: () => {
+                      toast({ title: KO.pages.discover.bulkDeleteFailed, variant: "destructive" });
+                    }
+                  });
+                }}
+                data-testid="button-confirm-bulk-delete"
+              >
+                {bulkDeleteInfluencers.isPending ? KO.pages.discover.deleting : KO.common.delete}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <div className="flex gap-2 md:gap-3 items-center">
           <div className="relative flex-1 max-w-xs md:max-w-md">

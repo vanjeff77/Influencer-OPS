@@ -122,6 +122,25 @@ export function useDeleteInfluencer() {
   });
 }
 
+export function useBulkDeleteInfluencers() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (influencerIds: number[]) => {
+      const res = await fetch('/api/influencers/bulk-delete', {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: influencerIds }),
+      });
+      if (!res.ok) throw new Error("Failed to bulk delete influencers");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/influencers'] });
+      queryClient.invalidateQueries({ queryKey: [api.influencers.list.path] });
+    },
+  });
+}
+
 // Bulk operations
 export function useSaveToGroup() {
   const queryClient = useQueryClient();

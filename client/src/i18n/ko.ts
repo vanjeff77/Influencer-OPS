@@ -161,6 +161,13 @@ export const KO = {
       deleteInfluencerSuccess: "인플루언서가 삭제되었습니다.",
       deleteInfluencerFailed: "삭제에 실패했습니다.",
       deleting: "삭제 중...",
+      bulkDeleteConfirm: "선택한 {count}명의 인플루언서를 삭제하시겠습니까?",
+      bulkDeleteWarning: "삭제하면 모든 관련 데이터가 함께 삭제되며, 이 작업은 되돌릴 수 없습니다.",
+      bulkDeleteCountPrompt: "삭제를 진행하려면 삭제할 인플루언서 수를 입력하세요:",
+      bulkDeleteCountPlaceholder: "숫자를 입력하세요",
+      bulkDeleteSuccess: "{count}명의 인플루언서가 삭제되었습니다.",
+      bulkDeleteFailed: "대량 삭제에 실패했습니다.",
+      bulkDelete: "삭제",
     },
     campaigns: {
       title: "캠페인",
