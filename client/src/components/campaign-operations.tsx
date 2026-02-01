@@ -15,12 +15,15 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { ko } from "date-fns/locale";
 import { 
   Search, Filter, AlertCircle, Clock, FileText, Calendar, MessageSquare, 
   CheckCircle2, Instagram, Youtube, Twitter,
-  ExternalLink, Save, AlertTriangle
+  ExternalLink, Save, AlertTriangle, CalendarIcon
 } from "lucide-react";
 import type { CampaignInfluencer, Influencer, InfluencerAccount, FeedbackNote, User } from "@shared/schema";
 import { KO } from "@/i18n/ko";
@@ -346,28 +349,56 @@ export function CampaignOperations({ campaignId, lineItems }: CampaignOperations
                           )}
                         </TableCell>
                         <TableCell className="text-xs" onClick={(e) => e.stopPropagation()}>
-                          <Input
-                            type="date"
-                            className="h-7 w-28 text-xs"
-                            value={item.draftDueAt ? format(new Date(item.draftDueAt), 'yyyy-MM-dd') : ''}
-                            onChange={(e) => {
-                              const newDate = e.target.value ? new Date(e.target.value) : null;
-                              updateOperations.mutate({ id: item.id, updates: { draftDueAt: newDate } });
-                            }}
-                            data-testid={`input-draft-due-${item.id}`}
-                          />
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 w-28 text-xs justify-start font-normal"
+                                data-testid={`button-draft-due-${item.id}`}
+                              >
+                                <CalendarIcon className="mr-1 h-3 w-3 text-muted-foreground" />
+                                {item.draftDueAt ? format(new Date(item.draftDueAt), 'MM/dd') : <span className="text-muted-foreground">선택</span>}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                              <CalendarComponent
+                                mode="single"
+                                selected={item.draftDueAt ? new Date(item.draftDueAt) : undefined}
+                                onSelect={(date) => {
+                                  updateOperations.mutate({ id: item.id, updates: { draftDueAt: date || null } });
+                                }}
+                                locale={ko}
+                                initialFocus
+                              />
+                            </PopoverContent>
+                          </Popover>
                         </TableCell>
                         <TableCell className="text-xs" onClick={(e) => e.stopPropagation()}>
-                          <Input
-                            type="date"
-                            className="h-7 w-28 text-xs"
-                            value={item.uploadDueAt ? format(new Date(item.uploadDueAt), 'yyyy-MM-dd') : ''}
-                            onChange={(e) => {
-                              const newDate = e.target.value ? new Date(e.target.value) : null;
-                              updateOperations.mutate({ id: item.id, updates: { uploadDueAt: newDate } });
-                            }}
-                            data-testid={`input-upload-due-${item.id}`}
-                          />
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 w-28 text-xs justify-start font-normal"
+                                data-testid={`button-upload-due-${item.id}`}
+                              >
+                                <CalendarIcon className="mr-1 h-3 w-3 text-muted-foreground" />
+                                {item.uploadDueAt ? format(new Date(item.uploadDueAt), 'MM/dd') : <span className="text-muted-foreground">선택</span>}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                              <CalendarComponent
+                                mode="single"
+                                selected={item.uploadDueAt ? new Date(item.uploadDueAt) : undefined}
+                                onSelect={(date) => {
+                                  updateOperations.mutate({ id: item.id, updates: { uploadDueAt: date || null } });
+                                }}
+                                locale={ko}
+                                initialFocus
+                              />
+                            </PopoverContent>
+                          </Popover>
                         </TableCell>
                         <TableCell onClick={(e) => e.stopPropagation()}>
                           <Button
@@ -611,21 +642,51 @@ function OperationsPanel({ item, onUpdate, isSaving }: OperationsPanelProps) {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{KO.pages.operations.panel.draftDueAt}</Label>
-                <Input
-                  type="date"
-                  value={localItem.draftDueAt ? format(new Date(localItem.draftDueAt), 'yyyy-MM-dd') : ""}
-                  onChange={(e) => setLocalItem({...localItem, draftDueAt: e.target.value ? new Date(e.target.value) : null})}
-                  data-testid="input-draft-due"
-                />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start font-normal"
+                      data-testid="button-draft-due-panel"
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />
+                      {localItem.draftDueAt ? format(new Date(localItem.draftDueAt), 'yyyy년 MM월 dd일', { locale: ko }) : <span className="text-muted-foreground">날짜 선택</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarComponent
+                      mode="single"
+                      selected={localItem.draftDueAt ? new Date(localItem.draftDueAt) : undefined}
+                      onSelect={(date) => setLocalItem({...localItem, draftDueAt: date || null})}
+                      locale={ko}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
               <div className="space-y-2">
                 <Label>{KO.pages.operations.panel.uploadDueAt}</Label>
-                <Input
-                  type="date"
-                  value={localItem.uploadDueAt ? format(new Date(localItem.uploadDueAt), 'yyyy-MM-dd') : ""}
-                  onChange={(e) => setLocalItem({...localItem, uploadDueAt: e.target.value ? new Date(e.target.value) : null})}
-                  data-testid="input-upload-due"
-                />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start font-normal"
+                      data-testid="button-upload-due-panel"
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />
+                      {localItem.uploadDueAt ? format(new Date(localItem.uploadDueAt), 'yyyy년 MM월 dd일', { locale: ko }) : <span className="text-muted-foreground">날짜 선택</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarComponent
+                      mode="single"
+                      selected={localItem.uploadDueAt ? new Date(localItem.uploadDueAt) : undefined}
+                      onSelect={(date) => setLocalItem({...localItem, uploadDueAt: date || null})}
+                      locale={ko}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
           </AccordionContent>
