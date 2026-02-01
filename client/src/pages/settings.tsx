@@ -69,6 +69,7 @@ export default function SettingsPage() {
   });
 
   const isOwner = myRoleData?.role === 'WORKSPACE_OWNER';
+  const isMemberOrOwner = myRoleData?.role === 'WORKSPACE_OWNER' || myRoleData?.role === 'WORKSPACE_MEMBER';
 
   const { data: clients = [], isLoading: loadingClients } = useQuery<Client[]>({
     queryKey: [`/api/clients?workspaceId=${workspaceId}`],
@@ -280,7 +281,7 @@ export default function SettingsPage() {
                 <CardTitle className="text-lg">{KO.settings.clients}</CardTitle>
                 <CardDescription>캠페인을 클라이언트별로 분류합니다.</CardDescription>
               </div>
-              {isOwner && (
+              {isMemberOrOwner && (
                 <Dialog open={clientDialogOpen && !editingClient} onOpenChange={(open) => {
                   setClientDialogOpen(open);
                   if (!open) resetClientForm();
@@ -351,7 +352,7 @@ export default function SettingsPage() {
                         <Badge variant={client.status === 'active' ? 'default' : 'secondary'}>
                           {client.status === 'active' ? KO.settings.active : KO.settings.inactive}
                         </Badge>
-                        {isOwner && (
+                        {isMemberOrOwner && (
                           <>
                             <Button
                               size="icon"
