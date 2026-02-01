@@ -11,7 +11,7 @@ import { AlertTriangle, CheckCircle, XCircle, Loader2 } from "lucide-react";
 
 const ALLOWED_COLUMNS = [
   '닉네임', '플랫폼', '플랫폼 계정', '채널 URL', '팔로워', '컨택포인트',
-  '메모', '클라이언트', '세부유형', '컨택여부', '회신 여부', '협업 여부', '콘텐츠 완성본 링크'
+  '메모', '클라이언트', '세부유형', '컨택여부', '회신 여부', '협업 여부', '콘텐츠 완성본 링크', '단가 메모'
 ];
 
 interface PasteImportDialogProps {

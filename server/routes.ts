@@ -98,7 +98,7 @@ export async function registerRoutes(
   // === INFLUENCER IMPORT (PASTE/TSV) ===
   const ALLOWED_COLUMNS = [
     '닉네임', '플랫폼', '플랫폼 계정', '채널 URL', '팔로워', '컨택포인트',
-    '메모', '클라이언트', '세부유형', '컨택여부', '회신 여부', '협업 여부', '콘텐츠 완성본 링크'
+    '메모', '클라이언트', '세부유형', '컨택여부', '회신 여부', '협업 여부', '콘텐츠 완성본 링크', '단가 메모'
   ];
 
   const PLATFORM_MAP: Record<string, string> = {
@@ -203,6 +203,7 @@ export async function registerRoutes(
         const replyStatus = (getValue('회신 여부') || '').toString().trim();
         const collabStatus = (getValue('협업 여부') || '').toString().trim();
         const finalContentUrl = (getValue('콘텐츠 완성본 링크') || '').toString().trim();
+        const priceMemo = (getValue('단가 메모') || '').toString().trim();
 
         const platform = parsePlatform(platformRaw);
         const followers = parseFollowers(followersRaw);
@@ -255,7 +256,8 @@ export async function registerRoutes(
             contactStatus: contactStatus || null,
             replyStatus: replyStatus || null,
             collabStatus: collabStatus || null,
-            finalContentUrl: finalContentUrl || null
+            finalContentUrl: finalContentUrl || null,
+            priceMemo: priceMemo || null
           };
 
           const accountData = (platform || handle || url) ? {

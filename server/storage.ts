@@ -1021,6 +1021,7 @@ export class DatabaseStorage implements IStorage {
       replyStatus?: string | null;
       collabStatus?: string | null;
       finalContentUrl?: string | null;
+      priceMemo?: string | null;
     },
     accountData: {
       platform: string;
@@ -1042,6 +1043,7 @@ export class DatabaseStorage implements IStorage {
       if (influencerData.replyStatus) updateData.replyStatus = influencerData.replyStatus;
       if (influencerData.collabStatus) updateData.collabStatus = influencerData.collabStatus;
       if (influencerData.finalContentUrl) updateData.finalContentUrl = influencerData.finalContentUrl;
+      if (influencerData.priceMemo) updateData.priceMemo = influencerData.priceMemo;
 
       const [updatedInf] = await db.update(influencers).set(updateData).where(eq(influencers.id, existingInfluencer.id)).returning();
 
@@ -1083,7 +1085,8 @@ export class DatabaseStorage implements IStorage {
         contactStatus: influencerData.contactStatus,
         replyStatus: influencerData.replyStatus,
         collabStatus: influencerData.collabStatus,
-        finalContentUrl: influencerData.finalContentUrl
+        finalContentUrl: influencerData.finalContentUrl,
+        priceMemo: influencerData.priceMemo
       }).returning();
 
       let newAccount: InfluencerAccount | null = null;
