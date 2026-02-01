@@ -142,6 +142,7 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
   }, [parseTsvWithQuotes]);
 
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    e.preventDefault();
     const text = e.clipboardData.getData('text');
     setPastedData(text);
     parseData(text);
