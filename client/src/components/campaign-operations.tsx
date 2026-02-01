@@ -213,23 +213,24 @@ export function CampaignOperations({ campaignId, lineItems }: CampaignOperations
 
       <Card>
         <CardContent className="p-0">
-          <ScrollArea className="max-h-[600px]">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{KO.pages.operations.influencer}</TableHead>
-                  <TableHead>{KO.pages.operations.stage}</TableHead>
-                  <TableHead>{KO.pages.operations.commStatus}</TableHead>
-                  <TableHead>{KO.pages.operations.reviewStatus}</TableHead>
-                  <TableHead>{KO.pages.operations.dueStatus}</TableHead>
-                  <TableHead>{KO.pages.operations.contract}</TableHead>
-                  <TableHead>{KO.pages.operations.draftDue}</TableHead>
-                  <TableHead>{KO.pages.operations.uploadDue}</TableHead>
-                  <TableHead>{KO.pages.operations.contractGenerate}</TableHead>
-                  <TableHead>{KO.pages.operations.notes}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+          <div className="overflow-x-auto">
+            <ScrollArea className="max-h-[600px]">
+              <Table className="min-w-[1100px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="sticky left-0 bg-background z-10">{KO.pages.operations.influencer}</TableHead>
+                    <TableHead>{KO.pages.operations.stage}</TableHead>
+                    <TableHead>{KO.pages.operations.commStatus}</TableHead>
+                    <TableHead>{KO.pages.operations.reviewStatus}</TableHead>
+                    <TableHead>{KO.pages.operations.dueStatus}</TableHead>
+                    <TableHead>{KO.pages.operations.contract}</TableHead>
+                    <TableHead>{KO.pages.operations.draftDue}</TableHead>
+                    <TableHead>{KO.pages.operations.uploadDue}</TableHead>
+                    <TableHead>{KO.pages.operations.contractGenerate}</TableHead>
+                    <TableHead>{KO.pages.operations.notes}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                 {filteredItems.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
@@ -421,9 +422,10 @@ export function CampaignOperations({ campaignId, lineItems }: CampaignOperations
                     );
                   })
                 )}
-              </TableBody>
-            </Table>
-          </ScrollArea>
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          </div>
         </CardContent>
       </Card>
 
