@@ -16,6 +16,9 @@ const FIXED_COLUMNS = [
   { key: 'platform', label: '플랫폼', required: true },
   { key: 'followers', label: '팔로워', required: false },
   { key: 'contactPoint', label: '컨택포인트', required: false },
+  { key: 'tag1', label: '태그1', required: false },
+  { key: 'tag2', label: '태그2', required: false },
+  { key: 'tag3', label: '태그3', required: false },
   { key: 'memo', label: '메모', required: false },
   { key: 'priceMemo', label: '단가 메모', required: false },
 ];
@@ -28,6 +31,9 @@ interface RowData {
   platform: string;
   followers: string;
   contactPoint: string;
+  tag1: string;
+  tag2: string;
+  tag3: string;
   memo: string;
   priceMemo: string;
 }
@@ -57,6 +63,9 @@ const createEmptyRow = (): RowData => ({
   platform: '',
   followers: '',
   contactPoint: '',
+  tag1: '',
+  tag2: '',
+  tag3: '',
   memo: '',
   priceMemo: '',
 });
@@ -163,8 +172,11 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
         platform: (cells[2] || '').trim(),
         followers: (cells[3] || '').trim(),
         contactPoint: (cells[4] || '').trim(),
-        memo: (cells[5] || '').trim(),
-        priceMemo: (cells[6] || '').trim(),
+        tag1: (cells[5] || '').trim(),
+        tag2: (cells[6] || '').trim(),
+        tag3: (cells[7] || '').trim(),
+        memo: (cells[8] || '').trim(),
+        priceMemo: (cells[9] || '').trim(),
       };
       if (row.nickname || row.handle || row.platform) {
         parsedRows.push(row);
@@ -247,6 +259,9 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
         platform: normalizePlatform(row.platform) || row.platform,
         followers: parseFollowers(row.followers),
         contactPoint: row.contactPoint.trim() || null,
+        tag1: row.tag1.trim() || null,
+        tag2: row.tag2.trim() || null,
+        tag3: row.tag3.trim() || null,
         memo: row.memo.trim() || null,
         priceMemo: row.priceMemo.trim() || null,
       }));
@@ -305,7 +320,7 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
 
         <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md p-3 text-sm text-blue-700 dark:text-blue-300 flex items-start gap-2">
           <ClipboardPaste className="w-4 h-4 mt-0.5 shrink-0" />
-          <span>테이블 아무 곳에서나 Ctrl+V (Cmd+V)로 붙여넣기하세요. 열 순서: 닉네임, 플랫폼 계정, 플랫폼, 팔로워, 컨택포인트, 메모, 단가 메모</span>
+          <span>테이블 아무 곳에서나 Ctrl+V (Cmd+V)로 붙여넣기하세요. 열 순서: 닉네임, 플랫폼 계정, 플랫폼, 팔로워, 컨택포인트, 태그1, 태그2, 태그3, 메모, 단가 메모</span>
         </div>
 
         {results && (

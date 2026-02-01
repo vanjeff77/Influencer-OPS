@@ -971,7 +971,9 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
   const [newContentLink, setNewContentLink] = useState("");
   const [contactPoint, setContactPoint] = useState("");
   const [client, setClient] = useState("");
-  const [subType, setSubType] = useState("");
+  const [tag1, setTag1] = useState("");
+  const [tag2, setTag2] = useState("");
+  const [tag3, setTag3] = useState("");
   const [contactStatus, setContactStatus] = useState<string>("");
   const [replyStatus, setReplyStatus] = useState<string>("");
   const [collabStatus, setCollabStatus] = useState<string>("");
@@ -996,7 +998,9 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
       setAccounts(influencer.accounts?.map(acc => ({ platform: acc.platform, handle: acc.handle })) || []);
       setContactPoint(influencer.contactPoint || "");
       setClient(influencer.client || "");
-      setSubType(influencer.subType || "");
+      setTag1(influencer.tag1 || "");
+      setTag2(influencer.tag2 || "");
+      setTag3(influencer.tag3 || "");
       setContactStatus(influencer.contactStatus || "");
       setReplyStatus(influencer.replyStatus || "");
       setCollabStatus(influencer.collabStatus || "");
@@ -1026,7 +1030,9 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
         accounts: validAccounts,
         contactPoint,
         client,
-        subType,
+        tag1,
+        tag2,
+        tag3,
         contactStatus: contactStatus || null,
         replyStatus: replyStatus || null,
         collabStatus: collabStatus || null,
@@ -1164,9 +1170,20 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
                         </SelectContent>
                       </Select>
                     </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-3 gap-3">
                     <div>
-                      <label className="text-sm font-medium">{KO.pages.discover.subType}</label>
-                      <Input value={subType} onChange={e => setSubType(e.target.value)} placeholder="세부유형" data-testid="input-influencer-subtype" />
+                      <label className="text-sm font-medium">{KO.pages.discover.tag1}</label>
+                      <Input value={tag1} onChange={e => setTag1(e.target.value)} placeholder="태그1" data-testid="input-influencer-tag1" />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">{KO.pages.discover.tag2}</label>
+                      <Input value={tag2} onChange={e => setTag2(e.target.value)} placeholder="태그2" data-testid="input-influencer-tag2" />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">{KO.pages.discover.tag3}</label>
+                      <Input value={tag3} onChange={e => setTag3(e.target.value)} placeholder="태그3" data-testid="input-influencer-tag3" />
                     </div>
                   </div>
                   

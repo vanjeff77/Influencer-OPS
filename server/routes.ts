@@ -115,6 +115,9 @@ export async function registerRoutes(
       platform: string;
       followers?: number | null;
       contactPoint?: string | null;
+      tag1?: string | null;
+      tag2?: string | null;
+      tag3?: string | null;
       memo?: string | null;
       priceMemo?: string | null;
     }> };
@@ -189,6 +192,9 @@ export async function registerRoutes(
           phone: item.contactPoint && !item.contactPoint.includes('@') ? item.contactPoint : undefined,
           memo: item.memo || undefined,
           priceMemo: item.priceMemo || undefined,
+          tag1: item.tag1 || undefined,
+          tag2: item.tag2 || undefined,
+          tag3: item.tag3 || undefined,
           accounts: [{
             platform: normalizedPlatform,
             handle: item.handle.replace(/^@/, ''),
@@ -408,7 +414,9 @@ export async function registerRoutes(
         const contactPoint = (getValue('컨택포인트') || '').toString().trim();
         const memo = (getValue('메모') || '').toString().trim();
         const client = (getValue('클라이언트') || '').toString().trim();
-        const subType = (getValue('세부유형') || '').toString().trim();
+        const tag1 = (getValue('태그1') || getValue('세부유형') || '').toString().trim();
+        const tag2 = (getValue('태그2') || '').toString().trim();
+        const tag3 = (getValue('태그3') || '').toString().trim();
         const contactStatus = (getValue('컨택여부') || '').toString().trim();
         const replyStatus = (getValue('회신 여부') || '').toString().trim();
         const collabStatus = (getValue('협업 여부') || '').toString().trim();
@@ -462,7 +470,9 @@ export async function registerRoutes(
             contactPoint: contactPoint || null,
             memo: memo || null,
             client: client || null,
-            subType: subType || null,
+            tag1: tag1 || null,
+            tag2: tag2 || null,
+            tag3: tag3 || null,
             contactStatus: contactStatus || null,
             replyStatus: replyStatus || null,
             collabStatus: collabStatus || null,

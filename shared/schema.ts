@@ -86,7 +86,9 @@ export const influencers = pgTable("influencers", {
   tags: text("tags").array(),
   memo: text("memo"),
   client: text("client"), // Client/advertiser name
-  subType: text("sub_type"), // Category/type of influencer
+  tag1: text("tag1"), // 태그1 (formerly subType)
+  tag2: text("tag2"), // 태그2
+  tag3: text("tag3"), // 태그3
   contactStatus: text("contact_status"), // Y, N, 진행중, 보류
   replyStatus: text("reply_status"), // Y, N, 진행중, 보류
   collabStatus: text("collab_status"), // Y, N, 진행중, 보류

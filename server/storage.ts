@@ -1028,7 +1028,9 @@ export class DatabaseStorage implements IStorage {
       contactPoint?: string | null;
       memo?: string | null;
       client?: string | null;
-      subType?: string | null;
+      tag1?: string | null;
+      tag2?: string | null;
+      tag3?: string | null;
       contactStatus?: string | null;
       replyStatus?: string | null;
       collabStatus?: string | null;
@@ -1050,7 +1052,9 @@ export class DatabaseStorage implements IStorage {
       if (influencerData.contactPoint) updateData.contactPoint = influencerData.contactPoint;
       if (influencerData.memo) updateData.memo = influencerData.memo;
       if (influencerData.client) updateData.client = influencerData.client;
-      if (influencerData.subType) updateData.subType = influencerData.subType;
+      if (influencerData.tag1) updateData.tag1 = influencerData.tag1;
+      if (influencerData.tag2) updateData.tag2 = influencerData.tag2;
+      if (influencerData.tag3) updateData.tag3 = influencerData.tag3;
       if (influencerData.contactStatus) updateData.contactStatus = influencerData.contactStatus;
       if (influencerData.replyStatus) updateData.replyStatus = influencerData.replyStatus;
       if (influencerData.collabStatus) updateData.collabStatus = influencerData.collabStatus;
@@ -1093,7 +1097,9 @@ export class DatabaseStorage implements IStorage {
         contactPoint: influencerData.contactPoint,
         memo: influencerData.memo,
         client: influencerData.client,
-        subType: influencerData.subType,
+        tag1: influencerData.tag1,
+        tag2: influencerData.tag2,
+        tag3: influencerData.tag3,
         contactStatus: influencerData.contactStatus,
         replyStatus: influencerData.replyStatus,
         collabStatus: influencerData.collabStatus,
