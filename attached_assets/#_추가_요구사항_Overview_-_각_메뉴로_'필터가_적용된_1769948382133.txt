@@ -1,0 +1,49 @@
+# 추가 요구사항: Overview -> 각 메뉴로 '필터가 적용된 상태'로 이동 (딥링크 규격)
+
+## 1) 공통 규칙
+- Overview의 KPI 카드/리스트의 CTA는 반드시 "실제 이동"이 되어야 한다.
+- 이동 대상 페이지가 아직 필터 UI를 지원하지 않더라도,
+  최소한 URL query string을 받아서 화면 상단에 "현재 필터" 배지를 보여주고,
+  리스트를 해당 조건으로 1차 필터링(클라이언트 사이드 필터링)이라도 수행한다.
+- 필터 파라미터 표준은 아래를 따른다.
+
+## 2) 표준 Query Params
+- campaignStatus: 진행중|대기|완료
+- commStatus: 미응답|응답|발송실패|전체
+- contentStatus: 초안대기|피드백대기|피드백전달|업로드예정|업로드완료
+- contractStatus: 미작성|발송|회신대기|수정|서명완료|보류
+- settlementStatus: 정보미수집|증빙요청|증빙수령|지급대기|지급완료|보류
+- dueIn: 숫자(예: 0=오늘,1=내일,3=3일이내)
+- hasIssue: true|false (트래킹 오류/비공개/지표급락 등)
+- campaignId, influencerId: 선택(특정 대상 deep link)
+
+## 3) 라우트별 딥링크 예시(이대로 구현)
+- 진행 중 캠페인 수 KPI 클릭:
+  /campaigns?campaignStatus=진행중
+
+- 응답 대기 인플루언서 수 KPI 클릭:
+  /campaigns?tab=커뮤니케이션&commStatus=미응답
+
+- 이번 주 업로드 예정 콘텐츠 수 KPI 클릭:
+  /campaigns?tab=콘텐츠&contentStatus=업로드예정&dueIn=7
+
+- 지급 대기 정산 총액 KPI 클릭:
+  /finance?settlementStatus=지급대기
+
+- 계약 미완료 KPI 클릭(선택):
+  /finance?contractStatus=서명완료제외
+
+- 리스크(확인 필요) 클릭:
+  /tracking?hasIssue=true
+
+## 4) 캠페인 상세 딥링크(있으면 적용)
+- 캠페인 상세 화면이 이미 있고, 탭을 지원한다면:
+  /campaigns/:id?tab=커뮤니케이션
+  /campaigns/:id?tab=콘텐츠
+  /campaigns/:id?tab=정산
+  형태를 우선 사용한다.
+- 탭이 없다면 /campaigns 에서 tab 쿼리로만도 동작하게 만든다.
+
+## 5) 필터 배지 UI(최소 요구)
+- 각 리스트 페이지 상단에 현재 적용된 필터를 배지로 표시하고 "초기화" 버튼 제공.
+- 예: [미응답] [업로드예정] [D-3] [이슈있음]  (X로 개별 제거)
