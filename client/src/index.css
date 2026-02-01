@@ -93,3 +93,47 @@
 ::-webkit-scrollbar-thumb {
   @apply bg-border rounded-full hover:bg-muted-foreground/30 transition-colors;
 }
+
+/* Enhanced Visual Hierarchy */
+@layer components {
+  /* Card elevation system */
+  .card-elevated {
+    @apply shadow-sm hover:shadow-md transition-shadow duration-200;
+  }
+  
+  .card-elevated-lg {
+    @apply shadow-md hover:shadow-lg transition-shadow duration-200;
+  }
+
+  /* Sidebar active state with light blue */
+  .nav-active {
+    @apply bg-primary/10 text-primary font-medium border-l-2 border-primary;
+  }
+  
+  /* Table row hover effect */
+  .table-row-interactive {
+    @apply hover:bg-primary/5 transition-colors duration-150 cursor-pointer;
+  }
+  
+  /* Section headers */
+  .section-header {
+    @apply text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3;
+  }
+  
+  /* Badge variants for status */
+  .status-badge {
+    @apply px-2 py-0.5 rounded-full text-xs font-medium;
+  }
+  
+  /* Panel/section separator */
+  .panel-separator {
+    @apply border-b border-border/60 pb-4 mb-4;
+  }
+}
+
+/* Better focus states */
+@layer utilities {
+  .focus-ring {
+    @apply focus:ring-2 focus:ring-primary/20 focus:ring-offset-1 focus:outline-none;
+  }
+}

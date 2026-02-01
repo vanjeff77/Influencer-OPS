@@ -100,9 +100,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <Link 
         href={href} 
         onClick={onClick}
-        className={`flex items-center gap-2 md:gap-3 px-2 md:px-3 py-1.5 md:py-2 rounded-md transition-all duration-200 group ${isActive ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
+        className={`flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-2.5 rounded-lg transition-all duration-200 group ${
+          isActive 
+            ? 'bg-primary/10 text-primary font-semibold shadow-sm border border-primary/20' 
+            : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground hover:shadow-sm'
+        }`}
       >
-        <Icon className={`w-4 h-4 md:w-5 md:h-5 ${isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'}`} />
+        <Icon className={`w-4 h-4 md:w-5 md:h-5 transition-colors ${isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'}`} />
         <span className="text-sm md:text-base">{label}</span>
       </Link>
     );
@@ -162,21 +166,21 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </DropdownMenu>
       </div>
 
-      <div className="flex-1 overflow-y-auto py-4 md:py-6 px-2 md:px-3 space-y-0.5 md:space-y-1">
-        <div className="px-2 md:px-3 mb-1.5 md:mb-2 text-[10px] md:text-xs font-semibold text-muted-foreground uppercase tracking-wider">{KO.nav.platform}</div>
+      <div className="flex-1 overflow-y-auto py-4 md:py-6 px-2 md:px-3 space-y-1">
+        <div className="px-3 md:px-4 mb-2 md:mb-3 text-[10px] md:text-xs font-bold text-muted-foreground/70 uppercase tracking-widest">{KO.nav.platform}</div>
         {!isClientRole && <NavItem href="/" icon={LayoutDashboard} label={KO.nav.overview} onClick={onNavClick} />}
         {!isClientRole && <NavItem href="/discover" icon={Search} label={KO.nav.discover} onClick={onNavClick} />}
         <NavItem href="/campaigns" icon={Megaphone} label={KO.nav.campaigns} onClick={onNavClick} />
         {!isClientRole && <NavItem href="/groups" icon={Users} label={KO.nav.groups} onClick={onNavClick} />}
         
-        <div className="px-2 md:px-3 mt-6 md:mt-8 mb-1.5 md:mb-2 text-[10px] md:text-xs font-semibold text-muted-foreground uppercase tracking-wider">{KO.nav.operations}</div>
+        <div className="px-3 md:px-4 mt-6 md:mt-8 mb-2 md:mb-3 text-[10px] md:text-xs font-bold text-muted-foreground/70 uppercase tracking-widest">{KO.nav.operations}</div>
         {!isClientRole && <NavItem href="/email" icon={Mail} label={KO.nav.emailCenter} onClick={onNavClick} />}
         <NavItem href="/finance" icon={Briefcase} label={KO.nav.finance} onClick={onNavClick} />
         {!isClientRole && <NavItem href="/tracking" icon={LineChart} label={KO.nav.tracking} onClick={onNavClick} />}
         
         {!isClientRole && (
           <>
-            <div className="px-2 md:px-3 mt-6 md:mt-8 mb-1.5 md:mb-2 text-[10px] md:text-xs font-semibold text-muted-foreground uppercase tracking-wider">{KO.nav.management}</div>
+            <div className="px-3 md:px-4 mt-6 md:mt-8 mb-2 md:mb-3 text-[10px] md:text-xs font-bold text-muted-foreground/70 uppercase tracking-widest">{KO.nav.management}</div>
             <NavItem href="/settings" icon={Settings} label={KO.nav.settings} onClick={onNavClick} />
           </>
         )}
@@ -208,7 +212,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen bg-background overflow-hidden">
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex w-56 lg:w-64 border-r border-border bg-card flex-col shadow-sm z-10">
+      <aside className="hidden md:flex w-56 lg:w-64 border-r border-border/60 bg-card flex-col shadow-md z-10">
         <SidebarContent />
       </aside>
 
@@ -237,8 +241,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </Avatar>
         </header>
 
-        <main className="flex-1 overflow-auto bg-muted/20 relative">
-          <div className="max-w-[1600px] mx-auto p-3 md:p-6 lg:p-8">
+        <main className="flex-1 overflow-auto bg-muted/30 relative">
+          <div className="max-w-[1600px] mx-auto p-4 md:p-6 lg:p-8">
             {children}
           </div>
         </main>
