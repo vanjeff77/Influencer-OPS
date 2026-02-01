@@ -1,6 +1,6 @@
 import { db } from "./db";
 import {
-  users, workspaces, influencers, influencerAccounts, groups, groupInfluencers, campaigns, campaignInfluencers,
+  users, workspaces, workspaceMembers, influencers, influencerAccounts, groups, groupInfluencers, campaigns, campaignInfluencers,
   emailAccounts, emailThreads, trackingJobs, trackingMetrics, contents, timelineEvents, auditLogs, notifications,
   conversations, conversationMessages, emailTemplates,
   type User, type InsertUser, type Workspace, type InsertWorkspace,
@@ -52,6 +52,9 @@ export interface IStorage {
   addInfluencersToCampaign(campaignId: number, influencerIds: number[]): Promise<CampaignInfluencer[]>;
   updateCampaignItem(id: number, updates: Partial<CampaignInfluencer>): Promise<CampaignInfluencer>;
   getAllCampaignInfluencers(workspaceId: number): Promise<CampaignInfluencer[]>;
+
+  // Workspace Memberships
+  getWorkspaceMemberships(userId: number): Promise<{ workspaceId: number; role: string }[]>;
 
   // Email
   getEmailAccounts(workspaceId: number): Promise<EmailAccount[]>;
@@ -330,6 +333,13 @@ export class DatabaseStorage implements IStorage {
     const campaignIds = workspaceCampaigns.map(c => c.id);
     if (campaignIds.length === 0) return [];
     return await db.select().from(campaignInfluencers).where(inArray(campaignInfluencers.campaignId, campaignIds));
+  }
+
+  async getWorkspaceMemberships(userId: number): Promise<{ workspaceId: number; role: string }[]> {
+    return await db.select({
+      workspaceId: workspaceMembers.workspaceId,
+      role: workspaceMembers.role
+    }).from(workspaceMembers).where(eq(workspaceMembers.userId, userId));
   }
 
   async getEmailAccounts(workspaceId: number): Promise<EmailAccount[]> {

@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import crypto from "crypto";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
@@ -323,6 +324,124 @@ export async function registerRoutes(
   app.get('/api/email/gmail/callback', async (req, res) => {
     const code = req.query.code;
     res.send("Gmail Connected! You can close this window.");
+  });
+
+  // Register Gmail account (using Replit Google Mail connector)
+  // Zod schemas for email registration
+  const gmailRegisterSchema = z.object({
+    workspaceId: z.number()
+  });
+  
+  const imapRegisterSchema = z.object({
+    workspaceId: z.number(),
+    email: z.string().email(),
+    password: z.string().min(1),
+    imapServer: z.string().min(1),
+    imapPort: z.string().default("993"),
+    smtpServer: z.string().min(1),
+    smtpPort: z.string().default("587")
+  });
+  
+  // Simple encryption for IMAP password using crypto
+  const encryptPassword = (password: string): string => {
+    const key = process.env.SESSION_SECRET || 'default-secret-key-32chars-long!!';
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(key.slice(0, 32).padEnd(32, '0')), iv);
+    let encrypted = cipher.update(password, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    return iv.toString('hex') + ':' + encrypted;
+  };
+
+  app.post('/api/email/gmail/register', async (req, res) => {
+    try {
+      // Auth check
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const parsed = gmailRegisterSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid request", errors: parsed.error.errors });
+      }
+      const { workspaceId } = parsed.data;
+      
+      // Check workspace access
+      const memberships = await storage.getWorkspaceMemberships((req.user as any).id);
+      if (!memberships.some(m => m.workspaceId === workspaceId)) {
+        return res.status(403).json({ message: "Access denied to this workspace" });
+      }
+      
+      const { getGmailProfile } = await import('./gmail');
+      const profile = await getGmailProfile();
+      
+      if (!profile.emailAddress) {
+        return res.status(400).json({ message: "Gmail not connected. Please connect Gmail first via Replit." });
+      }
+      
+      // Check if account already exists
+      const existingAccounts = await storage.getEmailAccounts(workspaceId);
+      const existing = existingAccounts.find(a => a.email === profile.emailAddress);
+      if (existing) {
+        return res.json({ account: existing, message: "Account already registered" });
+      }
+      
+      // Create new email account
+      const account = await storage.createEmailAccount(workspaceId, {
+        email: profile.emailAddress,
+        provider: 'gmail',
+        accessToken: null,
+        refreshToken: null,
+      });
+      
+      res.status(201).json({ account, message: "Gmail account registered successfully" });
+    } catch (err: any) {
+      console.error('Gmail register error:', err);
+      res.status(500).json({ message: err.message || "Failed to register Gmail account" });
+    }
+  });
+
+  // Register IMAP/SMTP email account
+  app.post('/api/email/imap/register', async (req, res) => {
+    try {
+      // Auth check
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const parsed = imapRegisterSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid request", errors: parsed.error.errors });
+      }
+      const { workspaceId, email, password, imapServer, imapPort, smtpServer, smtpPort } = parsed.data;
+      
+      // Check workspace access
+      const memberships = await storage.getWorkspaceMemberships((req.user as any).id);
+      if (!memberships.some(m => m.workspaceId === workspaceId)) {
+        return res.status(403).json({ message: "Access denied to this workspace" });
+      }
+      
+      // Check if account already exists
+      const existingAccounts = await storage.getEmailAccounts(workspaceId);
+      const existing = existingAccounts.find(a => a.email === email);
+      if (existing) {
+        return res.status(400).json({ message: "Account already registered" });
+      }
+      
+      // Create new email account with encrypted password
+      const imapSettings = JSON.stringify({ imapServer, imapPort, smtpServer, smtpPort });
+      const encryptedPassword = encryptPassword(password);
+      const account = await storage.createEmailAccount(workspaceId, {
+        email,
+        provider: 'imap',
+        accessToken: imapSettings,
+        refreshToken: encryptedPassword,
+      });
+      
+      res.status(201).json({ account, message: "IMAP account registered successfully" });
+    } catch (err: any) {
+      console.error('IMAP register error:', err);
+      res.status(500).json({ message: err.message || "Failed to register IMAP account" });
+    }
   });
 
   app.get(api.email.listAccounts.path, async (req, res) => {

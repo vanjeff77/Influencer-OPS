@@ -2,14 +2,14 @@ import Layout from "@/components/layout";
 import { useWorkspaces } from "@/hooks/use-workspaces";
 import { useEmailAccounts, useEmailThreads, useSyncEmail, useSendBulkEmail } from "@/hooks/use-email";
 import { useState } from "react";
-import { Card } from "@/components/ui/card";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { RefreshCw, Send, Mail, User, Clock, Plus, ExternalLink } from "lucide-react";
+import { RefreshCw, Send, Mail, User, Clock, Plus, ExternalLink, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -34,6 +34,38 @@ export default function EmailCenter() {
   const [composeData, setComposeData] = useState({ to: "", subject: "", body: "" });
   const [connectType, setConnectType] = useState<"gmail" | "imap" | null>(null);
   const [imapData, setImapData] = useState({ email: "", password: "", imapServer: "", imapPort: "993", smtpServer: "", smtpPort: "587" });
+
+  const registerGmail = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('POST', '/api/email/gmail/register', { workspaceId });
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/workspaces', workspaceId, 'email-accounts'] });
+      setIsConnectOpen(false);
+      toast({ title: "Gmail 연결 완료", description: `${data.account?.email || ''} 계정이 추가되었습니다.` });
+    },
+    onError: (err: any) => {
+      toast({ variant: "destructive", title: "Gmail 연결 실패", description: err.message || "Gmail이 Replit에 연결되어 있는지 확인하세요." });
+    }
+  });
+
+  const registerImap = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await apiRequest('POST', '/api/email/imap/register', { workspaceId, ...data });
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/workspaces', workspaceId, 'email-accounts'] });
+      setIsConnectOpen(false);
+      setConnectType(null);
+      setImapData({ email: "", password: "", imapServer: "", imapPort: "993", smtpServer: "", smtpPort: "587" });
+      toast({ title: "이메일 연결 완료", description: `${data.account?.email || ''} 계정이 추가되었습니다.` });
+    },
+    onError: (err: any) => {
+      toast({ variant: "destructive", title: KO.pages.email.connectionFailed, description: err.message });
+    }
+  });
 
   const handleSync = () => {
     if (!selectedAccountId) return;
@@ -60,9 +92,15 @@ export default function EmailCenter() {
   };
 
   const handleConnectGmail = () => {
-    window.open('/api/email/gmail/callback?code=mock', '_blank');
-    setIsConnectOpen(false);
-    toast({ title: "Gmail OAuth", description: "Gmail 연결이 시작되었습니다." });
+    registerGmail.mutate();
+  };
+
+  const handleConnectImap = () => {
+    if (!imapData.email || !imapData.password) {
+      toast({ variant: "destructive", title: "필수 정보 누락", description: "이메일과 비밀번호를 입력하세요." });
+      return;
+    }
+    registerImap.mutate(imapData);
   };
 
   return (
@@ -141,21 +179,28 @@ export default function EmailCenter() {
                         variant="outline" 
                         className="h-16 justify-start gap-4"
                         onClick={() => handleConnectGmail()}
+                        disabled={registerGmail.isPending}
+                        data-testid="button-connect-gmail"
                       >
-                        <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-                          <SiGmail className="w-5 h-5 text-red-500" />
-                        </div>
+                        {registerGmail.isPending ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                            <SiGmail className="w-5 h-5 text-red-500" />
+                          </div>
+                        )}
                         <div className="text-left">
                           <div className="font-medium">{KO.pages.email.connectGmail}</div>
-                          <div className="text-xs text-muted-foreground">Google 계정으로 안전하게 연결</div>
+                          <div className="text-xs text-muted-foreground">Replit에 연결된 Gmail 계정 사용</div>
                         </div>
-                        <ExternalLink className="w-4 h-4 ml-auto text-muted-foreground" />
+                        {!registerGmail.isPending && <ExternalLink className="w-4 h-4 ml-auto text-muted-foreground" />}
                       </Button>
                       
                       <Button 
                         variant="outline" 
                         className="h-16 justify-start gap-4"
                         onClick={() => setConnectType("imap")}
+                        data-testid="button-connect-imap-option"
                       >
                         <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
                           <Mail className="w-5 h-5 text-blue-500" />
@@ -169,36 +214,39 @@ export default function EmailCenter() {
                   ) : (
                     <div className="grid gap-4 py-4">
                       <div className="grid gap-2">
-                        <label>{KO.pages.email.emailAddress}</label>
-                        <Input value={imapData.email} onChange={e => setImapData({...imapData, email: e.target.value})} placeholder="you@company.com" />
+                        <label className="text-sm font-medium">{KO.pages.email.emailAddress}</label>
+                        <Input value={imapData.email} onChange={e => setImapData({...imapData, email: e.target.value})} placeholder="you@company.com" data-testid="input-imap-email" />
                       </div>
                       <div className="grid gap-2">
-                        <label>{KO.pages.email.password}</label>
-                        <Input type="password" value={imapData.password} onChange={e => setImapData({...imapData, password: e.target.value})} />
+                        <label className="text-sm font-medium">{KO.pages.email.password}</label>
+                        <Input type="password" value={imapData.password} onChange={e => setImapData({...imapData, password: e.target.value})} data-testid="input-imap-password" />
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="grid gap-2">
-                          <label>{KO.pages.email.imapServer}</label>
-                          <Input value={imapData.imapServer} onChange={e => setImapData({...imapData, imapServer: e.target.value})} placeholder="imap.gmail.com" />
+                          <label className="text-sm font-medium">{KO.pages.email.imapServer}</label>
+                          <Input value={imapData.imapServer} onChange={e => setImapData({...imapData, imapServer: e.target.value})} placeholder="imap.gmail.com" data-testid="input-imap-server" />
                         </div>
                         <div className="grid gap-2">
-                          <label>{KO.pages.email.imapPort}</label>
-                          <Input value={imapData.imapPort} onChange={e => setImapData({...imapData, imapPort: e.target.value})} />
+                          <label className="text-sm font-medium">{KO.pages.email.imapPort}</label>
+                          <Input value={imapData.imapPort} onChange={e => setImapData({...imapData, imapPort: e.target.value})} data-testid="input-imap-port" />
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="grid gap-2">
-                          <label>{KO.pages.email.smtpServer}</label>
-                          <Input value={imapData.smtpServer} onChange={e => setImapData({...imapData, smtpServer: e.target.value})} placeholder="smtp.gmail.com" />
+                          <label className="text-sm font-medium">{KO.pages.email.smtpServer}</label>
+                          <Input value={imapData.smtpServer} onChange={e => setImapData({...imapData, smtpServer: e.target.value})} placeholder="smtp.gmail.com" data-testid="input-smtp-server" />
                         </div>
                         <div className="grid gap-2">
-                          <label>{KO.pages.email.smtpPort}</label>
-                          <Input value={imapData.smtpPort} onChange={e => setImapData({...imapData, smtpPort: e.target.value})} />
+                          <label className="text-sm font-medium">{KO.pages.email.smtpPort}</label>
+                          <Input value={imapData.smtpPort} onChange={e => setImapData({...imapData, smtpPort: e.target.value})} data-testid="input-smtp-port" />
                         </div>
                       </div>
                       <div className="flex gap-2 justify-end">
                         <Button variant="outline" onClick={() => setConnectType(null)}>{KO.common.cancel}</Button>
-                        <Button>{KO.pages.email.connect}</Button>
+                        <Button onClick={handleConnectImap} disabled={registerImap.isPending} data-testid="button-connect-imap">
+                          {registerImap.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                          {KO.pages.email.connect}
+                        </Button>
                       </div>
                     </div>
                   )}
