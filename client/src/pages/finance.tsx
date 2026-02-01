@@ -4,18 +4,40 @@ import { useFinanceSummary, useCampaigns } from "@/hooks/use-campaigns";
 import { useInfluencers } from "@/hooks/use-influencers";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DollarSign, TrendingUp, Clock, CreditCard } from "lucide-react";
+import { DollarSign, TrendingUp, Clock, CreditCard, X } from "lucide-react";
 import { KO } from "@/i18n/ko";
+import { useLocation, useSearch } from "wouter";
+import { useMemo } from "react";
 
 export default function Finance() {
   const { data: workspaces } = useWorkspaces();
   const workspaceId = workspaces?.[0]?.id;
+  const [, navigate] = useLocation();
+  const searchString = useSearch();
+  
+  const searchParams = new URLSearchParams(searchString);
+  const settlementStatusParam = searchParams.get("settlementStatus");
   
   const { data: financeSummary, isLoading } = useFinanceSummary(workspaceId || 0);
   const { data: campaigns } = useCampaigns(workspaceId || 0);
   const { data: influencers } = useInfluencers(workspaceId || 0);
+
+  const activeFilters = [
+    settlementStatusParam && { key: "settlementStatus", label: settlementStatusParam },
+  ].filter(Boolean) as { key: string; label: string }[];
+
+  const clearFilter = (key: string) => {
+    const params = new URLSearchParams(searchString);
+    params.delete(key);
+    navigate(`/finance${params.toString() ? `?${params.toString()}` : ""}`);
+  };
+
+  const clearAllFilters = () => {
+    navigate("/finance");
+  };
 
   const getInfluencerName = (id: number) => {
     return influencers?.find(i => i.id === id)?.name || `인플루언서 ${id}`;
@@ -37,7 +59,23 @@ export default function Finance() {
   const pendingTotal = financeSummary?.pendingTotal || 0;
   const paidThisMonth = financeSummary?.paidThisMonth || 0;
   const pendingCount = financeSummary?.pendingCount || 0;
-  const items = financeSummary?.items || [];
+  const rawItems = financeSummary?.items || [];
+  
+  // Filter items based on query params
+  const items = useMemo(() => {
+    let filtered = rawItems;
+    if (settlementStatusParam) {
+      const statusMap: Record<string, string> = {
+        "지급대기": "pending",
+        "지급완료": "paid",
+        "보류": "hold",
+        "정보미수집": "pending",
+      };
+      const status = statusMap[settlementStatusParam] || settlementStatusParam;
+      filtered = filtered.filter(item => item.paymentStatus === status);
+    }
+    return filtered;
+  }, [rawItems, settlementStatusParam]);
 
   const totalProcessed = paidThisMonth + pendingTotal;
   const avgPerInfluencer = items.length > 0 ? Math.round(totalProcessed / items.length) : 0;
@@ -49,6 +87,24 @@ export default function Finance() {
           <h1 className="text-xl md:text-3xl font-bold tracking-tight">{KO.pages.finance.title}</h1>
           <p className="text-muted-foreground text-xs md:text-base mt-0.5 md:mt-1">{KO.pages.finance.subtitle}</p>
         </div>
+
+        {/* Active Filters Display */}
+        {activeFilters.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground">{KO.pages.filter.currentFilter}</span>
+            {activeFilters.map((filter) => (
+              <Badge key={filter.key} variant="secondary" className="gap-1 text-xs" data-testid={`badge-filter-${filter.key}`}>
+                {filter.label}
+                <span onClick={() => clearFilter(filter.key)} className="cursor-pointer ml-1" data-testid={`button-remove-filter-${filter.key}`}>
+                  <X className="w-3 h-3" />
+                </span>
+              </Badge>
+            ))}
+            <Button variant="ghost" size="sm" onClick={clearAllFilters} data-testid="button-clear-all-filters">
+              {KO.pages.filter.clearAll}
+            </Button>
+          </div>
+        )}
 
         {isLoading ? (
           <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-6">

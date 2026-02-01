@@ -3,19 +3,34 @@ import { useWorkspaces } from "@/hooks/use-workspaces";
 import { useTrackingJobs, useTrackingMetrics, useCreateTrackingJob, useMockUpdateTracking } from "@/hooks/use-tracking";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useState } from "react";
-import { Plus, RefreshCcw, Download } from "lucide-react";
+import { Plus, RefreshCcw, Download, X, AlertTriangle } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import { KO } from "@/i18n/ko";
+import { useLocation, useSearch } from "wouter";
 
 export default function Tracking() {
   const { data: workspaces } = useWorkspaces();
   const workspaceId = workspaces?.[0]?.id;
   const { data: jobs } = useTrackingJobs(workspaceId || 0);
   const createJob = useCreateTrackingJob(workspaceId || 0);
+  const [, navigate] = useLocation();
+  const searchString = useSearch();
+  
+  const searchParams = new URLSearchParams(searchString);
+  const hasIssueParam = searchParams.get("hasIssue");
+  
+  const activeFilters = [
+    hasIssueParam && { key: "hasIssue", label: "이슈있음" },
+  ].filter(Boolean) as { key: string; label: string }[];
+
+  const clearAllFilters = () => {
+    navigate("/tracking");
+  };
   
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
   const { data: metrics } = useTrackingMetrics(selectedJobId || 0);
@@ -46,13 +61,23 @@ export default function Tracking() {
              <h1 className="text-xl md:text-3xl font-bold tracking-tight">{KO.pages.tracking.title}</h1>
              <p className="text-muted-foreground text-xs md:text-base mt-0.5 md:mt-1">{KO.pages.tracking.subtitle}</p>
           </div>
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm" className="text-xs md:text-sm" data-testid="button-add-tracking">
-                <Plus className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
-                {KO.pages.tracking.addTrackingJob}
-              </Button>
-            </DialogTrigger>
+          <div className="flex items-center gap-2">
+            {hasIssueParam && (
+              <Badge variant="destructive" className="gap-1">
+                <AlertTriangle className="w-3 h-3" />
+                {KO.pages.filter.hasIssue}
+                <span onClick={clearAllFilters} className="cursor-pointer ml-1 text-destructive-foreground" data-testid="button-clear-issue-filter">
+                  <X className="w-3 h-3" />
+                </span>
+              </Badge>
+            )}
+            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" data-testid="button-add-tracking">
+                  <Plus className="w-4 h-4 mr-2" />
+                  {KO.pages.tracking.addTrackingJob}
+                </Button>
+              </DialogTrigger>
             <DialogContent className="max-w-[90vw] md:max-w-md">
               <DialogHeader>
                 <DialogTitle className="text-base md:text-lg">{KO.pages.tracking.newTrackingJob}</DialogTitle>
@@ -66,6 +91,7 @@ export default function Tracking() {
               </Button>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-6">
@@ -97,15 +123,14 @@ export default function Tracking() {
               </div>
               {selectedJobId && (
                 <div className="flex items-center gap-1.5 md:gap-2 w-full md:w-auto">
-                  <Button variant="outline" size="sm" className="text-xs h-7 md:h-8 flex-1 md:flex-none" onClick={() => mockUpdate.mutate()} disabled={mockUpdate.isPending} data-testid="button-update-data">
-                     <RefreshCcw className={`w-3 h-3 mr-1 md:mr-2 ${mockUpdate.isPending ? 'animate-spin' : ''}`} />
+                  <Button variant="outline" size="sm" onClick={() => mockUpdate.mutate()} disabled={mockUpdate.isPending} data-testid="button-update-data">
+                     <RefreshCcw className={`w-3 h-3 mr-2 ${mockUpdate.isPending ? 'animate-spin' : ''}`} />
                      <span className="hidden sm:inline">{KO.common.updateData}</span>
-                     <span className="sm:hidden">업데이트</span>
+                     <span className="sm:hidden">{KO.pages.filter.update}</span>
                   </Button>
                   <Button 
                     variant="outline" 
                     size="sm"
-                    className="text-xs h-7 md:h-8 flex-1 md:flex-none"
                     onClick={() => {
                       if (!metrics || metrics.length === 0) return;
                       const selectedJob = jobs?.find(j => j.id === selectedJobId);
@@ -127,8 +152,8 @@ export default function Tracking() {
                     disabled={!metrics || metrics.length === 0}
                     data-testid="button-export-csv"
                   >
-                    <Download className="w-3 h-3 mr-1 md:mr-2" />
-                    <span className="hidden sm:inline">CSV 내보내기</span>
+                    <Download className="w-3 h-3 mr-2" />
+                    <span className="hidden sm:inline">{KO.pages.filter.exportCsv}</span>
                     <span className="sm:hidden">CSV</span>
                   </Button>
                 </div>

@@ -4,12 +4,12 @@ import { useCampaigns, useCreateCampaign } from "@/hooks/use-campaigns";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Calendar, DollarSign, ArrowRight } from "lucide-react";
+import { Plus, Calendar, DollarSign, ArrowRight, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { Link } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { format } from "date-fns";
 import { KO } from "@/i18n/ko";
 
@@ -19,10 +19,29 @@ export default function Campaigns() {
   const { data: campaigns, isLoading } = useCampaigns(workspaceId || 0);
   const createCampaign = useCreateCampaign(workspaceId || 0);
   const { toast } = useToast();
+  const [, navigate] = useLocation();
+  const searchString = useSearch();
+
+  const searchParams = new URLSearchParams(searchString);
+  const campaignStatusParam = searchParams.get("campaignStatus");
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newCampaign, setNewCampaign] = useState({ name: "", client: "", goal: "", budget: 0 });
   const [advertiserFilter, setAdvertiserFilter] = useState<string>("all");
+
+  const activeFilters = [
+    campaignStatusParam && { key: "campaignStatus", label: campaignStatusParam },
+  ].filter(Boolean) as { key: string; label: string }[];
+
+  const clearFilter = (key: string) => {
+    const params = new URLSearchParams(searchString);
+    params.delete(key);
+    navigate(`/campaigns${params.toString() ? `?${params.toString()}` : ""}`);
+  };
+
+  const clearAllFilters = () => {
+    navigate("/campaigns");
+  };
 
   // Advertiser filter options
   const advertisers = [
@@ -32,14 +51,31 @@ export default function Campaigns() {
     { id: "voye", name: "Voye" },
   ];
 
-  // Filter campaigns by advertiser
+  // Filter campaigns by advertiser and query params
   const filteredCampaigns = useMemo(() => {
     if (!campaigns) return [];
-    if (advertiserFilter === "all") return campaigns;
-    return campaigns.filter(c => 
-      c.client?.toLowerCase().includes(advertisers.find(a => a.id === advertiserFilter)?.name.toLowerCase() || "")
-    );
-  }, [campaigns, advertiserFilter]);
+    let filtered = campaigns;
+    
+    // Advertiser filter
+    if (advertiserFilter !== "all") {
+      filtered = filtered.filter(c => 
+        c.client?.toLowerCase().includes(advertisers.find(a => a.id === advertiserFilter)?.name.toLowerCase() || "")
+      );
+    }
+    
+    // Campaign status filter from query param
+    if (campaignStatusParam) {
+      const statusMap: Record<string, string> = {
+        "진행중": "active",
+        "대기": "draft",
+        "완료": "completed",
+      };
+      const status = statusMap[campaignStatusParam] || campaignStatusParam;
+      filtered = filtered.filter(c => c.status === status);
+    }
+    
+    return filtered;
+  }, [campaigns, advertiserFilter, campaignStatusParam]);
 
   const handleCreate = () => {
     if (!newCampaign.name) return;
@@ -66,10 +102,10 @@ export default function Campaigns() {
 
   const getStatusColor = (status: string) => {
     switch(status) {
-      case 'active': return 'bg-green-100 text-green-700 hover:bg-green-100';
-      case 'completed': return 'bg-blue-100 text-blue-700 hover:bg-blue-100';
-      case 'draft': return 'bg-gray-100 text-gray-700 hover:bg-gray-100';
-      default: return 'bg-gray-100 text-gray-700';
+      case 'active': return 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300';
+      case 'completed': return 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300';
+      case 'draft': return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300';
+      default: return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300';
     }
   };
 
@@ -117,6 +153,24 @@ export default function Campaigns() {
           </Dialog>
         </div>
 
+        {/* Active Filters Display */}
+        {activeFilters.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground">{KO.pages.filter.currentFilter}</span>
+            {activeFilters.map((filter) => (
+              <Badge key={filter.key} variant="secondary" className="gap-1 text-xs" data-testid={`badge-filter-${filter.key}`}>
+                {filter.label}
+                <span onClick={() => clearFilter(filter.key)} className="cursor-pointer ml-1" data-testid={`button-remove-filter-${filter.key}`}>
+                  <X className="w-3 h-3" />
+                </span>
+              </Badge>
+            ))}
+            <Button variant="ghost" size="sm" onClick={clearAllFilters} data-testid="button-clear-all-filters">
+              {KO.pages.filter.clearAll}
+            </Button>
+          </div>
+        )}
+
         {/* Advertiser Filter Buttons */}
         <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
           {advertisers.map((adv) => (
@@ -126,7 +180,6 @@ export default function Campaigns() {
               size="sm"
               onClick={() => setAdvertiserFilter(adv.id)}
               data-testid={`button-advertiser-${adv.id}`}
-              className={`text-xs md:text-sm h-7 md:h-8 px-2 md:px-3 ${advertiserFilter === adv.id ? "" : "bg-background"}`}
             >
               {adv.name}
             </Button>

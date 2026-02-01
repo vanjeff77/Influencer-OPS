@@ -352,6 +352,13 @@ export const KO = {
       newInfluencerAdded: "새 인플루언서가 추가되었습니다",
       viewMore: "더보기",
     },
+    filter: {
+      currentFilter: "현재 필터:",
+      clearAll: "필터 초기화",
+      hasIssue: "이슈있음",
+      update: "업데이트",
+      exportCsv: "CSV 내보내기",
+    },
     login: {
       title: "인플루언서옵스",
       subtitle: "플랫폼에 접속하려면 자격 증명을 입력하세요.",
