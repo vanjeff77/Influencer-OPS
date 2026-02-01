@@ -76,7 +76,7 @@ export const api = {
       method: 'POST' as const,
       path: '/api/workspaces/:workspaceId/influencers',
       input: insertInfluencerSchema.extend({
-        accounts: z.array(insertInfluencerAccountSchema).optional(),
+        accounts: z.array(insertInfluencerAccountSchema.omit({ influencerId: true })).optional(),
       }),
       responses: { 201: influencerWithAccounts },
     },
