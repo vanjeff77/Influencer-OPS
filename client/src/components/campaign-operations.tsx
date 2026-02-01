@@ -78,9 +78,9 @@ const getDueBadges = (item: LineItemWithDetails): { text: string; type: 'danger'
     draftDue.setHours(0, 0, 0, 0);
     const diffDays = Math.floor((draftDue.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     
-    if (diffDays < 0) badges.push({ text: "초안 지연", type: 'danger' });
-    else if (diffDays === 0) badges.push({ text: "초안 D-day", type: 'warning' });
-    else if (diffDays === 1) badges.push({ text: "초안 D-1", type: 'info' });
+    if (diffDays < 0) badges.push({ text: KO.pages.operations.due.draftDelayed, type: 'danger' });
+    else if (diffDays === 0) badges.push({ text: KO.pages.operations.due.draftDday, type: 'warning' });
+    else if (diffDays === 1) badges.push({ text: KO.pages.operations.due.draftD1, type: 'info' });
   }
   
   if (item.uploadDueAt && (!item.finalUrl || !item.isPublishedConfirmed)) {
@@ -88,9 +88,9 @@ const getDueBadges = (item: LineItemWithDetails): { text: string; type: 'danger'
     uploadDue.setHours(0, 0, 0, 0);
     const diffDays = Math.floor((uploadDue.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     
-    if (diffDays < 0) badges.push({ text: "업로드 지연", type: 'danger' });
-    else if (diffDays === 0) badges.push({ text: "업로드 D-day", type: 'warning' });
-    else if (diffDays === 1) badges.push({ text: "업로드 D-1", type: 'info' });
+    if (diffDays < 0) badges.push({ text: KO.pages.operations.due.uploadDelayed, type: 'danger' });
+    else if (diffDays === 0) badges.push({ text: KO.pages.operations.due.uploadDday, type: 'warning' });
+    else if (diffDays === 1) badges.push({ text: KO.pages.operations.due.uploadD1, type: 'info' });
   }
   
   return badges.slice(0, 2);
@@ -126,7 +126,7 @@ export function CampaignOperations({ campaignId, lineItems }: CampaignOperations
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/campaigns', campaignId] });
       queryClient.invalidateQueries({ queryKey: ['/api/line-items', selectedItemId] });
-      toast({ title: "저장되었습니다." });
+      toast({ title: KO.pages.operations.panel.saved });
     }
   });
 
@@ -136,7 +136,7 @@ export function CampaignOperations({ campaignId, lineItems }: CampaignOperations
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/line-items', selectedItemId] });
-      toast({ title: "메모가 추가되었습니다." });
+      toast({ title: KO.pages.operations.panel.noteSaved });
     }
   });
 
@@ -155,7 +155,7 @@ export function CampaignOperations({ campaignId, lineItems }: CampaignOperations
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/line-items', selectedItemId] });
-      toast({ title: "메모가 삭제되었습니다." });
+      toast({ title: KO.pages.operations.panel.noteDeleted });
     }
   });
 
@@ -165,7 +165,7 @@ export function CampaignOperations({ campaignId, lineItems }: CampaignOperations
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/line-items', selectedItemId] });
-      toast({ title: "요약이 저장되었습니다." });
+      toast({ title: KO.pages.operations.panel.summarySaved });
     }
   });
 
@@ -200,7 +200,7 @@ export function CampaignOperations({ campaignId, lineItems }: CampaignOperations
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="인플루언서 검색..."
+            placeholder={KO.pages.operations.searchPlaceholder}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -209,39 +209,39 @@ export function CampaignOperations({ campaignId, lineItems }: CampaignOperations
         </div>
         <Select value={stageFilter} onValueChange={setStageFilter}>
           <SelectTrigger className="w-[120px]" data-testid="select-stage-filter">
-            <SelectValue placeholder="운영단계" />
+            <SelectValue placeholder={KO.pages.operations.filterStage} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">전체 단계</SelectItem>
+            <SelectItem value="all">{KO.pages.operations.filterAll}</SelectItem>
             {STAGES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={commFilter} onValueChange={setCommFilter}>
           <SelectTrigger className="w-[120px]" data-testid="select-comm-filter">
-            <SelectValue placeholder="커뮤니케이션" />
+            <SelectValue placeholder={KO.pages.operations.filterComm} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">전체 상태</SelectItem>
+            <SelectItem value="all">{KO.pages.operations.filterAll}</SelectItem>
             {COMM_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={reviewFilter} onValueChange={setReviewFilter}>
           <SelectTrigger className="w-[120px]" data-testid="select-review-filter">
-            <SelectValue placeholder="검수" />
+            <SelectValue placeholder={KO.pages.operations.filterReview} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">전체 검수</SelectItem>
+            <SelectItem value="all">{KO.pages.operations.filterAll}</SelectItem>
             {REVIEW_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={dueFilter} onValueChange={setDueFilter}>
           <SelectTrigger className="w-[120px]" data-testid="select-due-filter">
-            <SelectValue placeholder="임박/지연" />
+            <SelectValue placeholder={KO.pages.operations.filterDue} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">전체</SelectItem>
-            <SelectItem value="dueSoon">임박만</SelectItem>
-            <SelectItem value="overdue">지연만</SelectItem>
+            <SelectItem value="all">{KO.pages.operations.filterAll}</SelectItem>
+            <SelectItem value="dueSoon">{KO.pages.operations.filterDueSoon}</SelectItem>
+            <SelectItem value="overdue">{KO.pages.operations.filterOverdue}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -252,22 +252,22 @@ export function CampaignOperations({ campaignId, lineItems }: CampaignOperations
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>인플루언서</TableHead>
-                  <TableHead>운영단계</TableHead>
-                  <TableHead>커뮤니케이션</TableHead>
-                  <TableHead>검수</TableHead>
-                  <TableHead>임박/지연</TableHead>
-                  <TableHead>계약</TableHead>
-                  <TableHead>초안 예정</TableHead>
-                  <TableHead>업로드 예정</TableHead>
-                  <TableHead>메모</TableHead>
+                  <TableHead>{KO.pages.operations.influencer}</TableHead>
+                  <TableHead>{KO.pages.operations.stage}</TableHead>
+                  <TableHead>{KO.pages.operations.commStatus}</TableHead>
+                  <TableHead>{KO.pages.operations.reviewStatus}</TableHead>
+                  <TableHead>{KO.pages.operations.dueStatus}</TableHead>
+                  <TableHead>{KO.pages.operations.contract}</TableHead>
+                  <TableHead>{KO.pages.operations.draftDue}</TableHead>
+                  <TableHead>{KO.pages.operations.uploadDue}</TableHead>
+                  <TableHead>{KO.pages.operations.notes}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredItems.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
-                      조건에 맞는 항목이 없습니다
+                      {KO.pages.operations.noItems}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -439,7 +439,7 @@ function OperationsPanel({ item, onUpdate, onCreateNote, onUpdateNote, onDeleteN
   const generateSummaryFromSelected = () => {
     const selectedNotes = item.feedbackNotes?.filter(n => n.isSelectedForSummary) || [];
     if (selectedNotes.length === 0) {
-      toast({ title: "요약에 포함할 메모를 선택해주세요.", variant: "destructive" });
+      toast({ title: KO.pages.operations.panel.selectNotesFirst, variant: "destructive" });
       return;
     }
     const combined = selectedNotes.map(n => n.body).join("\n\n---\n\n");
@@ -448,7 +448,7 @@ function OperationsPanel({ item, onUpdate, onCreateNote, onUpdateNote, onDeleteN
 
   const copyFeedbackSummary = () => {
     navigator.clipboard.writeText(feedbackSummary);
-    toast({ title: "복사되었습니다." });
+    toast({ title: KO.pages.operations.panel.copied });
   };
 
   return (
@@ -458,10 +458,10 @@ function OperationsPanel({ item, onUpdate, onCreateNote, onUpdateNote, onDeleteN
           <Avatar className="h-8 w-8">
             <AvatarFallback>{item.influencer?.name?.substring(0, 2) || 'IN'}</AvatarFallback>
           </Avatar>
-          {item.influencer?.name || '인플루언서'}
+          {item.influencer?.name || KO.pages.operations.influencer}
         </SheetTitle>
         <SheetDescription>
-          {item.influencer?.email || '이메일 없음'}
+          {item.influencer?.email || KO.pages.discover.noEmail}
         </SheetDescription>
       </SheetHeader>
 
@@ -478,11 +478,11 @@ function OperationsPanel({ item, onUpdate, onCreateNote, onUpdateNote, onDeleteN
 
       <Accordion type="multiple" defaultValue={["status", "offer", "contract", "schedule", "content", "feedback"]} className="w-full">
         <AccordionItem value="status">
-          <AccordionTrigger>상태</AccordionTrigger>
+          <AccordionTrigger>{KO.pages.operations.panel.status}</AccordionTrigger>
           <AccordionContent className="space-y-4">
             <div className="grid grid-cols-1 gap-4">
               <div className="space-y-2">
-                <Label>운영단계</Label>
+                <Label>{KO.pages.operations.stage}</Label>
                 <Select value={localItem.stage || "선정완료"} onValueChange={(val) => setLocalItem({...localItem, stage: val})}>
                   <SelectTrigger data-testid="select-stage">
                     <SelectValue />
@@ -493,7 +493,7 @@ function OperationsPanel({ item, onUpdate, onCreateNote, onUpdateNote, onDeleteN
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>커뮤니케이션 상태</Label>
+                <Label>{KO.pages.operations.commStatus}</Label>
                 <Select value={localItem.commStatus || "컨택전"} onValueChange={(val) => setLocalItem({...localItem, commStatus: val})}>
                   <SelectTrigger data-testid="select-comm-status">
                     <SelectValue />
@@ -504,7 +504,7 @@ function OperationsPanel({ item, onUpdate, onCreateNote, onUpdateNote, onDeleteN
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>검수 상태</Label>
+                <Label>{KO.pages.operations.reviewStatus}</Label>
                 <Select value={localItem.reviewStatus || "초안대기"} onValueChange={(val) => setLocalItem({...localItem, reviewStatus: val})}>
                   <SelectTrigger data-testid="select-review-status">
                     <SelectValue />
@@ -519,11 +519,11 @@ function OperationsPanel({ item, onUpdate, onCreateNote, onUpdateNote, onDeleteN
         </AccordionItem>
 
         <AccordionItem value="offer">
-          <AccordionTrigger>오퍼 확정</AccordionTrigger>
+          <AccordionTrigger>{KO.pages.operations.panel.offer}</AccordionTrigger>
           <AccordionContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>진행비</Label>
+                <Label>{KO.pages.operations.panel.fee}</Label>
                 <Input
                   type="number"
                   value={localItem.offerFee || ""}
@@ -540,13 +540,13 @@ function OperationsPanel({ item, onUpdate, onCreateNote, onUpdateNote, onDeleteN
                     onCheckedChange={(checked) => setLocalItem({...localItem, offerVatIncluded: !!checked})}
                     data-testid="checkbox-vat"
                   />
-                  <Label htmlFor="vatIncluded">VAT 포함</Label>
+                  <Label htmlFor="vatIncluded">{KO.pages.operations.panel.vatIncluded}</Label>
                 </div>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>2차활용 기간(개월)</Label>
+                <Label>{KO.pages.operations.panel.usageMonths}</Label>
                 <Input
                   type="number"
                   value={localItem.offerUsageMonths || ""}
@@ -556,7 +556,7 @@ function OperationsPanel({ item, onUpdate, onCreateNote, onUpdateNote, onDeleteN
                 />
               </div>
               <div className="space-y-2">
-                <Label>활용 범위 메모</Label>
+                <Label>{KO.pages.operations.panel.usageNote}</Label>
                 <Input
                   value={localItem.offerUsageNote || ""}
                   onChange={(e) => setLocalItem({...localItem, offerUsageNote: e.target.value})}
@@ -566,7 +566,7 @@ function OperationsPanel({ item, onUpdate, onCreateNote, onUpdateNote, onDeleteN
               </div>
             </div>
             <div className="space-y-2">
-              <Label>납기 메모</Label>
+              <Label>{KO.pages.operations.panel.deadlineNote}</Label>
               <Input
                 value={localItem.offerDeadlineNote || ""}
                 onChange={(e) => setLocalItem({...localItem, offerDeadlineNote: e.target.value})}
@@ -578,10 +578,10 @@ function OperationsPanel({ item, onUpdate, onCreateNote, onUpdateNote, onDeleteN
         </AccordionItem>
 
         <AccordionItem value="contract">
-          <AccordionTrigger>계약</AccordionTrigger>
+          <AccordionTrigger>{KO.pages.operations.panel.contractSection}</AccordionTrigger>
           <AccordionContent className="space-y-4">
             <div className="space-y-2">
-              <Label>계약서 링크</Label>
+              <Label>{KO.pages.operations.panel.contractUrl}</Label>
               <Input
                 value={localItem.contractUrl || ""}
                 onChange={(e) => setLocalItem({...localItem, contractUrl: e.target.value})}
@@ -590,7 +590,7 @@ function OperationsPanel({ item, onUpdate, onCreateNote, onUpdateNote, onDeleteN
               />
             </div>
             <div className="space-y-2">
-              <Label>계약서 파일 ID</Label>
+              <Label>{KO.pages.operations.panel.contractFileId}</Label>
               <Input
                 value={localItem.contractFileId || ""}
                 onChange={(e) => setLocalItem({...localItem, contractFileId: e.target.value})}
@@ -599,17 +599,17 @@ function OperationsPanel({ item, onUpdate, onCreateNote, onUpdateNote, onDeleteN
               />
             </div>
             <div className="text-sm text-muted-foreground">
-              현재 상태: {localItem.contractUrl && localItem.contractFileId ? '링크+파일' : localItem.contractUrl ? '링크만' : localItem.contractFileId ? '파일만' : '미첨부'}
+              {KO.pages.operations.panel.currentStatus}: {localItem.contractUrl && localItem.contractFileId ? KO.pages.operations.panel.linkAndFile : localItem.contractUrl ? KO.pages.operations.panel.linkOnly : localItem.contractFileId ? KO.pages.operations.panel.fileOnly : KO.pages.operations.panel.notAttached}
             </div>
           </AccordionContent>
         </AccordionItem>
 
         <AccordionItem value="schedule">
-          <AccordionTrigger>일정</AccordionTrigger>
+          <AccordionTrigger>{KO.pages.operations.panel.schedule}</AccordionTrigger>
           <AccordionContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>초안 수신 예정일</Label>
+                <Label>{KO.pages.operations.panel.draftDueAt}</Label>
                 <Input
                   type="date"
                   value={localItem.draftDueAt ? format(new Date(localItem.draftDueAt), 'yyyy-MM-dd') : ""}
@@ -618,7 +618,7 @@ function OperationsPanel({ item, onUpdate, onCreateNote, onUpdateNote, onDeleteN
                 />
               </div>
               <div className="space-y-2">
-                <Label>업로드 예정일</Label>
+                <Label>{KO.pages.operations.panel.uploadDueAt}</Label>
                 <Input
                   type="date"
                   value={localItem.uploadDueAt ? format(new Date(localItem.uploadDueAt), 'yyyy-MM-dd') : ""}
@@ -631,10 +631,10 @@ function OperationsPanel({ item, onUpdate, onCreateNote, onUpdateNote, onDeleteN
         </AccordionItem>
 
         <AccordionItem value="content">
-          <AccordionTrigger>초안/완성본</AccordionTrigger>
+          <AccordionTrigger>{KO.pages.operations.panel.content}</AccordionTrigger>
           <AccordionContent className="space-y-4">
             <div className="space-y-2">
-              <Label>초안 링크</Label>
+              <Label>{KO.pages.operations.panel.draftUrl}</Label>
               <Input
                 value={localItem.draftUrl || ""}
                 onChange={(e) => setLocalItem({...localItem, draftUrl: e.target.value})}
@@ -643,7 +643,7 @@ function OperationsPanel({ item, onUpdate, onCreateNote, onUpdateNote, onDeleteN
               />
             </div>
             <div className="space-y-2">
-              <Label>초안 파일 ID</Label>
+              <Label>{KO.pages.operations.panel.draftFileId}</Label>
               <Input
                 value={localItem.draftFileId || ""}
                 onChange={(e) => setLocalItem({...localItem, draftFileId: e.target.value})}
@@ -652,7 +652,7 @@ function OperationsPanel({ item, onUpdate, onCreateNote, onUpdateNote, onDeleteN
               />
             </div>
             <div className="space-y-2">
-              <Label>완성본/게시 URL</Label>
+              <Label>{KO.pages.operations.panel.finalUrl}</Label>
               <Input
                 value={localItem.finalUrl || ""}
                 onChange={(e) => setLocalItem({...localItem, finalUrl: e.target.value})}
@@ -661,7 +661,7 @@ function OperationsPanel({ item, onUpdate, onCreateNote, onUpdateNote, onDeleteN
               />
             </div>
             <div className="space-y-2">
-              <Label>완성본 파일 ID</Label>
+              <Label>{KO.pages.operations.panel.finalFileId}</Label>
               <Input
                 value={localItem.finalFileId || ""}
                 onChange={(e) => setLocalItem({...localItem, finalFileId: e.target.value})}
@@ -676,19 +676,19 @@ function OperationsPanel({ item, onUpdate, onCreateNote, onUpdateNote, onDeleteN
                 onCheckedChange={(checked) => setLocalItem({...localItem, isPublishedConfirmed: !!checked})}
                 data-testid="checkbox-published"
               />
-              <Label htmlFor="publishedConfirmed">게시 확인 완료</Label>
+              <Label htmlFor="publishedConfirmed">{KO.pages.operations.panel.publishedConfirmed}</Label>
             </div>
           </AccordionContent>
         </AccordionItem>
 
         <AccordionItem value="feedback">
-          <AccordionTrigger>내부 피드백</AccordionTrigger>
+          <AccordionTrigger>{KO.pages.operations.panel.feedback}</AccordionTrigger>
           <AccordionContent className="space-y-4">
             <div className="flex gap-2">
               <Input
                 value={newNoteBody}
                 onChange={(e) => setNewNoteBody(e.target.value)}
-                placeholder="피드백 메모 추가..."
+                placeholder={KO.pages.operations.panel.addNote}
                 data-testid="input-new-note"
                 onKeyDown={(e) => e.key === 'Enter' && handleAddNote()}
               />
@@ -709,7 +709,7 @@ function OperationsPanel({ item, onUpdate, onCreateNote, onUpdateNote, onDeleteN
                           data-testid={`checkbox-note-${note.id}`}
                         />
                         <span className="text-xs text-muted-foreground">
-                          {note.author?.name || '익명'} · {note.createdAt ? format(new Date(note.createdAt), 'MM/dd HH:mm') : ''}
+                          {note.author?.name || KO.pages.operations.panel.anonymous} · {note.createdAt ? format(new Date(note.createdAt), 'MM/dd HH:mm') : ''}
                         </span>
                       </div>
                       <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onDeleteNote(note.id)}>
@@ -720,17 +720,17 @@ function OperationsPanel({ item, onUpdate, onCreateNote, onUpdateNote, onDeleteN
                   </div>
                 ))}
                 {(!item.feedbackNotes || item.feedbackNotes.length === 0) && (
-                  <p className="text-sm text-muted-foreground text-center py-4">아직 메모가 없습니다</p>
+                  <p className="text-sm text-muted-foreground text-center py-4">{KO.pages.operations.panel.noNotes}</p>
                 )}
               </div>
             </ScrollArea>
 
             <div className="border-t pt-4 space-y-2">
               <div className="flex items-center justify-between">
-                <Label>피드백 요약 (외부 전달용)</Label>
+                <Label>{KO.pages.operations.panel.feedbackSummary}</Label>
                 <div className="flex gap-1">
                   <Button variant="outline" size="sm" onClick={generateSummaryFromSelected} data-testid="button-generate-summary">
-                    선택 메모로 요약 생성
+                    {KO.pages.operations.panel.generateSummary}
                   </Button>
                   <Button variant="outline" size="sm" onClick={copyFeedbackSummary} data-testid="button-copy-summary">
                     <Copy className="w-4 h-4" />
@@ -740,12 +740,12 @@ function OperationsPanel({ item, onUpdate, onCreateNote, onUpdateNote, onDeleteN
               <Textarea
                 value={feedbackSummary}
                 onChange={(e) => setFeedbackSummary(e.target.value)}
-                placeholder="피드백 요약을 작성하세요..."
+                placeholder={KO.pages.operations.panel.feedbackSummary}
                 rows={4}
                 data-testid="textarea-summary"
               />
               <Button size="sm" onClick={() => onSaveSummary(feedbackSummary)} data-testid="button-save-summary">
-                <Save className="w-4 h-4 mr-1" /> 요약 저장
+                <Save className="w-4 h-4 mr-1" /> {KO.pages.operations.panel.saveSummary}
               </Button>
             </div>
           </AccordionContent>
@@ -755,7 +755,7 @@ function OperationsPanel({ item, onUpdate, onCreateNote, onUpdateNote, onDeleteN
       <div className="sticky bottom-0 bg-background pt-4 border-t">
         <Button className="w-full" onClick={handleSave} disabled={isSaving} data-testid="button-save-operations">
           <Save className="w-4 h-4 mr-2" />
-          {isSaving ? "저장 중..." : "저장"}
+          {isSaving ? KO.pages.operations.panel.saving : KO.pages.operations.panel.save}
         </Button>
       </div>
     </div>

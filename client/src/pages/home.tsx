@@ -95,7 +95,12 @@ export default function Home() {
   const [completedTaskIds, setCompletedTaskIds] = useState<string[]>([]);
 
   const { data: apiTasks = [], isLoading: tasksLoading } = useQuery<ApiTask[]>({
-    queryKey: [`/api/overview/tasks?workspaceId=${workspaceId}`],
+    queryKey: ["/api/overview/tasks", workspaceId],
+    queryFn: async () => {
+      const res = await fetch(`/api/overview/tasks?workspaceId=${workspaceId}`);
+      if (!res.ok) throw new Error('Failed to fetch tasks');
+      return res.json();
+    },
     enabled: !!workspaceId,
   });
 
