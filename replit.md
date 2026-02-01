@@ -34,13 +34,16 @@ Preferred communication style: Simple, everyday language.
 - **Framework**: Express.js with TypeScript
 - **API Design**: RESTful API with typed route definitions (`shared/routes.ts`)
 - **Authentication**: Passport.js with local strategy, session-based auth stored in PostgreSQL, 30-day cookie expiration
-- **Authorization**: Role-based permissions (MASTER/EDITOR/VIEWER) at the workspace level planned.
+- **Authorization**: Three-tier role-based access control (RBAC) system:
+    - `WORKSPACE_OWNER`: Full access to all features including settings, client management, and user management
+    - `WORKSPACE_MEMBER`: Standard access to all operational features (influencers, campaigns, finance, email, tracking, groups)
+    - `CLIENT`: Restricted access with server-side data filtering based on assigned clients (campaigns and finance only)
 - **Email Services**: IMAP for searching/fetching threads, SMTP queue-based system for bulk email sending with throttling and variable substitution.
 
 ### Data Storage
 - **Database**: PostgreSQL with Drizzle ORM
 - **Schema Management**: Drizzle Kit for migrations, schema defined in `shared/schema.ts`
-- **Key Data Models**: Users, Workspaces, Influencers (with multi-platform accounts), Groups, Campaigns (with line items), Email accounts, Threads, Messages, Tracking jobs, Feedback Notes, Bulk Email Jobs.
+- **Key Data Models**: Users, Workspaces, Influencers (with multi-platform accounts), Groups, Campaigns (with line items), Email accounts, Threads, Messages, Tracking jobs, Feedback Notes, Bulk Email Jobs, Clients, ClientUserAssignments.
 
 ### Project Structure
 - `client/`: React frontend
