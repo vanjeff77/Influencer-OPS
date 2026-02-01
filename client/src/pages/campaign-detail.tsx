@@ -59,6 +59,7 @@ export default function CampaignDetail() {
   const [selectedLineItem, setSelectedLineItem] = useState<CampaignLineItem | null>(null);
   const [isEditingClient, setIsEditingClient] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState<string>("");
+  const [isEditingStatus, setIsEditingStatus] = useState(false);
 
   const handleClientChange = () => {
     if (!selectedClientId) return;
@@ -74,6 +75,21 @@ export default function CampaignDetail() {
         toast({ title: "클라이언트가 변경되었습니다." });
         setIsEditingClient(false);
         setSelectedClientId("");
+      },
+      onError: () => {
+        toast({ variant: "destructive", title: "변경 실패" });
+      }
+    });
+  };
+
+  const handleStatusChange = (newStatus: string) => {
+    updateCampaign.mutate({
+      id,
+      data: { status: newStatus }
+    }, {
+      onSuccess: () => {
+        toast({ title: "캠페인 상태가 변경되었습니다." });
+        setIsEditingStatus(false);
       },
       onError: () => {
         toast({ variant: "destructive", title: "변경 실패" });
@@ -165,9 +181,32 @@ export default function CampaignDetail() {
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-3xl font-bold tracking-tight">{campaign.name}</h1>
-              <Badge variant="outline" className="text-sm bg-green-50 text-green-700 border-green-200 capitalize">
-                {campaign.status === 'active' ? KO.status.active : campaign.status}
-              </Badge>
+              {isEditingStatus ? (
+                <Select value={campaign.status || "대기중"} onValueChange={(v) => handleStatusChange(v)}>
+                  <SelectTrigger className="w-[120px] h-8" data-testid="select-campaign-status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="대기중">대기중</SelectItem>
+                    <SelectItem value="진행중">진행중</SelectItem>
+                    <SelectItem value="완료">완료</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Badge 
+                  variant="outline" 
+                  className={`text-sm cursor-pointer ${
+                    campaign.status === '진행중' ? 'bg-green-50 text-green-700 border-green-200' :
+                    campaign.status === '완료' ? 'bg-gray-100 text-gray-600 border-gray-300' :
+                    'bg-yellow-50 text-yellow-700 border-yellow-200'
+                  }`}
+                  onClick={() => setIsEditingStatus(true)}
+                  data-testid="badge-campaign-status"
+                >
+                  {campaign.status || '대기중'}
+                  <Pencil className="w-3 h-3 ml-1" />
+                </Badge>
+              )}
             </div>
             <div className="flex items-center gap-2 mt-2">
               {isEditingClient ? (

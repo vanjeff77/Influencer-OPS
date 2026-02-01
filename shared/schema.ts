@@ -9,6 +9,9 @@ export const workspaceRoleEnum = z.enum(["WORKSPACE_OWNER", "WORKSPACE_MEMBER", 
 export const platformEnum = z.enum(["IG", "YT", "TikTok", "X", "Blog"]);
 export const jobStatusEnum = z.enum(["pending", "processing", "completed", "failed"]);
 
+// Campaign status enum
+export const campaignStatusEnum = z.enum(["대기중", "진행중", "완료"]);
+
 // Campaign line item enums
 export const stageEnum = z.enum(["선정완료", "오퍼확정", "계약진행", "일정확정", "초안수신", "피드백중", "완성본확정", "완료"]);
 export const commStatusEnum = z.enum(["컨택전", "미응답", "협의중", "수락", "거절", "보류"]);
@@ -166,7 +169,7 @@ export const campaigns = pgTable("campaigns", {
   budget: integer("budget").default(0),
   startDate: timestamp("start_date"),
   endDate: timestamp("end_date"),
-  status: text("status").default("draft"), // draft, active, completed
+  status: text("status").default("대기중"), // 대기중, 진행중, 완료
   createdAt: timestamp("created_at").defaultNow(),
 });
 

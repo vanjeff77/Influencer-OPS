@@ -116,19 +116,19 @@ export default function Campaigns() {
 
   const getStatusLabel = (status: string) => {
     switch(status) {
-      case 'active': return KO.status.active;
-      case 'completed': return KO.status.completed;
-      case 'draft': return KO.status.draft;
-      default: return status;
+      case '진행중': return '진행중';
+      case '완료': return '완료';
+      case '대기중': return '대기중';
+      default: return status || '대기중';
     }
   };
 
   const getStatusColor = (status: string) => {
     switch(status) {
-      case 'active': return 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300';
-      case 'completed': return 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300';
-      case 'draft': return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300';
-      default: return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300';
+      case '진행중': return 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300';
+      case '완료': return 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300';
+      case '대기중': return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300';
+      default: return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300';
     }
   };
 
