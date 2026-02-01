@@ -2,8 +2,8 @@ import { z } from 'zod';
 import { 
   insertUserSchema, insertWorkspaceSchema, insertInfluencerSchema, 
   insertInfluencerAccountSchema, insertGroupSchema, insertCampaignSchema,
-  insertEmailAccountSchema, insertTrackingJobSchema,
-  influencers, groups, campaigns, campaignInfluencers, emailAccounts, emailThreads, emailMessages, trackingJobs
+  insertEmailAccountSchema, insertTrackingJobSchema, insertContractTemplateSchema,
+  influencers, groups, campaigns, campaignInfluencers, emailAccounts, emailThreads, emailMessages, trackingJobs, contractTemplates
 } from './schema';
 
 export const errorSchemas = {
@@ -188,6 +188,53 @@ export const api = {
       method: 'GET' as const,
       path: '/api/tracking/jobs/:id/metrics',
       responses: { 200: z.array(z.object({ date: z.string(), value: z.number() })) },
+    },
+  },
+  contractTemplates: {
+    list: {
+      method: 'GET' as const,
+      path: '/api/workspaces/:workspaceId/contract-templates',
+      responses: { 200: z.array(z.custom<typeof contractTemplates.$inferSelect>()) },
+    },
+    get: {
+      method: 'GET' as const,
+      path: '/api/workspaces/:workspaceId/contract-templates/:id',
+      responses: { 200: z.custom<typeof contractTemplates.$inferSelect>(), 404: errorSchemas.notFound },
+    },
+    create: {
+      method: 'POST' as const,
+      path: '/api/workspaces/:workspaceId/contract-templates',
+      input: insertContractTemplateSchema,
+      responses: { 201: z.custom<typeof contractTemplates.$inferSelect>() },
+    },
+    update: {
+      method: 'PATCH' as const,
+      path: '/api/workspaces/:workspaceId/contract-templates/:id',
+      input: insertContractTemplateSchema.partial(),
+      responses: { 200: z.custom<typeof contractTemplates.$inferSelect>(), 404: errorSchemas.notFound },
+    },
+    delete: {
+      method: 'DELETE' as const,
+      path: '/api/workspaces/:workspaceId/contract-templates/:id',
+      responses: { 200: z.object({ success: z.boolean() }), 404: errorSchemas.notFound },
+    },
+    generateDocx: {
+      method: 'POST' as const,
+      path: '/api/workspaces/:workspaceId/contract-templates/:id/generate-docx',
+      input: z.object({
+        lineItemId: z.number(),
+        variables: z.record(z.string()).optional(),
+      }),
+      responses: { 200: z.any() },
+    },
+    generatePdf: {
+      method: 'POST' as const,
+      path: '/api/workspaces/:workspaceId/contract-templates/:id/generate-pdf',
+      input: z.object({
+        lineItemId: z.number(),
+        variables: z.record(z.string()).optional(),
+      }),
+      responses: { 200: z.any() },
     },
   },
 };

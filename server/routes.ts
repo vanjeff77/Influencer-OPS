@@ -2267,6 +2267,203 @@ export async function registerRoutes(
     res.send('\uFEFF' + csv); // BOM for Korean Excel compatibility
   });
 
+  // === CONTRACT TEMPLATES ===
+  app.get(api.contractTemplates.list.path, async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const wId = parseInt(req.params.workspaceId);
+      const templates = await storage.getContractTemplates(wId);
+      res.json(templates);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get(api.contractTemplates.get.path, async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const template = await storage.getContractTemplate(parseInt(req.params.id));
+      if (!template) return res.status(404).json({ message: "Template not found" });
+      res.json(template);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post(api.contractTemplates.create.path, async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const wId = parseInt(req.params.workspaceId);
+      const input = api.contractTemplates.create.input.parse({ ...req.body, workspaceId: wId });
+      const template = await storage.createContractTemplate(input);
+      res.status(201).json(template);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.patch(api.contractTemplates.update.path, async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const id = parseInt(req.params.id);
+      const existing = await storage.getContractTemplate(id);
+      if (!existing) return res.status(404).json({ message: "Template not found" });
+      const input = api.contractTemplates.update.input.parse(req.body);
+      const template = await storage.updateContractTemplate(id, input);
+      res.json(template);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete(api.contractTemplates.delete.path, async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const id = parseInt(req.params.id);
+      const existing = await storage.getContractTemplate(id);
+      if (!existing) return res.status(404).json({ message: "Template not found" });
+      await storage.deleteContractTemplate(id);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Generate DOCX contract
+  app.post(api.contractTemplates.generateDocx.path, async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const templateId = parseInt(req.params.id);
+      const { lineItemId, variables } = req.body;
+
+      const template = await storage.getContractTemplate(templateId);
+      if (!template) return res.status(404).json({ message: "Template not found" });
+
+      const lineItem = await storage.getLineItemWithDetails(lineItemId);
+      if (!lineItem) return res.status(404).json({ message: "Line item not found" });
+
+      const campaign = await storage.getCampaign(lineItem.campaignId);
+      
+      // Build variables for replacement
+      const defaultVariables: Record<string, string> = {
+        '인플루언서명': lineItem.influencer?.name || '',
+        '캠페인명': campaign?.name || '',
+        '금액': (lineItem.offerFee || lineItem.payAmount || 0).toLocaleString() + '원',
+        '날짜': new Date().toLocaleDateString('ko-KR'),
+        '초안예정일': lineItem.draftDueAt ? new Date(lineItem.draftDueAt).toLocaleDateString('ko-KR') : '',
+        '업로드예정일': lineItem.uploadDueAt ? new Date(lineItem.uploadDueAt).toLocaleDateString('ko-KR') : '',
+        '클라이언트명': campaign?.client || '',
+        '이메일': lineItem.influencer?.email || '',
+        '연락처': lineItem.influencer?.phone || lineItem.influencer?.contactPoint || '',
+      };
+
+      const allVariables = { ...defaultVariables, ...variables };
+
+      // Replace variables in template content
+      let content = template.content;
+      for (const [key, value] of Object.entries(allVariables)) {
+        content = content.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value);
+      }
+
+      // Generate DOCX using docx library
+      const { Document, Paragraph, TextRun, Packer, AlignmentType } = await import('docx');
+      
+      // Parse content into paragraphs (split by newlines)
+      const paragraphs = content.split('\n').map(line => {
+        return new Paragraph({
+          children: [new TextRun({ text: line, size: 24 })],
+          spacing: { after: 200 },
+        });
+      });
+
+      const doc = new Document({
+        sections: [{
+          properties: {},
+          children: paragraphs,
+        }],
+      });
+
+      const buffer = await Packer.toBuffer(doc);
+      
+      const filename = `계약서_${lineItem.influencer?.name || 'contract'}_${new Date().toISOString().split('T')[0]}.docx`;
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+      res.send(buffer);
+    } catch (err: any) {
+      console.error('DOCX generation error:', err);
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Generate PDF contract
+  app.post(api.contractTemplates.generatePdf.path, async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const templateId = parseInt(req.params.id);
+      const { lineItemId, variables } = req.body;
+
+      const template = await storage.getContractTemplate(templateId);
+      if (!template) return res.status(404).json({ message: "Template not found" });
+
+      const lineItem = await storage.getLineItemWithDetails(lineItemId);
+      if (!lineItem) return res.status(404).json({ message: "Line item not found" });
+
+      const campaign = await storage.getCampaign(lineItem.campaignId);
+      
+      // Build variables for replacement
+      const defaultVariables: Record<string, string> = {
+        '인플루언서명': lineItem.influencer?.name || '',
+        '캠페인명': campaign?.name || '',
+        '금액': (lineItem.offerFee || lineItem.payAmount || 0).toLocaleString() + '원',
+        '날짜': new Date().toLocaleDateString('ko-KR'),
+        '초안예정일': lineItem.draftDueAt ? new Date(lineItem.draftDueAt).toLocaleDateString('ko-KR') : '',
+        '업로드예정일': lineItem.uploadDueAt ? new Date(lineItem.uploadDueAt).toLocaleDateString('ko-KR') : '',
+        '클라이언트명': campaign?.client || '',
+        '이메일': lineItem.influencer?.email || '',
+        '연락처': lineItem.influencer?.phone || lineItem.influencer?.contactPoint || '',
+      };
+
+      const allVariables = { ...defaultVariables, ...variables };
+
+      // Replace variables in template content
+      let content = template.content;
+      for (const [key, value] of Object.entries(allVariables)) {
+        content = content.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value);
+      }
+
+      // Generate PDF using pdfkit
+      const PDFDocument = (await import('pdfkit')).default;
+      const doc = new PDFDocument({ size: 'A4', margin: 50 });
+      
+      const chunks: Buffer[] = [];
+      doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+      
+      // Register and use Korean font
+      // Note: Using a basic font since custom font loading may fail
+      doc.fontSize(12);
+      
+      // Split content by lines and add to PDF
+      const lines = content.split('\n');
+      for (const line of lines) {
+        doc.text(line, { continued: false });
+        doc.moveDown(0.5);
+      }
+
+      doc.end();
+
+      await new Promise<void>((resolve) => doc.on('end', resolve));
+      
+      const buffer = Buffer.concat(chunks);
+      const filename = `계약서_${lineItem.influencer?.name || 'contract'}_${new Date().toISOString().split('T')[0]}.pdf`;
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+      res.send(buffer);
+    } catch (err: any) {
+      console.error('PDF generation error:', err);
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   // === AUDIT LOGS ===
   app.get('/api/audit-logs', async (req, res) => {
     const { workspaceId, entityType, entityId } = req.query;

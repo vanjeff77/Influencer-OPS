@@ -3,7 +3,7 @@ import {
   users, workspaces, workspaceMembers, influencers, influencerAccounts, groups, groupInfluencers, campaigns, campaignInfluencers,
   emailAccounts, emailThreads, trackingJobs, trackingMetrics, contents, timelineEvents, auditLogs, notifications,
   conversations, conversationMessages, emailTemplates, bulkEmailJobs, bulkEmailQueueItems, campaignContents, feedbackNotes,
-  clients, clientUserAssignments,
+  clients, clientUserAssignments, contractTemplates,
   type User, type InsertUser, type Workspace, type InsertWorkspace,
   type Client, type InsertClient, type ClientUserAssignment, type InsertClientUserAssignment,
   type Influencer, type CreateInfluencerWithAccounts, type InfluencerAccount,
@@ -14,7 +14,8 @@ import {
   type InsertConversation, type InsertConversationMessage, type InsertEmailTemplate,
   type BulkEmailJob, type BulkEmailQueueItem, type InsertBulkEmailJob, type InsertBulkEmailQueueItem,
   type CampaignContent, type InsertCampaignContent,
-  type FeedbackNote, type InsertFeedbackNote
+  type FeedbackNote, type InsertFeedbackNote,
+  type ContractTemplate, type InsertContractTemplate
 } from "@shared/schema";
 import { eq, like, or, and, sql, inArray, desc } from "drizzle-orm";
 
@@ -179,6 +180,13 @@ export interface IStorage {
   updateWorkspaceMemberRole(userId: number, workspaceId: number, role: string): Promise<void>;
   createWorkspaceMember(userId: number, workspaceId: number, role: string): Promise<void>;
   getWorkspaceMember(userId: number, workspaceId: number): Promise<{ userId: number; workspaceId: number; role: string } | undefined>;
+
+  // Contract Templates
+  getContractTemplates(workspaceId: number): Promise<ContractTemplate[]>;
+  getContractTemplate(id: number): Promise<ContractTemplate | undefined>;
+  createContractTemplate(template: InsertContractTemplate): Promise<ContractTemplate>;
+  updateContractTemplate(id: number, data: Partial<ContractTemplate>): Promise<ContractTemplate>;
+  deleteContractTemplate(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1302,6 +1310,35 @@ export class DatabaseStorage implements IStorage {
         eq(workspaceMembers.workspaceId, workspaceId)
       ));
     return member;
+  }
+
+  // Contract Templates
+  async getContractTemplates(workspaceId: number): Promise<ContractTemplate[]> {
+    return await db.select().from(contractTemplates)
+      .where(eq(contractTemplates.workspaceId, workspaceId))
+      .orderBy(desc(contractTemplates.createdAt));
+  }
+
+  async getContractTemplate(id: number): Promise<ContractTemplate | undefined> {
+    const [template] = await db.select().from(contractTemplates).where(eq(contractTemplates.id, id));
+    return template;
+  }
+
+  async createContractTemplate(template: InsertContractTemplate): Promise<ContractTemplate> {
+    const [created] = await db.insert(contractTemplates).values(template).returning();
+    return created;
+  }
+
+  async updateContractTemplate(id: number, data: Partial<ContractTemplate>): Promise<ContractTemplate> {
+    const [updated] = await db.update(contractTemplates)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(contractTemplates.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteContractTemplate(id: number): Promise<void> {
+    await db.delete(contractTemplates).where(eq(contractTemplates.id, id));
   }
 }
 
