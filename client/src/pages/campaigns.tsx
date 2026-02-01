@@ -7,11 +7,19 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Calendar, DollarSign, ArrowRight, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState, useMemo, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useLocation, useSearch } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { KO } from "@/i18n/ko";
+
+interface Client {
+  id: number;
+  workspaceId: number;
+  name: string;
+}
 
 export default function Campaigns() {
   const { data: workspaces } = useWorkspaces();
@@ -22,11 +30,21 @@ export default function Campaigns() {
   const [, navigate] = useLocation();
   const searchString = useSearch();
 
+  const { data: clients } = useQuery<Client[]>({
+    queryKey: ['/api/clients', workspaceId],
+    queryFn: async () => {
+      const res = await fetch(`/api/clients?workspaceId=${workspaceId}`);
+      if (!res.ok) throw new Error("Failed to fetch clients");
+      return res.json();
+    },
+    enabled: !!workspaceId,
+  });
+
   const searchParams = new URLSearchParams(searchString);
   const campaignStatusParam = searchParams.get("campaignStatus");
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [newCampaign, setNewCampaign] = useState({ name: "", client: "", goal: "", budget: 0 });
+  const [newCampaign, setNewCampaign] = useState({ name: "", clientId: "", goal: "", budget: 0 });
   const [advertiserFilter, setAdvertiserFilter] = useState<string>("all");
 
   const activeFilters = [
@@ -78,14 +96,19 @@ export default function Campaigns() {
   }, [campaigns, advertiserFilter, campaignStatusParam]);
 
   const handleCreate = () => {
-    if (!newCampaign.name) return;
+    if (!newCampaign.name || !newCampaign.clientId) return;
+    const selectedClient = clients?.find(c => c.id === parseInt(newCampaign.clientId));
     createCampaign.mutate({
-      ...newCampaign,
+      name: newCampaign.name,
+      client: selectedClient?.name || "",
+      clientId: parseInt(newCampaign.clientId),
+      goal: newCampaign.goal,
+      budget: newCampaign.budget,
       status: "active"
     }, {
       onSuccess: () => {
         setIsCreateOpen(false);
-        setNewCampaign({ name: "", client: "", goal: "", budget: 0 });
+        setNewCampaign({ name: "", clientId: "", goal: "", budget: 0 });
         toast({ title: KO.pages.campaigns.campaignCreated, description: KO.pages.campaigns.campaignCreatedDesc });
       }
     });
@@ -134,8 +157,22 @@ export default function Campaigns() {
                   <Input className="h-8 md:h-10 text-sm" value={newCampaign.name} onChange={e => setNewCampaign({...newCampaign, name: e.target.value})} placeholder="서머 런칭 2024" />
                 </div>
                 <div className="grid gap-1.5 md:gap-2">
-                  <label className="text-xs md:text-sm">{KO.pages.campaigns.client}</label>
-                  <Input className="h-8 md:h-10 text-sm" value={newCampaign.client} onChange={e => setNewCampaign({...newCampaign, client: e.target.value})} placeholder="ACME 코퍼레이션" />
+                  <label className="text-xs md:text-sm">{KO.pages.campaigns.client} <span className="text-destructive">*</span></label>
+                  <Select value={newCampaign.clientId} onValueChange={(value) => setNewCampaign({...newCampaign, clientId: value})}>
+                    <SelectTrigger className="h-8 md:h-10 text-sm" data-testid="select-campaign-client">
+                      <SelectValue placeholder="클라이언트 선택" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clients?.map((client) => (
+                        <SelectItem key={client.id} value={client.id.toString()}>
+                          {client.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {(!clients || clients.length === 0) && (
+                    <p className="text-xs text-muted-foreground">설정 → 클라이언트에서 먼저 클라이언트를 추가하세요</p>
+                  )}
                 </div>
                 <div className="grid gap-1.5 md:gap-2">
                   <label className="text-xs md:text-sm">{KO.pages.campaigns.goal}</label>

@@ -1233,6 +1233,12 @@ function GroupSelectionModal({ open, onOpenChange, workspaceId, selectedIds, onS
   );
 }
 
+interface Client {
+  id: number;
+  workspaceId: number;
+  name: string;
+}
+
 function CampaignSelectionModal({ open, onOpenChange, workspaceId, selectedIds, onSuccess }: { 
   open: boolean; 
   onOpenChange: (open: boolean) => void; 
@@ -1244,15 +1250,32 @@ function CampaignSelectionModal({ open, onOpenChange, workspaceId, selectedIds, 
   const assignToCampaign = useAssignToCampaign();
   const { toast } = useToast();
   
+  const { data: clients } = useQuery<Client[]>({
+    queryKey: ['/api/clients', workspaceId],
+    queryFn: async () => {
+      const res = await fetch(`/api/clients?workspaceId=${workspaceId}`);
+      if (!res.ok) throw new Error("Failed to fetch clients");
+      return res.json();
+    },
+    enabled: !!workspaceId,
+  });
+  
   const [selectedCampaignId, setSelectedCampaignId] = useState<number | null>(null);
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [newCampaignName, setNewCampaignName] = useState("");
+  const [newCampaignClientId, setNewCampaignClientId] = useState("");
 
   const handleAssign = () => {
-    if (isCreatingNew && newCampaignName) {
+    if (isCreatingNew && newCampaignName && newCampaignClientId) {
+      const selectedClient = clients?.find(c => c.id === parseInt(newCampaignClientId));
       assignToCampaign.mutate({
         influencerIds: selectedIds,
-        createCampaign: { workspaceId, name: newCampaignName }
+        createCampaign: { 
+          workspaceId, 
+          name: newCampaignName,
+          client: selectedClient?.name || "",
+          clientId: parseInt(newCampaignClientId)
+        }
       }, {
         onSuccess: () => {
           toast({ title: "캠페인에 배정되었습니다." });
@@ -1284,7 +1307,7 @@ function CampaignSelectionModal({ open, onOpenChange, workspaceId, selectedIds, 
         <div className="space-y-4 py-4">
           {!isCreatingNew ? (
             <>
-              <div className="space-y-2">
+              <div className="space-y-2 max-h-[300px] overflow-y-auto">
                 {campaigns?.map(c => (
                   <div 
                     key={c.id}
@@ -1303,20 +1326,41 @@ function CampaignSelectionModal({ open, onOpenChange, workspaceId, selectedIds, 
               </Button>
             </>
           ) : (
-            <div className="space-y-2">
-              <Input 
-                placeholder="캠페인 이름" 
-                value={newCampaignName} 
-                onChange={e => setNewCampaignName(e.target.value)}
-                data-testid="input-new-campaign-name"
-              />
-              <Button variant="ghost" onClick={() => setIsCreatingNew(false)}>취소</Button>
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">캠페인 이름 <span className="text-destructive">*</span></label>
+                <Input 
+                  placeholder="캠페인 이름" 
+                  value={newCampaignName} 
+                  onChange={e => setNewCampaignName(e.target.value)}
+                  data-testid="input-new-campaign-name"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">클라이언트 <span className="text-destructive">*</span></label>
+                <Select value={newCampaignClientId} onValueChange={setNewCampaignClientId}>
+                  <SelectTrigger data-testid="select-new-campaign-client">
+                    <SelectValue placeholder="클라이언트 선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clients?.map((client) => (
+                      <SelectItem key={client.id} value={client.id.toString()}>
+                        {client.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {(!clients || clients.length === 0) && (
+                  <p className="text-xs text-muted-foreground">설정 → 클라이언트에서 먼저 클라이언트를 추가하세요</p>
+                )}
+              </div>
+              <Button variant="ghost" onClick={() => { setIsCreatingNew(false); setNewCampaignClientId(""); }}>취소</Button>
             </div>
           )}
         </div>
         <Button 
           onClick={handleAssign} 
-          disabled={assignToCampaign.isPending || (!selectedCampaignId && !newCampaignName)}
+          disabled={assignToCampaign.isPending || (!selectedCampaignId && (!newCampaignName || !newCampaignClientId))}
           data-testid="button-confirm-assign-campaign"
         >
           {assignToCampaign.isPending ? "배정 중..." : "배정"}

@@ -639,6 +639,7 @@ export async function registerRoutes(
       const newCampaign = await storage.createCampaign(workspaceId, {
         name: createCampaign.name,
         client: createCampaign.client || '',
+        clientId: createCampaign.clientId || null,
         status: 'active'
       });
       targetCampaignId = newCampaign.id;
