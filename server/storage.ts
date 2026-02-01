@@ -85,6 +85,45 @@ export interface IStorage {
     items: (CampaignInfluencer & { campaign?: Campaign; influencer?: Influencer })[];
   }>;
 
+  // Settlement Work Queue (정산 작업큐)
+  getSettlementWorkQueue(workspaceId: number, filters?: { 
+    clientId?: number; 
+    campaignId?: number; 
+    payoutStatus?: string; 
+    settlementInfoComplete?: boolean;
+    uploadCompletedOnly?: boolean;
+  }): Promise<{
+    kpi: {
+      pendingCount: number;
+      pendingTotal: number;
+      incompleteInfoCount: number;
+      holdCount: number;
+    };
+    items: (CampaignInfluencer & { 
+      campaign?: Campaign; 
+      influencer?: Influencer;
+      client?: { id: number; name: string } | null;
+      settlementInfoComplete: boolean;
+    })[];
+  }>;
+
+  // Update line item payout info
+  updateLineItemPayout(itemId: number, data: {
+    payoutStatus?: string;
+    payoutAmountSupply?: number;
+    payoutVat?: number;
+    payoutTotal?: number;
+    payoutMemo?: string;
+    invoiceFileId?: string;
+    invoiceIssuedAt?: Date;
+    payoutDueAt?: Date;
+    paidAt?: Date;
+    transferProofFileId?: string;
+  }): Promise<CampaignInfluencer>;
+
+  // Mark upload completed (triggers payout status)
+  markUploadCompleted(itemId: number, userId: number, completed: boolean): Promise<CampaignInfluencer>;
+
   // Audit Logs
   createAuditLog(data: Partial<AuditLog>): Promise<AuditLog>;
   getAuditLogs(workspaceId: number, entityType?: string, entityId?: number): Promise<AuditLog[]>;
@@ -514,6 +553,200 @@ export class DatabaseStorage implements IStorage {
       pendingCount: pendingItems.length,
       items: enrichedItems
     };
+  }
+
+  // Settlement Work Queue implementation
+  async getSettlementWorkQueue(workspaceId: number, filters?: { 
+    clientId?: number; 
+    campaignId?: number; 
+    payoutStatus?: string; 
+    settlementInfoComplete?: boolean;
+    uploadCompletedOnly?: boolean;
+  }): Promise<{
+    kpi: {
+      pendingCount: number;
+      pendingTotal: number;
+      incompleteInfoCount: number;
+      holdCount: number;
+    };
+    items: (CampaignInfluencer & { 
+      campaign?: Campaign; 
+      influencer?: Influencer;
+      client?: { id: number; name: string } | null;
+      settlementInfoComplete: boolean;
+    })[];
+  }> {
+    const campaignList = await db.select().from(campaigns).where(eq(campaigns.workspaceId, workspaceId));
+    if (campaignList.length === 0) {
+      return { kpi: { pendingCount: 0, pendingTotal: 0, incompleteInfoCount: 0, holdCount: 0 }, items: [] };
+    }
+    
+    // Get clients for the workspace
+    const clientList = await db.select().from(clients).where(eq(clients.workspaceId, workspaceId));
+    
+    let campaignIds = campaignList.map(c => c.id);
+    
+    // Filter by clientId if specified
+    if (filters?.clientId) {
+      campaignIds = campaignList.filter(c => c.clientId === filters.clientId).map(c => c.id);
+    }
+    
+    // Filter by campaignId if specified
+    if (filters?.campaignId) {
+      campaignIds = campaignIds.filter(id => id === filters.campaignId);
+    }
+    
+    if (campaignIds.length === 0) {
+      return { kpi: { pendingCount: 0, pendingTotal: 0, incompleteInfoCount: 0, holdCount: 0 }, items: [] };
+    }
+    
+    let items = await db.select().from(campaignInfluencers).where(inArray(campaignInfluencers.campaignId, campaignIds));
+    
+    // Filter by uploadCompletedOnly (default true)
+    if (filters?.uploadCompletedOnly !== false) {
+      items = items.filter(i => i.isUploadCompleted);
+    }
+    
+    // Filter by payoutStatus
+    if (filters?.payoutStatus) {
+      items = items.filter(i => i.payoutStatus === filters.payoutStatus);
+    }
+    
+    // Get influencer data
+    const influencerIds = Array.from(new Set(items.map(i => i.influencerId)));
+    const influencerList = influencerIds.length > 0 
+      ? await db.select().from(influencers).where(inArray(influencers.id, influencerIds))
+      : [];
+    
+    // Helper to check if settlement info is complete
+    const isSettlementInfoComplete = (inf: Influencer | undefined): boolean => {
+      if (!inf) return false;
+      const hasBank = !!inf.bankName && !!inf.accountHolder && !!inf.accountNumber;
+      if (inf.settlementType === '사업자') {
+        return hasBank && !!inf.businessName && !!inf.businessRegNo;
+      } else if (inf.settlementType === '프리랜서') {
+        return hasBank && !!inf.freelancerId;
+      }
+      return false;
+    };
+    
+    const enrichedItems = items.map(item => {
+      const campaign = campaignList.find(c => c.id === item.campaignId);
+      const influencer = influencerList.find(i => i.id === item.influencerId);
+      const client = campaign?.clientId ? clientList.find(c => c.id === campaign.clientId) : null;
+      
+      return {
+        ...item,
+        campaign,
+        influencer,
+        client: client ? { id: client.id, name: client.name } : null,
+        settlementInfoComplete: isSettlementInfoComplete(influencer)
+      };
+    });
+    
+    // Filter by settlementInfoComplete if specified
+    let finalItems = enrichedItems;
+    if (filters?.settlementInfoComplete !== undefined) {
+      finalItems = enrichedItems.filter(i => i.settlementInfoComplete === filters.settlementInfoComplete);
+    }
+    
+    // Sort: incompleteInfo and pending first, then by uploadCompletedAt oldest first
+    finalItems.sort((a, b) => {
+      // Priority: 정산정보미비 > 지급대기 > 증빙요청 > 증빙수령 > others
+      const statusPriority: Record<string, number> = {
+        '정산정보미비': 1,
+        '지급대기': 2,
+        '증빙요청': 3,
+        '증빙수령': 4,
+        '보류': 5,
+        '지급완료': 6
+      };
+      const aPriority = statusPriority[a.payoutStatus || '정산정보미비'] || 5;
+      const bPriority = statusPriority[b.payoutStatus || '정산정보미비'] || 5;
+      if (aPriority !== bPriority) return aPriority - bPriority;
+      
+      // Then by uploadCompletedAt (oldest first)
+      const aDate = a.uploadCompletedAt ? new Date(a.uploadCompletedAt).getTime() : 0;
+      const bDate = b.uploadCompletedAt ? new Date(b.uploadCompletedAt).getTime() : 0;
+      return aDate - bDate;
+    });
+    
+    // Calculate KPI based on all items (not filtered)
+    const pendingItems = enrichedItems.filter(i => i.payoutStatus === '지급대기');
+    const incompleteInfoItems = enrichedItems.filter(i => !i.settlementInfoComplete || i.payoutStatus === '정산정보미비');
+    const holdItems = enrichedItems.filter(i => i.payoutStatus === '보류');
+    
+    return {
+      kpi: {
+        pendingCount: pendingItems.length,
+        pendingTotal: pendingItems.reduce((sum, i) => sum + (i.payoutTotal || i.payAmount || 0), 0),
+        incompleteInfoCount: incompleteInfoItems.length,
+        holdCount: holdItems.length
+      },
+      items: finalItems
+    };
+  }
+
+  async updateLineItemPayout(itemId: number, data: {
+    payoutStatus?: string;
+    payoutAmountSupply?: number;
+    payoutVat?: number;
+    payoutTotal?: number;
+    payoutMemo?: string;
+    invoiceFileId?: string;
+    invoiceIssuedAt?: Date;
+    payoutDueAt?: Date;
+    paidAt?: Date;
+    transferProofFileId?: string;
+  }): Promise<CampaignInfluencer> {
+    const [updated] = await db.update(campaignInfluencers)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(campaignInfluencers.id, itemId))
+      .returning();
+    return updated;
+  }
+
+  async markUploadCompleted(itemId: number, userId: number, completed: boolean): Promise<CampaignInfluencer> {
+    // Get the line item with influencer
+    const [item] = await db.select().from(campaignInfluencers).where(eq(campaignInfluencers.id, itemId));
+    if (!item) throw new Error('Line item not found');
+    
+    // Get influencer to check settlement info
+    const [inf] = await db.select().from(influencers).where(eq(influencers.id, item.influencerId));
+    
+    // Helper to check if settlement info is complete
+    const isSettlementInfoComplete = (): boolean => {
+      if (!inf) return false;
+      const hasBank = !!inf.bankName && !!inf.accountHolder && !!inf.accountNumber;
+      if (inf.settlementType === '사업자') {
+        return hasBank && !!inf.businessName && !!inf.businessRegNo;
+      } else if (inf.settlementType === '프리랜서') {
+        return hasBank && !!inf.freelancerId;
+      }
+      return false;
+    };
+    
+    let newPayoutStatus = item.payoutStatus;
+    if (completed) {
+      // Set payoutStatus based on settlement info completeness
+      newPayoutStatus = isSettlementInfoComplete() ? '지급대기' : '정산정보미비';
+    } else {
+      // When unchecking, set to 보류
+      newPayoutStatus = '보류';
+    }
+    
+    const [updated] = await db.update(campaignInfluencers)
+      .set({
+        isUploadCompleted: completed,
+        uploadCompletedAt: completed ? new Date() : null,
+        uploadCompletedByUserId: completed ? userId : null,
+        payoutStatus: newPayoutStatus,
+        updatedAt: new Date()
+      })
+      .where(eq(campaignInfluencers.id, itemId))
+      .returning();
+    
+    return updated;
   }
 
   async createAuditLog(data: Partial<AuditLog>): Promise<AuditLog> {

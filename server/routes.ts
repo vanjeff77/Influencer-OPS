@@ -644,6 +644,94 @@ export async function registerRoutes(
     }
   });
 
+  // === SETTLEMENT WORK QUEUE (정산 작업큐) ===
+  app.get('/api/settlement/queue', async (req, res) => {
+    try {
+      const { workspaceId, clientId, campaignId, payoutStatus, settlementInfoComplete, uploadCompletedOnly } = req.query;
+      const wsId = parseInt(workspaceId as string) || 1;
+      
+      // Check role access (CLIENT cannot access settlement)
+      if (req.isAuthenticated()) {
+        const userId = (req.user as any).id;
+        const member = await storage.getWorkspaceMember(userId, wsId);
+        if (member?.role === 'CLIENT') {
+          return res.status(403).json({ message: 'CLIENT role cannot access settlement queue' });
+        }
+      }
+      
+      const filters = {
+        clientId: clientId ? parseInt(clientId as string) : undefined,
+        campaignId: campaignId ? parseInt(campaignId as string) : undefined,
+        payoutStatus: payoutStatus as string | undefined,
+        settlementInfoComplete: settlementInfoComplete !== undefined ? settlementInfoComplete === 'true' : undefined,
+        uploadCompletedOnly: uploadCompletedOnly !== undefined ? uploadCompletedOnly === 'true' : true
+      };
+      
+      const result = await storage.getSettlementWorkQueue(wsId, filters);
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Update payout info for a line item
+  app.patch('/api/settlement/items/:id/payout', async (req, res) => {
+    try {
+      const itemId = parseInt(req.params.id);
+      const data = req.body;
+      
+      // Parse dates if needed
+      if (data.invoiceIssuedAt) data.invoiceIssuedAt = new Date(data.invoiceIssuedAt);
+      if (data.payoutDueAt) data.payoutDueAt = new Date(data.payoutDueAt);
+      if (data.paidAt) data.paidAt = new Date(data.paidAt);
+      
+      const updated = await storage.updateLineItemPayout(itemId, data);
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Mark payment complete (OWNER only)
+  app.post('/api/settlement/items/:id/mark-paid', async (req, res) => {
+    try {
+      const itemId = parseInt(req.params.id);
+      const { workspaceId } = req.body;
+      
+      // Check role access (OWNER only)
+      if (req.isAuthenticated()) {
+        const userId = (req.user as any).id;
+        const member = await storage.getWorkspaceMember(userId, workspaceId);
+        if (member?.role !== 'WORKSPACE_OWNER') {
+          return res.status(403).json({ message: 'Only OWNER can mark items as paid' });
+        }
+      }
+      
+      const updated = await storage.updateLineItemPayout(itemId, {
+        payoutStatus: '지급완료',
+        paidAt: new Date()
+      });
+      
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Mark upload completed (triggers payout status)
+  app.post('/api/settlement/items/:id/upload-completed', async (req, res) => {
+    try {
+      const itemId = parseInt(req.params.id);
+      const { completed } = req.body;
+      const userId = req.isAuthenticated() ? (req.user as any).id : 1;
+      
+      const updated = await storage.markUploadCompleted(itemId, userId, completed !== false);
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   // === TODAY'S TASKS ===
   app.get('/api/overview/tasks', async (req, res) => {
     const { workspaceId } = req.query;

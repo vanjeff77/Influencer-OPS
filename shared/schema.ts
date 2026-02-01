@@ -14,6 +14,13 @@ export const stageEnum = z.enum(["선정완료", "오퍼확정", "계약진행",
 export const commStatusEnum = z.enum(["컨택전", "미응답", "협의중", "수락", "거절", "보류"]);
 export const reviewStatusEnum = z.enum(["초안대기", "검토중", "피드백전달", "승인완료", "업로드완료"]);
 
+// === SESSION (for connect-pg-simple) ===
+export const session = pgTable("session", {
+  sid: text("sid").primaryKey(),
+  sess: jsonb("sess").notNull(),
+  expire: timestamp("expire").notNull(),
+});
+
 // === USERS & WORKSPACES ===
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -59,6 +66,12 @@ export const clientUserAssignments = pgTable("client_user_assignments", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Settlement type enum
+export const settlementTypeEnum = z.enum(["사업자", "프리랜서"]);
+
+// Payout status enum for campaign line items
+export const payoutStatusEnum = z.enum(["정산정보미비", "증빙요청", "증빙수령", "지급대기", "지급완료", "보류"]);
+
 // === INFLUENCERS ===
 export const influencers = pgTable("influencers", {
   id: serial("id").primaryKey(),
@@ -75,6 +88,18 @@ export const influencers = pgTable("influencers", {
   replyStatus: text("reply_status"), // Y, N, 진행중, 보류
   collabStatus: text("collab_status"), // Y, N, 진행중, 보류
   finalContentUrl: text("final_content_url"), // URL to final content
+  
+  // Settlement info (정산정보)
+  settlementType: text("settlement_type"), // 사업자 | 프리랜서
+  businessName: text("business_name"), // 사업자등록명
+  businessRegNo: text("business_reg_no"), // 사업자등록번호
+  freelancerId: text("freelancer_id"), // 프리랜서 주민번호
+  bankName: text("bank_name"), // 은행명
+  accountHolder: text("account_holder"), // 예금주명
+  accountNumber: text("account_number"), // 계좌번호
+  settlementInfoUpdatedAt: timestamp("settlement_info_updated_at"),
+  settlementInfoUpdatedByUserId: integer("settlement_info_updated_by_user_id"),
+  
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -190,6 +215,23 @@ export const campaignInfluencers = pgTable("campaign_influencers", {
   
   // Last outbound for comm tracking
   lastOutboundAt: timestamp("last_outbound_at"),
+  
+  // Upload completion (업로드 완료 트리거)
+  isUploadCompleted: boolean("is_upload_completed").default(false),
+  uploadCompletedAt: timestamp("upload_completed_at"),
+  uploadCompletedByUserId: integer("upload_completed_by_user_id"),
+  
+  // Payout info (정산 정보)
+  payoutStatus: text("payout_status").default("정산정보미비"), // 정산정보미비, 증빙요청, 증빙수령, 지급대기, 지급완료, 보류
+  payoutAmountSupply: integer("payout_amount_supply"), // 공급가
+  payoutVat: integer("payout_vat"), // VAT
+  payoutTotal: integer("payout_total"), // 총액
+  payoutMemo: text("payout_memo"),
+  invoiceFileId: text("invoice_file_id"), // 세금계산서/청구서/증빙
+  invoiceIssuedAt: timestamp("invoice_issued_at"),
+  payoutDueAt: timestamp("payout_due_at"), // 지급예정일
+  paidAt: timestamp("paid_at"), // 지급완료일
+  transferProofFileId: text("transfer_proof_file_id"), // 이체확인증
   
   updatedAt: timestamp("updated_at").defaultNow(),
 });
