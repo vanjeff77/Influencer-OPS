@@ -454,26 +454,102 @@ export async function registerRoutes(
     res.json(accounts);
   });
 
+  // Test IMAP connection
+  app.post('/api/email/imap/test', async (req, res) => {
+    try {
+      const { email, password, imapServer, imapPort } = req.body;
+      
+      const { testImapConnection } = await import('./imap');
+      
+      const result = await testImapConnection({
+        user: email,
+        password: password,
+        host: imapServer,
+        port: parseInt(imapPort) || 993,
+        tls: true,
+      });
+      
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
   app.post(api.email.sync.path, async (req, res) => {
     const accountId = parseInt(req.params.id);
     
-    // Get existing threads to check for duplicates
-    const existingThreads = await storage.getEmailThreads(accountId);
-    const existingThreadIds = new Set(existingThreads.map(t => t.threadId));
-    
-    // Only create a demo thread if none exists (prevents duplicates)
-    if (existingThreads.length === 0) {
-      await storage.createEmailThread({
-        accountId,
-        threadId: `demo-thread-${accountId}`,
-        subject: "Re: Collaboration Proposal",
-        snippet: "Sounds good, let's proceed.",
-        lastMessageDate: new Date(),
+    try {
+      // Get account info
+      const accounts = await storage.getEmailAccounts(1); // TODO: get proper workspaceId
+      const account = accounts.find(a => a.id === accountId);
+      
+      if (!account) {
+        return res.status(404).json({ message: "계정을 찾을 수 없습니다" });
+      }
+      
+      // Check if it's an IMAP account
+      if (account.provider === 'imap' && account.accessToken) {
+        const { fetchEmails, decryptPassword } = await import('./imap');
+        
+        const settings = JSON.parse(account.accessToken);
+        const password = decryptPassword(account.refreshToken || '');
+        
+        const imapConfig = {
+          user: account.email,
+          password: password,
+          host: settings.imapServer,
+          port: parseInt(settings.imapPort) || 993,
+          tls: true,
+        };
+        
+        console.log('Connecting to IMAP server:', settings.imapServer, 'for', account.email);
+        
+        const emails = await fetchEmails(imapConfig, 'INBOX', 20);
+        console.log(`Fetched ${emails.length} emails from IMAP`);
+        
+        // Get existing threads to avoid duplicates
+        const existingThreads = await storage.getEmailThreads(accountId);
+        const existingMessageIds = new Set(existingThreads.map(t => t.threadId));
+        
+        let syncedCount = 0;
+        for (const email of emails) {
+          const threadId = email.messageId || `imap-${Date.now()}-${syncedCount}`;
+          
+          if (!existingMessageIds.has(threadId)) {
+            await storage.createEmailThread({
+              accountId,
+              threadId,
+              subject: email.subject,
+              snippet: email.snippet,
+              lastMessageDate: email.date,
+            });
+            syncedCount++;
+          }
+        }
+        
+        res.json({ syncedCount, message: `${syncedCount}개의 새 이메일을 동기화했습니다` });
+      } else {
+        // Gmail or other provider - use existing mock behavior
+        const existingThreads = await storage.getEmailThreads(accountId);
+        if (existingThreads.length === 0) {
+          await storage.createEmailThread({
+            accountId,
+            threadId: `demo-thread-${accountId}`,
+            subject: "Re: Collaboration Proposal",
+            snippet: "Sounds good, let's proceed.",
+            lastMessageDate: new Date(),
+          });
+          res.json({ syncedCount: 1 });
+        } else {
+          res.json({ syncedCount: 0, message: "이미 최신 상태입니다" });
+        }
+      }
+    } catch (err: any) {
+      console.error('Email sync error:', err);
+      res.status(500).json({ 
+        message: `이메일 동기화 실패: ${err.message}`,
+        error: err.message 
       });
-      res.json({ syncedCount: 1 });
-    } else {
-      // No new messages to sync
-      res.json({ syncedCount: 0, message: "이미 최신 상태입니다" });
     }
   });
 

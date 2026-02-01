@@ -2,16 +2,20 @@ import Imap from 'imap';
 import { simpleParser, ParsedMail } from 'mailparser';
 import crypto from 'crypto';
 
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'default-encryption-key-32-chars!';
-
 export function decryptPassword(encryptedPassword: string): string {
+  // If not encrypted (no colon separator), return as-is
   if (!encryptedPassword.includes(':')) {
     return encryptedPassword;
   }
+  
+  // Must match the encryption in routes.ts
+  const key = process.env.SESSION_SECRET || 'default-secret-key-32chars-long!!';
+  const keyBuffer = Buffer.from(key.slice(0, 32).padEnd(32, '0'));
+  
   const [ivHex, encrypted] = encryptedPassword.split(':');
   const iv = Buffer.from(ivHex, 'hex');
-  const key = crypto.scryptSync(ENCRYPTION_KEY, 'salt', 32);
-  const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+  
+  const decipher = crypto.createDecipheriv('aes-256-cbc', keyBuffer, iv);
   let decrypted = decipher.update(encrypted, 'hex', 'utf8');
   decrypted += decipher.final('utf8');
   return decrypted;
