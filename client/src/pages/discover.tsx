@@ -27,6 +27,8 @@ import { useLocation, useSearch } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CampaignInfluencer } from "@shared/schema";
 import { PasteImportDialog } from "@/components/paste-import-dialog";
+import { BulkEditDialog } from "@/components/bulk-edit-dialog";
+import { Pencil } from "lucide-react";
 
 export default function Discover() {
   const { data: workspaces } = useWorkspaces();
@@ -68,6 +70,7 @@ export default function Discover() {
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
   const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
   const [isPasteImportOpen, setIsPasteImportOpen] = useState(false);
+  const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
   const [bulkDeleteConfirmInput, setBulkDeleteConfirmInput] = useState("");
   const bulkDeleteInfluencers = useBulkDeleteInfluencers();
@@ -458,10 +461,26 @@ export default function Discover() {
           clients={clientsForImport}
         />
 
+        <BulkEditDialog
+          open={isBulkEditOpen}
+          onOpenChange={setIsBulkEditOpen}
+          workspaceId={workspaceId || 0}
+          selectedIds={Array.from(selectedIds)}
+          influencers={influencers || []}
+          onEditComplete={() => {
+            setSelectedIds(new Set());
+            queryClient.invalidateQueries({ queryKey: ['/api/influencers'] });
+          }}
+        />
+
         {selectedIds.size > 0 && (
           <div className="bg-primary/5 border border-primary/20 rounded-md px-2 md:px-3 py-1.5 md:py-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <span className="text-xs md:text-sm font-medium">{selectedIds.size}명 선택됨</span>
             <div className="flex flex-wrap gap-1.5 md:gap-2">
+              <Button variant="outline" size="sm" className="text-xs h-7 px-2" onClick={() => setIsBulkEditOpen(true)} data-testid="button-bulk-edit">
+                <Pencil className="w-3 h-3 mr-1" />
+                일괄 수정
+              </Button>
               <Button variant="outline" size="sm" className="text-xs h-7 px-2" onClick={() => setIsGroupModalOpen(true)} data-testid="button-save-to-group">
                 <Users className="w-3 h-3 mr-1" />
                 그룹에 저장
