@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useWorkspaces } from "@/hooks/use-workspaces";
+import Layout from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -243,11 +244,12 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold" data-testid="text-settings-title">{KO.settings.title}</h1>
-        <p className="text-muted-foreground text-sm">{KO.settings.subtitle}</p>
-      </div>
+    <Layout>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-lg md:text-2xl font-bold tracking-tight" data-testid="text-settings-title">{KO.settings.title}</h1>
+          <p className="text-muted-foreground text-xs md:text-sm">{KO.settings.subtitle}</p>
+        </div>
 
       {!isOwner && (
         <Card className="border-yellow-500/50 bg-yellow-500/10">
@@ -652,6 +654,7 @@ export default function SettingsPage() {
           </DialogContent>
         </Dialog>
       )}
-    </div>
+      </div>
+    </Layout>
   );
 }
