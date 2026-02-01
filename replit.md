@@ -53,7 +53,7 @@ Preferred communication style: Simple, everyday language.
 
 ### Core Features & Technical Implementations
 - **Campaign Operations**: Comprehensive management of influencer line items, including stages, communication status, review, and deadline tracking (D-day badges). Detailed panel with feedback notes and summary generation.
-- **Influencer Import**: 4-step Excel paste import wizard with TSV parsing, validation, column recognition, platform normalization, and upsert logic.
+- **Influencer Import**: Simplified batch import with fixed 7-column grid (닉네임, 플랫폼 계정, 플랫폼, 팔로워, 컨택포인트, 메모, 단가 메모). Features TSV paste from Excel/Sheets, cell-level validation, platform normalization (Korean/English variants), auto URL generation, duplicate detection, partial success with retry capability.
 - **Email Communication**:
     - **Attach Existing Email Thread**: Wizard for linking external email threads via IMAP search (recipient, subject, message ID) to campaign conversations, importing all messages.
     - **Bulk Email Sending**: Queue-based 1:1 email delivery with throttling, WYSIWYG editor, variable substitution, validation, and first contact tracking.
