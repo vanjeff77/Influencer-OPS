@@ -585,6 +585,7 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
   const { toast } = useToast();
   
   const [memo, setMemo] = useState("");
+  const [priceMemo, setPriceMemo] = useState("");
   const [tags, setTags] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -610,6 +611,7 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
   useEffect(() => {
     if (influencer) {
       setMemo(influencer.memo || "");
+      setPriceMemo(influencer.priceMemo || "");
       setTags(influencer.tags?.join(", ") || "");
       setEmail(influencer.email || "");
       setPhone(influencer.phone || "");
@@ -639,6 +641,8 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
       data: {
         name,
         memo,
+        priceMemo,
+        priceMemoUpdatedAt: priceMemo ? new Date().toISOString() : null,
         tags: tags.split(",").map(t => t.trim()).filter(Boolean),
         email,
         phone,
@@ -766,6 +770,17 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
                   <div>
                     <label className="text-sm font-medium">{KO.pages.discover.memo}</label>
                     <Textarea value={memo} onChange={e => setMemo(e.target.value)} placeholder={KO.pages.discover.memo} className="min-h-[80px]" data-testid="input-influencer-memo" />
+                  </div>
+                  
+                  <div>
+                    <label className="text-sm font-medium">{KO.pages.discover.priceMemo}</label>
+                    <Textarea 
+                      value={priceMemo} 
+                      onChange={e => setPriceMemo(e.target.value)} 
+                      placeholder={KO.pages.discover.priceMemoPlaceholder}
+                      className="min-h-[80px]" 
+                      data-testid="input-influencer-price-memo" 
+                    />
                   </div>
                 </div>
 

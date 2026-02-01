@@ -89,6 +89,11 @@ export const influencers = pgTable("influencers", {
   collabStatus: text("collab_status"), // Y, N, 진행중, 보류
   finalContentUrl: text("final_content_url"), // URL to final content
   
+  // Price memo (단가 메모)
+  priceMemo: text("price_memo"), // 단가 관련 내부 메모 (예: "YT 롱폼 350만+VAT, 릴스 150만")
+  priceMemoUpdatedAt: timestamp("price_memo_updated_at"),
+  priceMemoUpdatedByUserId: integer("price_memo_updated_by_user_id"),
+  
   // Settlement info (정산정보)
   settlementType: text("settlement_type"), // 사업자 | 프리랜서
   businessName: text("business_name"), // 사업자등록명

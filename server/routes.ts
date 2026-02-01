@@ -77,14 +77,21 @@ export async function registerRoutes(
     res.json(inf);
   });
 
-  // Update influencer (memo, tags, email, phone)
+  // Update influencer (memo, tags, email, phone, priceMemo, etc.)
   app.patch('/api/influencers/:id', async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const inf = await storage.updateInfluencer(id, req.body);
+      const data = { ...req.body };
+      
+      // Parse date fields
+      if (data.priceMemoUpdatedAt) data.priceMemoUpdatedAt = new Date(data.priceMemoUpdatedAt);
+      if (data.settlementInfoUpdatedAt) data.settlementInfoUpdatedAt = new Date(data.settlementInfoUpdatedAt);
+      
+      const inf = await storage.updateInfluencer(id, data);
       res.json(inf);
-    } catch (err) {
-      res.status(500).json({ message: "Failed to update" });
+    } catch (err: any) {
+      console.error('Failed to update influencer:', err);
+      res.status(500).json({ message: "Failed to update", error: err.message });
     }
   });
 
