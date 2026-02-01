@@ -2433,13 +2433,20 @@ export async function registerRoutes(
 
       // Generate PDF using pdfkit
       const PDFDocument = (await import('pdfkit')).default;
+      const path = await import('path');
+      const fs = await import('fs');
+      
       const doc = new PDFDocument({ size: 'A4', margin: 50 });
       
       const chunks: Buffer[] = [];
       doc.on('data', (chunk: Buffer) => chunks.push(chunk));
       
-      // Register and use Korean font
-      // Note: Using a basic font since custom font loading may fail
+      // Register and use Korean font for proper Korean text rendering
+      const fontPath = path.join(process.cwd(), 'server', 'fonts', 'NanumGothic.ttf');
+      if (fs.existsSync(fontPath)) {
+        doc.registerFont('Korean', fontPath);
+        doc.font('Korean');
+      }
       doc.fontSize(12);
       
       // Split content by lines and add to PDF
