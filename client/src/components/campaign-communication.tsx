@@ -112,7 +112,7 @@ export function CampaignCommunication({ campaignId, lineItems }: { campaignId: n
   });
 
   const startConversation = useMutation({
-    mutationFn: (lineItemId: number) => apiRequest(`/api/line-items/${lineItemId}/start-conversation`, { method: 'POST' }),
+    mutationFn: (lineItemId: number) => apiRequest('POST', `/api/line-items/${lineItemId}/start-conversation`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/conversations'] });
       toast({ title: KO.pages.communication.startConversation });
@@ -120,7 +120,10 @@ export function CampaignCommunication({ campaignId, lineItems }: { campaignId: n
   });
 
   const syncMessages = useMutation({
-    mutationFn: (conversationId: number) => apiRequest(`/api/conversations/${conversationId}/sync`, { method: 'POST' }),
+    mutationFn: async (conversationId: number) => {
+      const res = await apiRequest('POST', `/api/conversations/${conversationId}/sync`);
+      return res.json();
+    },
     onSuccess: (data: any) => {
       refetchConversation();
       toast({ title: KO.pages.communication.syncSuccess, description: `${data.synced}${KO.pages.communication.syncedCount}` });
@@ -376,11 +379,7 @@ function MessageComposer({ conversationId, influencerEmail, onSent }: { conversa
 
   const sendMessage = useMutation({
     mutationFn: (data: { body: string; subject: string }) => 
-      apiRequest(`/api/conversations/${conversationId}/messages`, { 
-        method: 'POST', 
-        body: JSON.stringify(data),
-        headers: { 'Content-Type': 'application/json' }
-      }),
+      apiRequest('POST', `/api/conversations/${conversationId}/messages`, data),
     onSuccess: () => {
       setMessage("");
       setSubject("");
@@ -457,11 +456,7 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
   const [tags, setTags] = useState(influencer?.tags?.join(", ") || "");
 
   const updateInfluencer = useMutation({
-    mutationFn: (data: any) => apiRequest(`/api/influencers/${influencer?.id}`, { 
-      method: 'PATCH',
-      body: JSON.stringify(data),
-      headers: { 'Content-Type': 'application/json' }
-    }),
+    mutationFn: (data: any) => apiRequest('PATCH', `/api/influencers/${influencer?.id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/influencers'] });
       toast({ title: KO.pages.communication.saved });
