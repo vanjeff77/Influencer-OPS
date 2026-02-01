@@ -1150,12 +1150,12 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-sm font-medium">{KO.pages.discover.client}</label>
-                      <Select value={client} onValueChange={setClient}>
+                      <Select value={client || "__none__"} onValueChange={(v) => setClient(v === "__none__" ? "" : v)}>
                         <SelectTrigger data-testid="select-influencer-client">
                           <SelectValue placeholder="클라이언트 선택" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">없음</SelectItem>
+                          <SelectItem value="__none__">없음</SelectItem>
                           {clientsList?.map((c) => (
                             <SelectItem key={c.id} value={c.name}>
                               {c.name}
