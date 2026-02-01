@@ -967,7 +967,7 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
-  const [accounts, setAccounts] = useState<{ platform: string; handle: string }[]>([]);
+  const [accounts, setAccounts] = useState<{ platform: string; handle: string; followers?: number }[]>([]);
   const [newContentLink, setNewContentLink] = useState("");
   const [contactPoint, setContactPoint] = useState("");
   const [client, setClient] = useState("");
@@ -995,7 +995,7 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
       setEmail(influencer.email || "");
       setPhone(influencer.phone || "");
       setName(influencer.name || "");
-      setAccounts(influencer.accounts?.map(acc => ({ platform: acc.platform, handle: acc.handle })) || []);
+      setAccounts(influencer.accounts?.map(acc => ({ platform: acc.platform, handle: acc.handle, followers: acc.followers })) || []);
       setContactPoint(influencer.contactPoint || "");
       setClient(influencer.client || "");
       setTag1(influencer.tag1 || "");
@@ -1015,7 +1015,8 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
       .map(acc => ({
         platform: acc.platform,
         handle: acc.handle,
-        url: `https://${platformUrlMap[acc.platform] || ''}${acc.handle.replace('@', '')}`
+        url: `https://${platformUrlMap[acc.platform] || ''}${acc.handle.replace('@', '')}`,
+        followers: acc.followers || 0
       }));
     updateInfluencer.mutate({
       id: influencerId,
