@@ -79,8 +79,8 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   
   const { data: emailAccounts, isLoading: isLoadingAccounts } = useQuery<any[]>({
-    queryKey: ['/api/email/accounts', '1'],
-    queryFn: () => fetch('/api/email/accounts?workspaceId=1').then(r => r.json()),
+    queryKey: ['/api/workspaces', '1', 'email-accounts'],
+    queryFn: () => fetch('/api/workspaces/1/email-accounts').then(r => r.json()),
     enabled: open,
   });
   
