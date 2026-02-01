@@ -1,5 +1,5 @@
 import Layout from "@/components/layout";
-import { useCampaign, useUpdateCampaignItem, useAddInfluencersToCampaign, useCampaignContents, useCreateCampaignContent, useUpdateCampaignContent, useDeleteCampaignContent } from "@/hooks/use-campaigns";
+import { useCampaign, useUpdateCampaign, useUpdateCampaignItem, useAddInfluencersToCampaign, useCampaignContents, useCreateCampaignContent, useUpdateCampaignContent, useDeleteCampaignContent } from "@/hooks/use-campaigns";
 import { useInfluencers } from "@/hooks/use-influencers";
 import { useWorkspaces } from "@/hooks/use-workspaces";
 import { useRoute } from "wouter";
@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ArrowLeft, CheckCircle2, CircleDollarSign, FileText, Plus, Search, Users, Instagram, Youtube, Twitter, Save, MessageCircle, ExternalLink, Eye, Heart, MessageSquare, Share2, Trash2, Edit3, Image } from "lucide-react";
+import { ArrowLeft, CheckCircle2, CircleDollarSign, FileText, Plus, Search, Users, Instagram, Youtube, Twitter, Save, MessageCircle, ExternalLink, Eye, Heart, MessageSquare, Share2, Trash2, Edit3, Image, Pencil } from "lucide-react";
 import { Link } from "wouter";
 import { format } from "date-fns";
 import { KO } from "@/i18n/ko";
@@ -27,6 +27,13 @@ import { CampaignCommunication } from "@/components/campaign-communication";
 import { CampaignOperations } from "@/components/campaign-operations";
 import type { CampaignContent } from "@shared/schema";
 import { Settings2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+
+interface Client {
+  id: number;
+  workspaceId: number;
+  name: string;
+}
 
 export default function CampaignDetail() {
   const [, params] = useRoute("/campaigns/:id");
@@ -35,10 +42,44 @@ export default function CampaignDetail() {
   const { data: workspaces } = useWorkspaces();
   const workspaceId = workspaces?.[0]?.id;
   const updateItem = useUpdateCampaignItem(id);
+  const updateCampaign = useUpdateCampaign();
   const { toast } = useToast();
+
+  const { data: clients } = useQuery<Client[]>({
+    queryKey: ['/api/clients', workspaceId],
+    queryFn: async () => {
+      const res = await fetch(`/api/clients?workspaceId=${workspaceId}`);
+      if (!res.ok) throw new Error("Failed to fetch clients");
+      return res.json();
+    },
+    enabled: !!workspaceId,
+  });
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedLineItem, setSelectedLineItem] = useState<CampaignLineItem | null>(null);
+  const [isEditingClient, setIsEditingClient] = useState(false);
+  const [selectedClientId, setSelectedClientId] = useState<string>("");
+
+  const handleClientChange = () => {
+    if (!selectedClientId) return;
+    const selectedClient = clients?.find(c => c.id === parseInt(selectedClientId));
+    updateCampaign.mutate({
+      id,
+      data: {
+        clientId: parseInt(selectedClientId),
+        client: selectedClient?.name || ""
+      }
+    }, {
+      onSuccess: () => {
+        toast({ title: "클라이언트가 변경되었습니다." });
+        setIsEditingClient(false);
+        setSelectedClientId("");
+      },
+      onError: () => {
+        toast({ variant: "destructive", title: "변경 실패" });
+      }
+    });
+  };
   
   // Content tab state
   const { data: contents, isLoading: contentsLoading } = useCampaignContents(id);
@@ -128,7 +169,39 @@ export default function CampaignDetail() {
                 {campaign.status === 'active' ? KO.status.active : campaign.status}
               </Badge>
             </div>
-            <p className="text-muted-foreground mt-2 text-lg">클라이언트: {campaign.client}</p>
+            <div className="flex items-center gap-2 mt-2">
+              {isEditingClient ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground text-lg">클라이언트:</span>
+                  <Select value={selectedClientId} onValueChange={setSelectedClientId}>
+                    <SelectTrigger className="w-[200px] h-8" data-testid="select-edit-client">
+                      <SelectValue placeholder="클라이언트 선택" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clients?.map((client) => (
+                        <SelectItem key={client.id} value={client.id.toString()}>
+                          {client.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button size="sm" onClick={handleClientChange} disabled={!selectedClientId || updateCampaign.isPending} data-testid="button-save-client">
+                    <Save className="w-3 h-3 mr-1" />
+                    저장
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => { setIsEditingClient(false); setSelectedClientId(""); }} data-testid="button-cancel-client">
+                    취소
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <p className="text-muted-foreground text-lg">클라이언트: {campaign.client || "미설정"}</p>
+                  <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setIsEditingClient(true)} data-testid="button-edit-client">
+                    <Pencil className="w-3.5 h-3.5" />
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
           <div className="text-right">
             <div className="text-sm text-muted-foreground mb-1">총 예산</div>
