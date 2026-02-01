@@ -54,6 +54,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<number | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -82,8 +83,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       }
     });
   };
-
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const NavItem = ({ href, icon: Icon, label, onClick }: { href: string; icon: any; label: string; onClick?: () => void }) => {
     const isActive = location === href;
