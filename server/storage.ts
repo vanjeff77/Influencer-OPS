@@ -58,6 +58,7 @@ export interface IStorage {
 
   // Email
   getEmailAccounts(workspaceId: number): Promise<EmailAccount[]>;
+  getEmailAccountById(accountId: number): Promise<EmailAccount | null>;
   createEmailAccount(workspaceId: number, account: any): Promise<EmailAccount>;
   getEmailThreads(accountId: number): Promise<EmailThread[]>;
   createEmailThread(thread: any): Promise<EmailThread>;
@@ -344,6 +345,11 @@ export class DatabaseStorage implements IStorage {
 
   async getEmailAccounts(workspaceId: number): Promise<EmailAccount[]> {
     return await db.select().from(emailAccounts).where(eq(emailAccounts.workspaceId, workspaceId));
+  }
+
+  async getEmailAccountById(accountId: number): Promise<EmailAccount | null> {
+    const [account] = await db.select().from(emailAccounts).where(eq(emailAccounts.id, accountId));
+    return account || null;
   }
 
   async createEmailAccount(workspaceId: number, account: any): Promise<EmailAccount> {

@@ -2,23 +2,31 @@ import Imap from 'imap';
 import { simpleParser, ParsedMail } from 'mailparser';
 import crypto from 'crypto';
 
+// Encryption key getter - must match routes.ts
+const getEncryptionKey = (): Buffer => {
+  const key = process.env.ENCRYPTION_KEY || process.env.SESSION_SECRET || 'default-secret-key-32chars-long!!';
+  return Buffer.from(key.slice(0, 32).padEnd(32, '0'));
+};
+
 export function decryptPassword(encryptedPassword: string): string {
   // If not encrypted (no colon separator), return as-is
   if (!encryptedPassword.includes(':')) {
     return encryptedPassword;
   }
   
-  // Must match the encryption in routes.ts
-  const key = process.env.SESSION_SECRET || 'default-secret-key-32chars-long!!';
-  const keyBuffer = Buffer.from(key.slice(0, 32).padEnd(32, '0'));
-  
-  const [ivHex, encrypted] = encryptedPassword.split(':');
-  const iv = Buffer.from(ivHex, 'hex');
-  
-  const decipher = crypto.createDecipheriv('aes-256-cbc', keyBuffer, iv);
-  let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-  decrypted += decipher.final('utf8');
-  return decrypted;
+  try {
+    const keyBuffer = getEncryptionKey();
+    const [ivHex, encrypted] = encryptedPassword.split(':');
+    const iv = Buffer.from(ivHex, 'hex');
+    
+    const decipher = crypto.createDecipheriv('aes-256-cbc', keyBuffer, iv);
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+  } catch (err: any) {
+    console.error('Password decryption failed - account may need to be re-registered');
+    throw new Error('비밀번호 복호화 실패. 계정을 다시 등록해 주세요.');
+  }
 }
 
 export interface ImapConfig {
@@ -42,13 +50,19 @@ export interface EmailMessage {
 
 export function createImapConnection(config: ImapConfig): Promise<Imap> {
   return new Promise((resolve, reject) => {
+    // Only disable certificate verification in development mode
+    const isDev = process.env.NODE_ENV === 'development';
+    
     const imap = new Imap({
       user: config.user,
       password: config.password,
       host: config.host,
       port: config.port,
       tls: config.tls,
-      tlsOptions: { rejectUnauthorized: false },
+      tlsOptions: { 
+        rejectUnauthorized: !isDev, // Enable certificate verification in production
+        servername: config.host, // Required for SNI
+      },
       connTimeout: 10000,
       authTimeout: 10000,
     });

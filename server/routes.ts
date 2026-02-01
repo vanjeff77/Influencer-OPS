@@ -342,11 +342,17 @@ export async function registerRoutes(
     smtpPort: z.string().default("587")
   });
   
+  // Encryption key - use ENCRYPTION_KEY if available, otherwise fall back to SESSION_SECRET
+  const getEncryptionKey = (): Buffer => {
+    const key = process.env.ENCRYPTION_KEY || process.env.SESSION_SECRET || 'default-secret-key-32chars-long!!';
+    return Buffer.from(key.slice(0, 32).padEnd(32, '0'));
+  };
+  
   // Simple encryption for IMAP password using crypto
   const encryptPassword = (password: string): string => {
-    const key = process.env.SESSION_SECRET || 'default-secret-key-32chars-long!!';
+    const keyBuffer = getEncryptionKey();
     const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(key.slice(0, 32).padEnd(32, '0')), iv);
+    const cipher = crypto.createCipheriv('aes-256-cbc', keyBuffer, iv);
     let encrypted = cipher.update(password, 'utf8', 'hex');
     encrypted += cipher.final('hex');
     return iv.toString('hex') + ':' + encrypted;
@@ -479,9 +485,8 @@ export async function registerRoutes(
     const accountId = parseInt(req.params.id);
     
     try {
-      // Get account info
-      const accounts = await storage.getEmailAccounts(1); // TODO: get proper workspaceId
-      const account = accounts.find(a => a.id === accountId);
+      // Get account info by ID directly
+      const account = await storage.getEmailAccountById(accountId);
       
       if (!account) {
         return res.status(404).json({ message: "계정을 찾을 수 없습니다" });
