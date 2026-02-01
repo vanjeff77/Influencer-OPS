@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { KO } from "@/i18n/ko";
-import { Plus, Pencil, Trash2, Building2, Users, Shield } from "lucide-react";
+import { Plus, Pencil, Trash2, Building2, Users, Shield, FileText, Star } from "lucide-react";
 
 interface Client {
   id: number;
@@ -261,7 +261,7 @@ export default function SettingsPage() {
       )}
 
       <Tabs defaultValue="clients">
-        <TabsList className={`grid w-full ${isOwner ? 'grid-cols-2' : 'grid-cols-1'} md:w-auto md:inline-flex`}>
+        <TabsList className={`grid w-full ${isOwner ? 'grid-cols-3' : 'grid-cols-2'} md:w-auto md:inline-flex`}>
           <TabsTrigger value="clients" className="gap-2" data-testid="tab-clients">
             <Building2 className="w-4 h-4" />
             {KO.settings.clientsTab}
@@ -272,6 +272,10 @@ export default function SettingsPage() {
               {KO.settings.usersTab}
             </TabsTrigger>
           )}
+          <TabsTrigger value="templates" className="gap-2" data-testid="tab-templates">
+            <FileText className="w-4 h-4" />
+            {KO.settings.templatesTab}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="clients" className="mt-6">
@@ -551,6 +555,10 @@ export default function SettingsPage() {
           </Card>
           </TabsContent>
         )}
+
+        <TabsContent value="templates" className="mt-6">
+          <ContractTemplatesSection workspaceId={workspaceId} />
+        </TabsContent>
       </Tabs>
 
       {editingClient && (
@@ -666,5 +674,224 @@ export default function SettingsPage() {
       )}
       </div>
     </Layout>
+  );
+}
+
+// Contract Templates Section Component
+interface ContractTemplate {
+  id: number;
+  workspaceId: number;
+  name: string;
+  description: string | null;
+  content: string;
+  variables: string[] | null;
+  isDefault: boolean | null;
+  createdAt?: string | null;
+}
+
+function ContractTemplatesSection({ workspaceId }: { workspaceId: number }) {
+  const { toast } = useToast();
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<ContractTemplate | null>(null);
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [content, setContent] = useState("");
+  const [isDefault, setIsDefault] = useState(false);
+
+  const { data: templates = [], isLoading } = useQuery<ContractTemplate[]>({
+    queryKey: ['/api/workspaces', workspaceId, 'contract-templates'],
+    queryFn: () => fetch(`/api/workspaces/${workspaceId}/contract-templates`).then(r => r.json()),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (data: { name: string; description?: string; content: string; isDefault?: boolean }) =>
+      apiRequest('POST', `/api/workspaces/${workspaceId}/contract-templates`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/workspaces', workspaceId, 'contract-templates'] });
+      toast({ title: KO.contractTemplates.created });
+      resetForm();
+      setDialogOpen(false);
+    },
+    onError: () => toast({ title: KO.toast.saveFailed, variant: "destructive" }),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Partial<ContractTemplate> }) =>
+      apiRequest('PATCH', `/api/workspaces/${workspaceId}/contract-templates/${id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/workspaces', workspaceId, 'contract-templates'] });
+      toast({ title: KO.contractTemplates.updated });
+      resetForm();
+      setEditingTemplate(null);
+    },
+    onError: () => toast({ title: KO.toast.saveFailed, variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) =>
+      apiRequest('DELETE', `/api/workspaces/${workspaceId}/contract-templates/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/workspaces', workspaceId, 'contract-templates'] });
+      toast({ title: KO.contractTemplates.deleted });
+    },
+    onError: () => toast({ title: KO.toast.deleteFailed, variant: "destructive" }),
+  });
+
+  const resetForm = () => {
+    setName("");
+    setDescription("");
+    setContent("");
+    setIsDefault(false);
+  };
+
+  const handleEdit = (template: ContractTemplate) => {
+    setEditingTemplate(template);
+    setName(template.name);
+    setDescription(template.description || "");
+    setContent(template.content);
+    setIsDefault(template.isDefault || false);
+  };
+
+  const handleSubmit = () => {
+    if (!name.trim() || !content.trim()) {
+      toast({ title: "이름과 내용은 필수입니다.", variant: "destructive" });
+      return;
+    }
+    if (editingTemplate) {
+      updateMutation.mutate({ id: editingTemplate.id, data: { name, description, content, isDefault } });
+    } else {
+      createMutation.mutate({ name, description, content, isDefault });
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between gap-4">
+        <div>
+          <CardTitle className="text-lg">{KO.contractTemplates.title}</CardTitle>
+          <CardDescription>{KO.contractTemplates.description}</CardDescription>
+        </div>
+        <Dialog open={dialogOpen && !editingTemplate} onOpenChange={(open) => {
+          setDialogOpen(open);
+          if (!open) resetForm();
+        }}>
+          <DialogTrigger asChild>
+            <Button size="sm" className="gap-1" data-testid="button-add-template">
+              <Plus className="w-4 h-4" />
+              {KO.contractTemplates.add}
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>{KO.contractTemplates.add}</DialogTitle>
+              <DialogDescription>{KO.contractTemplates.variableHint}</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div>
+                <Label>{KO.contractTemplates.name}</Label>
+                <Input value={name} onChange={(e) => setName(e.target.value)} data-testid="input-template-name" />
+              </div>
+              <div>
+                <Label>{KO.contractTemplates.descriptionLabel}</Label>
+                <Input value={description} onChange={(e) => setDescription(e.target.value)} data-testid="input-template-description" />
+              </div>
+              <div>
+                <Label>{KO.contractTemplates.content}</Label>
+                <Textarea value={content} onChange={(e) => setContent(e.target.value)} rows={10} className="font-mono text-sm" data-testid="textarea-template-content" />
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox id="is-default" checked={isDefault} onCheckedChange={(v) => setIsDefault(!!v)} data-testid="checkbox-template-default" />
+                <label htmlFor="is-default" className="text-sm">{KO.contractTemplates.setAsDefault}</label>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setDialogOpen(false)}>{KO.common.cancel}</Button>
+                <Button onClick={handleSubmit} disabled={createMutation.isPending}>{KO.common.save}</Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <p className="text-muted-foreground text-sm">로딩 중...</p>
+        ) : templates.length === 0 ? (
+          <p className="text-muted-foreground text-sm">{KO.contractTemplates.noTemplates}</p>
+        ) : (
+          <div className="space-y-3">
+            {templates.map((template) => (
+              <div key={template.id} className="flex items-center justify-between p-4 border rounded-md">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{template.name}</span>
+                    {template.isDefault && (
+                      <Badge variant="secondary" className="gap-1">
+                        <Star className="w-3 h-3" /> 기본
+                      </Badge>
+                    )}
+                  </div>
+                  {template.description && <p className="text-sm text-muted-foreground">{template.description}</p>}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button size="icon" variant="ghost" onClick={() => handleEdit(template)} data-testid={`button-edit-template-${template.id}`}>
+                    <Pencil className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => {
+                      if (confirm(KO.settings.confirmDelete)) {
+                        deleteMutation.mutate(template.id);
+                      }
+                    }}
+                    data-testid={`button-delete-template-${template.id}`}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+
+      {editingTemplate && (
+        <Dialog open={!!editingTemplate} onOpenChange={(open) => {
+          if (!open) {
+            setEditingTemplate(null);
+            resetForm();
+          }
+        }}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>{KO.common.edit}</DialogTitle>
+              <DialogDescription>{KO.contractTemplates.variableHint}</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div>
+                <Label>{KO.contractTemplates.name}</Label>
+                <Input value={name} onChange={(e) => setName(e.target.value)} data-testid="input-edit-template-name" />
+              </div>
+              <div>
+                <Label>{KO.contractTemplates.descriptionLabel}</Label>
+                <Input value={description} onChange={(e) => setDescription(e.target.value)} data-testid="input-edit-template-description" />
+              </div>
+              <div>
+                <Label>{KO.contractTemplates.content}</Label>
+                <Textarea value={content} onChange={(e) => setContent(e.target.value)} rows={10} className="font-mono text-sm" data-testid="textarea-edit-template-content" />
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox id="edit-is-default" checked={isDefault} onCheckedChange={(v) => setIsDefault(!!v)} data-testid="checkbox-edit-template-default" />
+                <label htmlFor="edit-is-default" className="text-sm">{KO.contractTemplates.setAsDefault}</label>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => { setEditingTemplate(null); resetForm(); }}>{KO.common.cancel}</Button>
+                <Button onClick={handleSubmit} disabled={updateMutation.isPending}>{KO.common.save}</Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+    </Card>
   );
 }
