@@ -260,15 +260,17 @@ export default function SettingsPage() {
       )}
 
       <Tabs defaultValue="clients">
-        <TabsList className="grid w-full grid-cols-2 md:w-auto md:inline-flex">
+        <TabsList className={`grid w-full ${isOwner ? 'grid-cols-2' : 'grid-cols-1'} md:w-auto md:inline-flex`}>
           <TabsTrigger value="clients" className="gap-2" data-testid="tab-clients">
             <Building2 className="w-4 h-4" />
             {KO.settings.clientsTab}
           </TabsTrigger>
-          <TabsTrigger value="users" className="gap-2" data-testid="tab-users">
-            <Users className="w-4 h-4" />
-            {KO.settings.usersTab}
-          </TabsTrigger>
+          {isOwner && (
+            <TabsTrigger value="users" className="gap-2" data-testid="tab-users">
+              <Users className="w-4 h-4" />
+              {KO.settings.usersTab}
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="clients" className="mt-6">
@@ -383,8 +385,9 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="users" className="mt-6">
-          <Card>
+        {isOwner && (
+          <TabsContent value="users" className="mt-6">
+            <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-4">
               <div>
                 <CardTitle className="text-lg">{KO.settings.users}</CardTitle>
@@ -545,7 +548,8 @@ export default function SettingsPage() {
               )}
             </CardContent>
           </Card>
-        </TabsContent>
+          </TabsContent>
+        )}
       </Tabs>
 
       {editingClient && (
