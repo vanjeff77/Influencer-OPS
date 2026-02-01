@@ -1063,7 +1063,7 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
     setAccounts(accounts.filter((_, i) => i !== index));
   };
 
-  const updateAccount = (index: number, field: 'platform' | 'handle', value: string) => {
+  const updateAccount = (index: number, field: 'platform' | 'handle' | 'followers', value: string | number) => {
     const newAccounts = [...accounts];
     newAccounts[index] = { ...newAccounts[index], [field]: value };
     setAccounts(newAccounts);
@@ -1241,9 +1241,9 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
                     </Button>
                   </div>
                   {accounts.map((acc, index) => (
-                    <div key={index} className="flex gap-2 items-center">
+                    <div key={index} className="flex gap-2 items-center flex-wrap">
                       <Select value={acc.platform} onValueChange={v => updateAccount(index, 'platform', v)}>
-                        <SelectTrigger className="w-28" data-testid={`select-account-platform-${index}`}>
+                        <SelectTrigger className="w-24" data-testid={`select-account-platform-${index}`}>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -1258,8 +1258,16 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
                         value={acc.handle} 
                         onChange={e => updateAccount(index, 'handle', e.target.value)} 
                         placeholder={KO.pages.discover.handlePlaceholder} 
-                        className="flex-1"
+                        className="flex-1 min-w-[100px]"
                         data-testid={`input-account-handle-${index}`}
+                      />
+                      <Input 
+                        type="number"
+                        value={acc.followers || ''} 
+                        onChange={e => updateAccount(index, 'followers', parseInt(e.target.value) || 0)} 
+                        placeholder={KO.pages.discover.followers}
+                        className="w-24"
+                        data-testid={`input-account-followers-${index}`}
                       />
                       <Button 
                         variant="ghost" 
