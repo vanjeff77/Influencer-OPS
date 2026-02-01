@@ -16,6 +16,12 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { KO } from "@/i18n/ko";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SiGmail } from "react-icons/si";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+const EMAIL_PRESETS: Record<string, { imapServer: string; imapPort: string; smtpServer: string; smtpPort: string }> = {
+  naver: { imapServer: "imap.naver.com", imapPort: "993", smtpServer: "smtp.naver.com", smtpPort: "587" },
+  google: { imapServer: "imap.gmail.com", imapPort: "993", smtpServer: "smtp.gmail.com", smtpPort: "587" },
+};
 
 export default function EmailCenter() {
   const { data: workspaces } = useWorkspaces();
@@ -33,7 +39,15 @@ export default function EmailCenter() {
   const [isConnectOpen, setIsConnectOpen] = useState(false);
   const [composeData, setComposeData] = useState({ to: "", subject: "", body: "" });
   const [connectType, setConnectType] = useState<"gmail" | "imap" | null>(null);
+  const [emailPreset, setEmailPreset] = useState<string>("");
   const [imapData, setImapData] = useState({ email: "", password: "", imapServer: "", imapPort: "993", smtpServer: "", smtpPort: "587" });
+
+  const handlePresetChange = (preset: string) => {
+    setEmailPreset(preset);
+    if (preset && EMAIL_PRESETS[preset]) {
+      setImapData(prev => ({ ...prev, ...EMAIL_PRESETS[preset] }));
+    }
+  };
 
   const registerGmail = useMutation({
     mutationFn: async () => {
@@ -214,31 +228,43 @@ export default function EmailCenter() {
                   ) : (
                     <div className="grid gap-4 py-4">
                       <div className="grid gap-2">
+                        <label className="text-sm font-medium">이메일 서비스 선택</label>
+                        <Select value={emailPreset} onValueChange={handlePresetChange}>
+                          <SelectTrigger data-testid="select-email-preset">
+                            <SelectValue placeholder="이메일 서비스를 선택하세요" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="naver">네이버 메일</SelectItem>
+                            <SelectItem value="google">Gmail (앱 비밀번호 사용)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid gap-2">
                         <label className="text-sm font-medium">{KO.pages.email.emailAddress}</label>
                         <Input value={imapData.email} onChange={e => setImapData({...imapData, email: e.target.value})} placeholder="you@company.com" data-testid="input-imap-email" />
                       </div>
                       <div className="grid gap-2">
                         <label className="text-sm font-medium">{KO.pages.email.password}</label>
-                        <Input type="password" value={imapData.password} onChange={e => setImapData({...imapData, password: e.target.value})} data-testid="input-imap-password" />
+                        <Input type="password" value={imapData.password} onChange={e => setImapData({...imapData, password: e.target.value})} placeholder="앱 비밀번호를 입력하세요" data-testid="input-imap-password" />
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="grid gap-2">
                           <label className="text-sm font-medium">{KO.pages.email.imapServer}</label>
-                          <Input value={imapData.imapServer} onChange={e => setImapData({...imapData, imapServer: e.target.value})} placeholder="imap.gmail.com" data-testid="input-imap-server" />
+                          <Input value={imapData.imapServer} onChange={e => setImapData({...imapData, imapServer: e.target.value})} placeholder="imap.naver.com" data-testid="input-imap-server" readOnly={!!emailPreset} className={emailPreset ? "bg-muted" : ""} />
                         </div>
                         <div className="grid gap-2">
                           <label className="text-sm font-medium">{KO.pages.email.imapPort}</label>
-                          <Input value={imapData.imapPort} onChange={e => setImapData({...imapData, imapPort: e.target.value})} data-testid="input-imap-port" />
+                          <Input value={imapData.imapPort} onChange={e => setImapData({...imapData, imapPort: e.target.value})} data-testid="input-imap-port" readOnly={!!emailPreset} className={emailPreset ? "bg-muted" : ""} />
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="grid gap-2">
                           <label className="text-sm font-medium">{KO.pages.email.smtpServer}</label>
-                          <Input value={imapData.smtpServer} onChange={e => setImapData({...imapData, smtpServer: e.target.value})} placeholder="smtp.gmail.com" data-testid="input-smtp-server" />
+                          <Input value={imapData.smtpServer} onChange={e => setImapData({...imapData, smtpServer: e.target.value})} placeholder="smtp.naver.com" data-testid="input-smtp-server" readOnly={!!emailPreset} className={emailPreset ? "bg-muted" : ""} />
                         </div>
                         <div className="grid gap-2">
                           <label className="text-sm font-medium">{KO.pages.email.smtpPort}</label>
-                          <Input value={imapData.smtpPort} onChange={e => setImapData({...imapData, smtpPort: e.target.value})} data-testid="input-smtp-port" />
+                          <Input value={imapData.smtpPort} onChange={e => setImapData({...imapData, smtpPort: e.target.value})} data-testid="input-smtp-port" readOnly={!!emailPreset} className={emailPreset ? "bg-muted" : ""} />
                         </div>
                       </div>
                       <div className="flex gap-2 justify-end">

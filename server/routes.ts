@@ -1328,5 +1328,27 @@ async function seedDatabase() {
       keywords: { include: ["서머런칭", "Acme"], exclude: [] },
       status: "active"
     });
+
+    // Create default email account (Naver)
+    const defaultEmailPassword = process.env.DEFAULT_EMAIL_PASSWORD;
+    if (defaultEmailPassword) {
+      const crypto = await import('crypto');
+      const encryptionKey = process.env.ENCRYPTION_KEY || 'default-encryption-key-32bytes!';
+      const iv = crypto.randomBytes(16);
+      const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(encryptionKey.padEnd(32, '0').slice(0, 32)), iv);
+      let encrypted = cipher.update(defaultEmailPassword, 'utf8', 'hex');
+      encrypted += cipher.final('hex');
+      const encryptedPassword = iv.toString('hex') + ':' + encrypted;
+
+      await storage.createEmailAccount(ws.id, {
+        email: 'jaff77@naver.com',
+        provider: 'naver',
+        imapHost: 'imap.naver.com',
+        imapPort: 993,
+        smtpHost: 'smtp.naver.com',
+        smtpPort: 587,
+        imapPassword: encryptedPassword
+      });
+    }
   }
 }

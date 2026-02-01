@@ -40,3 +40,8 @@ waitForPort = 5000
 
 [agent]
 integrations = ["google-mail:1.0.0"]
+
+[userenv]
+
+[userenv.shared]
+DEFAULT_EMAIL_PASSWORD = "EPBF7B87947G"
