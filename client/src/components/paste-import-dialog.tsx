@@ -3,20 +3,44 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { KO } from "@/i18n/ko";
 import { apiRequest } from "@/lib/queryClient";
-import { AlertTriangle, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { AlertTriangle, CheckCircle, XCircle, Loader2, Plus, Trash2, ClipboardPaste } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
-const ALLOWED_COLUMNS = [
-  '닉네임', '플랫폼', '플랫폼 계정', '채널 URL', '팔로워', '컨택포인트',
-  '메모', '클라이언트', '세부유형', '컨택여부', '회신 여부', '협업 여부', '콘텐츠 완성본 링크', '단가 메모'
+const FIXED_COLUMNS = [
+  { key: 'nickname', label: '닉네임', required: true },
+  { key: 'handle', label: '플랫폼 계정', required: true },
+  { key: 'platform', label: '플랫폼', required: true },
+  { key: 'followers', label: '팔로워', required: false },
+  { key: 'contactPoint', label: '컨택포인트', required: false },
+  { key: 'memo', label: '메모', required: false },
+  { key: 'priceMemo', label: '단가 메모', required: false },
 ];
 
-interface ClientInfo {
-  id: number;
-  name: string;
+const ALLOWED_PLATFORMS = ['Instagram', 'YouTube', 'TikTok', 'X', 'Blog'];
+
+interface RowData {
+  nickname: string;
+  handle: string;
+  platform: string;
+  followers: string;
+  contactPoint: string;
+  memo: string;
+  priceMemo: string;
+}
+
+interface RowError {
+  [key: string]: string;
+}
+
+interface BatchResult {
+  index: number;
+  status: 'created' | 'failed';
+  reason?: string;
+  influencerId?: number;
 }
 
 interface PasteImportDialogProps {
@@ -24,445 +48,443 @@ interface PasteImportDialogProps {
   onOpenChange: (open: boolean) => void;
   workspaceId: number;
   onImportComplete: () => void;
-  clients?: ClientInfo[];
+  clients?: { id: number; name: string }[];
 }
 
-type ImportState = 'paste' | 'validated' | 'importing' | 'completed';
+const createEmptyRow = (): RowData => ({
+  nickname: '',
+  handle: '',
+  platform: '',
+  followers: '',
+  contactPoint: '',
+  memo: '',
+  priceMemo: '',
+});
 
-interface ValidationResult {
-  totalRows: number;
-  validRows: number;
-  skippedRows: number;
-  errorRows: number;
-  excludedColumns: string[];
-  invalidClientRows: { row: number; client: string }[];
-}
-
-interface ImportResult {
-  created: number;
-  updated: number;
-  skipped: number;
-  errors: { row: number; reason: string }[];
-}
-
-export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportComplete, clients = [] }: PasteImportDialogProps) {
+export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportComplete }: PasteImportDialogProps) {
   const { toast } = useToast();
-  const [state, setState] = useState<ImportState>('paste');
-  const [pastedData, setPastedData] = useState<string>('');
-  const [gridData, setGridData] = useState<string[][]>([]);
-  const [headers, setHeaders] = useState<string[]>([]);
-  const [validation, setValidation] = useState<ValidationResult | null>(null);
-  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [rows, setRows] = useState<RowData[]>([createEmptyRow()]);
+  const [errors, setErrors] = useState<Map<number, RowError>>(new Map());
+  const [isValidated, setIsValidated] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [results, setResults] = useState<BatchResult[] | null>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (open) {
-      setState('paste');
-      setPastedData('');
-      setGridData([]);
-      setHeaders([]);
-      setValidation(null);
-      setImportResult(null);
+      setRows([createEmptyRow()]);
+      setErrors(new Map());
+      setIsValidated(false);
+      setResults(null);
     }
   }, [open]);
 
-  const parseTsvWithQuotes = useCallback((text: string): string[][] => {
-    const rows: string[][] = [];
-    let currentRow: string[] = [];
-    let currentCell = '';
-    let inQuotes = false;
-    let i = 0;
-
-    while (i < text.length) {
-      const char = text[i];
-      const nextChar = text[i + 1];
-
-      if (inQuotes) {
-        if (char === '"' && nextChar === '"') {
-          currentCell += '"';
-          i += 2;
-        } else if (char === '"') {
-          inQuotes = false;
-          i++;
+  const updateCell = (rowIndex: number, key: keyof RowData, value: string) => {
+    setRows(prev => {
+      const newRows = [...prev];
+      newRows[rowIndex] = { ...newRows[rowIndex], [key]: value };
+      return newRows;
+    });
+    setIsValidated(false);
+    setErrors(prev => {
+      const newErrors = new Map(prev);
+      const rowErrors = newErrors.get(rowIndex);
+      if (rowErrors && rowErrors[key]) {
+        const { [key]: _, ...rest } = rowErrors;
+        if (Object.keys(rest).length === 0) {
+          newErrors.delete(rowIndex);
         } else {
-          currentCell += char;
-          i++;
-        }
-      } else {
-        if (char === '"') {
-          inQuotes = true;
-          i++;
-        } else if (char === '\t') {
-          currentRow.push(currentCell);
-          currentCell = '';
-          i++;
-        } else if (char === '\r' && nextChar === '\n') {
-          currentRow.push(currentCell);
-          rows.push(currentRow);
-          currentRow = [];
-          currentCell = '';
-          i += 2;
-        } else if (char === '\n') {
-          currentRow.push(currentCell);
-          rows.push(currentRow);
-          currentRow = [];
-          currentCell = '';
-          i++;
-        } else {
-          currentCell += char;
-          i++;
+          newErrors.set(rowIndex, rest);
         }
       }
-    }
+      return newErrors;
+    });
+  };
 
-    if (currentCell || currentRow.length > 0) {
-      currentRow.push(currentCell);
-      rows.push(currentRow);
-    }
+  const addRow = () => {
+    setRows(prev => [...prev, createEmptyRow()]);
+  };
 
-    return rows.filter(row => row.some(cell => cell.trim()));
-  }, []);
+  const removeRow = (index: number) => {
+    if (rows.length === 1) return;
+    setRows(prev => prev.filter((_, i) => i !== index));
+    setErrors(prev => {
+      const newErrors = new Map();
+      prev.forEach((err, idx) => {
+        if (idx < index) newErrors.set(idx, err);
+        else if (idx > index) newErrors.set(idx - 1, err);
+      });
+      return newErrors;
+    });
+  };
 
-  const parseData = useCallback((text: string) => {
-    if (!text.trim()) {
-      setGridData([]);
-      setHeaders([]);
-      return;
-    }
+  const parseFollowers = (value: string): number | null => {
+    if (!value.trim()) return null;
+    const cleaned = value.replace(/[,\s]/g, '');
+    const num = parseInt(cleaned, 10);
+    return isNaN(num) ? null : num;
+  };
 
-    const rows = parseTsvWithQuotes(text);
-    if (rows.length === 0) return;
-
-    const headerRow = rows[0] || [];
-    const dataRows = rows.slice(1);
-
-    setHeaders(headerRow);
-    setGridData(dataRows);
-  }, [parseTsvWithQuotes]);
+  const normalizePlatform = (value: string): string | null => {
+    const lower = value.toLowerCase().trim();
+    const mapping: Record<string, string> = {
+      'instagram': 'Instagram',
+      'insta': 'Instagram',
+      '인스타': 'Instagram',
+      '인스타그램': 'Instagram',
+      'youtube': 'YouTube',
+      'yt': 'YouTube',
+      '유튜브': 'YouTube',
+      'tiktok': 'TikTok',
+      '틱톡': 'TikTok',
+      'x': 'X',
+      'twitter': 'X',
+      '트위터': 'X',
+      'blog': 'Blog',
+      '블로그': 'Blog',
+      '네이버블로그': 'Blog',
+    };
+    return mapping[lower] || (ALLOWED_PLATFORMS.includes(value) ? value : null);
+  };
 
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     e.preventDefault();
     const text = e.clipboardData.getData('text');
-    setPastedData(text);
-    parseData(text);
-  }, [parseData]);
+    if (!text.trim()) return;
 
-  const handleValidate = useCallback(() => {
-    const excludedColumns = headers.filter(h => h.trim() && !ALLOWED_COLUMNS.includes(h.trim()));
-    const clientNames = clients.map(c => c.name.toLowerCase().trim());
-    
-    let validRows = 0;
-    let skippedRows = 0;
-    let errorRows = 0;
-    const invalidClientRows: { row: number; client: string }[] = [];
+    const lines = text.split(/\r?\n/).filter(line => line.trim());
+    const parsedRows: RowData[] = [];
 
-    const clientIdx = headers.findIndex(h => h.trim() === '클라이언트');
-
-    gridData.forEach((row, index) => {
-      if (!row || row.every(cell => !cell || !cell.trim())) {
-        skippedRows++;
-        return;
+    for (const line of lines) {
+      const cells = line.split('\t');
+      const row: RowData = {
+        nickname: (cells[0] || '').trim(),
+        handle: (cells[1] || '').trim(),
+        platform: (cells[2] || '').trim(),
+        followers: (cells[3] || '').trim(),
+        contactPoint: (cells[4] || '').trim(),
+        memo: (cells[5] || '').trim(),
+        priceMemo: (cells[6] || '').trim(),
+      };
+      if (row.nickname || row.handle || row.platform) {
+        parsedRows.push(row);
       }
+    }
 
-      const nicknameIdx = headers.findIndex(h => h.trim() === '닉네임');
-      const platformAccountIdx = headers.findIndex(h => h.trim() === '플랫폼 계정');
-      const channelUrlIdx = headers.findIndex(h => h.trim() === '채널 URL');
+    if (parsedRows.length > 0) {
+      setRows(parsedRows);
+      setIsValidated(false);
+      setErrors(new Map());
+      setResults(null);
+      toast({ title: `${parsedRows.length}개 행이 붙여넣기 되었습니다.` });
+    }
+  }, [toast]);
 
-      const nickname = nicknameIdx >= 0 ? (row[nicknameIdx] || '').trim() : '';
-      const platformAccount = platformAccountIdx >= 0 ? (row[platformAccountIdx] || '').trim() : '';
-      const channelUrl = channelUrlIdx >= 0 ? (row[channelUrlIdx] || '').trim() : '';
+  const validate = useCallback(async () => {
+    const newErrors = new Map<number, RowError>();
+    const seenHandles = new Map<string, number>();
 
-      if (!nickname && !platformAccount && !channelUrl) {
-        errorRows++;
+    rows.forEach((row, index) => {
+      const rowError: RowError = {};
+
+      if (!row.nickname.trim()) {
+        rowError.nickname = '닉네임은 필수입니다';
+      }
+      if (!row.handle.trim()) {
+        rowError.handle = '플랫폼 계정은 필수입니다';
+      }
+      if (!row.platform.trim()) {
+        rowError.platform = '플랫폼은 필수입니다';
       } else {
-        // Check client validity
-        if (clientIdx >= 0) {
-          const clientValue = (row[clientIdx] || '').trim();
-          if (clientValue && !clientNames.includes(clientValue.toLowerCase())) {
-            invalidClientRows.push({ row: index + 2, client: clientValue }); // +2 for 1-indexed + header row
-          }
+        const normalized = normalizePlatform(row.platform);
+        if (!normalized) {
+          rowError.platform = `허용된 플랫폼: ${ALLOWED_PLATFORMS.join(', ')}`;
         }
-        validRows++;
+      }
+
+      if (row.followers.trim()) {
+        const parsed = parseFollowers(row.followers);
+        if (parsed === null) {
+          rowError.followers = '숫자만 입력 가능합니다';
+        }
+      }
+
+      const handleKey = `${normalizePlatform(row.platform) || row.platform}:${row.handle.toLowerCase().trim()}`;
+      if (row.platform && row.handle) {
+        if (seenHandles.has(handleKey)) {
+          rowError.handle = `${seenHandles.get(handleKey)! + 1}번 행과 중복됩니다`;
+        } else {
+          seenHandles.set(handleKey, index);
+        }
+      }
+
+      if (Object.keys(rowError).length > 0) {
+        newErrors.set(index, rowError);
       }
     });
 
-    setValidation({
-      totalRows: gridData.length,
-      validRows,
-      skippedRows,
-      errorRows,
-      excludedColumns,
-      invalidClientRows
-    });
-    setState('validated');
-  }, [headers, gridData, clients]);
+    setErrors(newErrors);
+    setIsValidated(true);
+
+    if (newErrors.size === 0) {
+      toast({ title: '유효성 검사 통과', description: `${rows.length}개 행이 준비되었습니다.` });
+    } else {
+      toast({ title: '유효성 검사 실패', description: `${newErrors.size}개 행에 오류가 있습니다.`, variant: 'destructive' });
+    }
+  }, [rows, toast]);
 
   const handleImport = useCallback(async () => {
-    if (!workspaceId) return;
+    if (errors.size > 0) {
+      toast({ title: '오류를 먼저 수정해주세요', variant: 'destructive' });
+      return;
+    }
 
     setIsImporting(true);
-    setState('importing');
-
     try {
-      const rows = gridData.map(row => row.map(cell => cell || null));
-      const response = await apiRequest(
-        'POST',
-        `/api/workspaces/${workspaceId}/influencers/import`,
-        { headers, rows }
-      );
-      const result = await response.json() as ImportResult & { excludedColumns: string[] };
+      const items = rows.map(row => ({
+        nickname: row.nickname.trim(),
+        handle: row.handle.trim(),
+        platform: normalizePlatform(row.platform) || row.platform,
+        followers: parseFollowers(row.followers),
+        contactPoint: row.contactPoint.trim() || null,
+        memo: row.memo.trim() || null,
+        priceMemo: row.priceMemo.trim() || null,
+      }));
 
-      setImportResult({
-        created: result.created,
-        updated: result.updated,
-        skipped: result.skipped,
-        errors: result.errors || []
-      });
-      setState('completed');
+      const response = await apiRequest('POST', `/api/workspaces/${workspaceId}/influencers/batch`, { items });
+      const result = await response.json() as { createdCount: number; failedCount: number; results: BatchResult[] };
 
-      toast({
-        title: KO.pages.discover.importSuccess,
-        description: KO.pages.discover.importSuccessDesc
-      });
+      setResults(result.results);
 
-      onImportComplete();
-    } catch (err: any) {
-      let errorMessage = KO.pages.discover.importFailedDesc;
-      if (err?.message) {
-        errorMessage = err.message;
-      } else if (err instanceof Error) {
-        errorMessage = err.message;
+      if (result.createdCount > 0) {
+        toast({ title: `${result.createdCount}명 생성 완료`, description: result.failedCount > 0 ? `${result.failedCount}명 실패` : undefined });
+        onImportComplete();
+      } else {
+        toast({ title: '생성 실패', description: '모든 항목이 실패했습니다.', variant: 'destructive' });
       }
-      toast({
-        title: KO.pages.discover.importFailed,
-        description: errorMessage,
-        variant: "destructive"
-      });
-      setState('validated');
+    } catch (err: any) {
+      toast({ title: '일괄 추가 실패', description: err.message || '오류가 발생했습니다.', variant: 'destructive' });
     } finally {
       setIsImporting(false);
     }
-  }, [workspaceId, headers, gridData, toast, onImportComplete]);
+  }, [rows, errors, workspaceId, toast, onImportComplete]);
 
-  const handleClose = () => {
-    onOpenChange(false);
+  const keepFailedRows = () => {
+    if (!results) return;
+    const failedIndices = results.filter(r => r.status === 'failed').map(r => r.index);
+    const failedRows = rows.filter((_, i) => failedIndices.includes(i));
+    if (failedRows.length > 0) {
+      setRows(failedRows);
+      setResults(null);
+      setIsValidated(false);
+      setErrors(new Map());
+    }
   };
+
+  const getRowStatus = (index: number): 'error' | 'success' | 'failed' | null => {
+    if (results) {
+      const result = results.find(r => r.index === index);
+      if (result) return result.status === 'created' ? 'success' : 'failed';
+    }
+    if (errors.has(index)) return 'error';
+    return null;
+  };
+
+  const createdCount = results?.filter(r => r.status === 'created').length || 0;
+  const failedCount = results?.filter(r => r.status === 'failed').length || 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>{KO.pages.discover.importTitle}</DialogTitle>
-          <DialogDescription>{KO.pages.discover.importDesc}</DialogDescription>
+          <DialogTitle>인플루언서 일괄 추가</DialogTitle>
+          <DialogDescription>
+            엑셀에서 복사한 데이터를 그대로 붙여넣으면 여러 인플루언서를 한 번에 추가할 수 있습니다.
+          </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 min-h-0 flex flex-col gap-4">
-          {state === 'paste' && (
-            <>
-              <textarea
-                ref={textareaRef}
-                className="w-full h-32 p-3 border rounded-md font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary"
-                placeholder="엑셀이나 구글시트에서 표를 복사한 후 여기에 붙여넣기 (Ctrl+V)..."
-                value={pastedData}
-                onChange={(e) => {
-                  setPastedData(e.target.value);
-                  parseData(e.target.value);
-                }}
-                onPaste={handlePaste}
-                data-testid="textarea-paste-data"
-              />
-
-              {gridData.length > 0 && (
-                <div className="flex-1 min-h-0 border rounded-md overflow-hidden">
-                  <ScrollArea className="h-64">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
-                        <thead className="bg-muted sticky top-0">
-                          <tr>
-                            <th className="px-2 py-1 text-left font-medium border-r bg-muted">#</th>
-                            {headers.map((h, i) => (
-                              <th key={i} className="px-2 py-1 text-left font-medium border-r whitespace-nowrap">
-                                {h}
-                                {!ALLOWED_COLUMNS.includes(h.trim()) && (
-                                  <Badge variant="outline" className="ml-1 text-orange-500 border-orange-300">{KO.pages.discover.excludedBadge}</Badge>
-                                )}
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {gridData.slice(0, 50).map((row, rowIdx) => (
-                            <tr key={rowIdx} className="border-b hover:bg-muted/50">
-                              <td className="px-2 py-1 text-muted-foreground border-r">{rowIdx + 1}</td>
-                              {row.map((cell, cellIdx) => (
-                                <td key={cellIdx} className="px-2 py-1 border-r max-w-[200px] align-top">
-                                  <div className="whitespace-pre-wrap break-words line-clamp-3" title={cell || ''}>
-                                    {cell || '-'}
-                                  </div>
-                                </td>
-                              ))}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      {gridData.length > 50 && (
-                        <div className="p-2 text-center text-xs text-muted-foreground">
-                          ...외 {gridData.length - 50}행 더 있음
-                        </div>
-                      )}
-                    </div>
-                  </ScrollArea>
-                </div>
-              )}
-            </>
-          )}
-
-          {(state === 'validated' || state === 'importing') && validation && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-4 gap-3">
-                <div className="p-3 bg-muted rounded-md text-center">
-                  <div className="text-2xl font-bold">{validation.totalRows}</div>
-                  <div className="text-xs text-muted-foreground">{KO.pages.discover.totalRows}</div>
-                </div>
-                <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-md text-center">
-                  <div className="text-2xl font-bold text-green-600">{validation.validRows}</div>
-                  <div className="text-xs text-muted-foreground">{KO.pages.discover.validRows}</div>
-                </div>
-                <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-md text-center">
-                  <div className="text-2xl font-bold text-yellow-600">{validation.skippedRows}</div>
-                  <div className="text-xs text-muted-foreground">{KO.pages.discover.skippedRows}</div>
-                </div>
-                <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-md text-center">
-                  <div className="text-2xl font-bold text-red-600">{validation.errorRows}</div>
-                  <div className="text-xs text-muted-foreground">{KO.pages.discover.errorRows}</div>
-                </div>
-              </div>
-
-              {validation.excludedColumns.length > 0 && (
-                <Alert className="border-orange-300 bg-orange-50 dark:bg-orange-900/20">
-                  <AlertTriangle className="w-4 h-4 text-orange-500" />
-                  <AlertDescription className="text-sm">
-                    <span className="font-medium">
-                      {KO.pages.discover.excludedColumnsWarning.replace('{n}', validation.excludedColumns.length.toString())}
-                    </span>
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {validation.excludedColumns.map((col, i) => (
-                        <Badge key={i} variant="outline" className="text-orange-600">{col}</Badge>
-                      ))}
-                    </div>
-                  </AlertDescription>
-                </Alert>
-              )}
-
-              {validation.invalidClientRows.length > 0 && (
-                <Alert className="border-red-300 bg-red-50 dark:bg-red-900/20">
-                  <XCircle className="w-4 h-4 text-red-500" />
-                  <AlertDescription className="text-sm">
-                    <span className="font-medium text-red-700 dark:text-red-400">
-                      존재하지 않는 클라이언트가 {validation.invalidClientRows.length}개 행에서 발견되었습니다.
-                    </span>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      설정 → 클라이언트에 등록된 클라이언트만 사용할 수 있습니다. 아래 클라이언트를 수정하거나 설정에서 먼저 등록하세요.
-                    </p>
-                    <div className="mt-2 max-h-[100px] overflow-y-auto">
-                      {validation.invalidClientRows.slice(0, 10).map((item, i) => (
-                        <div key={i} className="text-xs text-red-600 dark:text-red-400">
-                          행 {item.row}: "<span className="font-medium">{item.client}</span>"
-                        </div>
-                      ))}
-                      {validation.invalidClientRows.length > 10 && (
-                        <div className="text-xs text-muted-foreground mt-1">
-                          ... 그 외 {validation.invalidClientRows.length - 10}개 더
-                        </div>
-                      )}
-                    </div>
-                  </AlertDescription>
-                </Alert>
-              )}
-            </div>
-          )}
-
-          {state === 'completed' && importResult && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-green-600">
-                <CheckCircle className="w-5 h-5" />
-                <span className="font-medium">{KO.pages.discover.importResults}</span>
-              </div>
-              
-              <div className="grid grid-cols-4 gap-3">
-                <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-md text-center">
-                  <div className="text-2xl font-bold text-green-600">{importResult.created}</div>
-                  <div className="text-xs text-muted-foreground">{KO.pages.discover.created}</div>
-                </div>
-                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md text-center">
-                  <div className="text-2xl font-bold text-blue-600">{importResult.updated}</div>
-                  <div className="text-xs text-muted-foreground">{KO.pages.discover.updated}</div>
-                </div>
-                <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-md text-center">
-                  <div className="text-2xl font-bold text-yellow-600">{importResult.skipped}</div>
-                  <div className="text-xs text-muted-foreground">{KO.pages.discover.skipped}</div>
-                </div>
-                <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-md text-center">
-                  <div className="text-2xl font-bold text-red-600">{importResult.errors.length}</div>
-                  <div className="text-xs text-muted-foreground">{KO.pages.discover.errors}</div>
-                </div>
-              </div>
-
-              {importResult.errors.length > 0 && (
-                <ScrollArea className="h-32 border rounded-md p-2">
-                  {importResult.errors.map((err, i) => (
-                    <div key={i} className="flex items-center gap-2 text-sm text-red-600 py-1">
-                      <XCircle className="w-3 h-3" />
-                      <span>행 {err.row}: {err.reason}</span>
-                    </div>
-                  ))}
-                </ScrollArea>
-              )}
-            </div>
-          )}
+        <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md p-3 text-sm text-blue-700 dark:text-blue-300 flex items-start gap-2">
+          <ClipboardPaste className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>테이블 아무 곳에서나 Ctrl+V (Cmd+V)로 붙여넣기하세요. 열 순서: 닉네임, 플랫폼 계정, 플랫폼, 팔로워, 컨택포인트, 메모, 단가 메모</span>
         </div>
 
-        <div className="flex justify-end gap-2 pt-4 border-t">
-          <Button variant="outline" onClick={handleClose} data-testid="button-cancel-import">
-            {state === 'completed' ? KO.common.close : KO.common.cancel}
+        {results && (
+          <div className="flex items-center gap-4 p-3 bg-muted rounded-md">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="w-5 h-5 text-green-500" />
+              <span className="font-medium">성공: {createdCount}건</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <XCircle className="w-5 h-5 text-red-500" />
+              <span className="font-medium">실패: {failedCount}건</span>
+            </div>
+            {failedCount > 0 && (
+              <Button variant="outline" size="sm" onClick={keepFailedRows}>
+                실패한 행만 남기기
+              </Button>
+            )}
+          </div>
+        )}
+
+        <div 
+          ref={gridRef}
+          className="flex-1 min-h-0 border rounded-md overflow-hidden"
+          onPaste={handlePaste}
+          tabIndex={0}
+        >
+          <ScrollArea className="h-[400px]">
+            <table className="w-full text-sm border-collapse">
+              <thead className="bg-muted sticky top-0 z-10">
+                <tr>
+                  <th className="w-10 px-2 py-2 text-center font-medium border-b border-r">#</th>
+                  {FIXED_COLUMNS.map(col => (
+                    <th key={col.key} className="px-2 py-2 text-left font-medium border-b border-r whitespace-nowrap">
+                      {col.label}
+                      {col.required && <span className="text-red-500 ml-0.5">*</span>}
+                    </th>
+                  ))}
+                  <th className="w-10 px-2 py-2 text-center border-b">삭제</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, rowIndex) => {
+                  const rowStatus = getRowStatus(rowIndex);
+                  const rowResult = results?.find(r => r.index === rowIndex);
+                  const rowErrors = errors.get(rowIndex) || {};
+
+                  return (
+                    <tr 
+                      key={rowIndex} 
+                      className={`border-b ${
+                        rowStatus === 'success' ? 'bg-green-50 dark:bg-green-950' :
+                        rowStatus === 'failed' ? 'bg-red-50 dark:bg-red-950' :
+                        rowStatus === 'error' ? 'bg-red-50/50 dark:bg-red-950/50' : ''
+                      }`}
+                    >
+                      <td className="px-2 py-1 text-center text-muted-foreground border-r">
+                        {rowIndex + 1}
+                        {rowStatus === 'success' && <CheckCircle className="w-3 h-3 text-green-500 inline ml-1" />}
+                        {rowStatus === 'failed' && (
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <XCircle className="w-3 h-3 text-red-500 inline ml-1" />
+                            </TooltipTrigger>
+                            <TooltipContent>{rowResult?.reason}</TooltipContent>
+                          </Tooltip>
+                        )}
+                      </td>
+
+                      {FIXED_COLUMNS.map(col => {
+                        const cellError = rowErrors[col.key];
+                        const value = row[col.key as keyof RowData];
+
+                        if (col.key === 'platform') {
+                          return (
+                            <td key={col.key} className="px-1 py-1 border-r">
+                              <Tooltip open={!!cellError}>
+                                <TooltipTrigger asChild>
+                                  <div>
+                                    <Select
+                                      value={normalizePlatform(value) || ''}
+                                      onValueChange={(v) => updateCell(rowIndex, 'platform', v)}
+                                    >
+                                      <SelectTrigger 
+                                        className={`h-8 text-xs ${cellError ? 'border-red-500 bg-red-50 dark:bg-red-950' : ''}`}
+                                        data-testid={`select-platform-${rowIndex}`}
+                                      >
+                                        <SelectValue placeholder="선택" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {ALLOWED_PLATFORMS.map(p => (
+                                          <SelectItem key={p} value={p}>{p}</SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                </TooltipTrigger>
+                                {cellError && (
+                                  <TooltipContent side="bottom" className="bg-red-500 text-white">
+                                    {cellError}
+                                  </TooltipContent>
+                                )}
+                              </Tooltip>
+                            </td>
+                          );
+                        }
+
+                        return (
+                          <td key={col.key} className="px-1 py-1 border-r">
+                            <Tooltip open={!!cellError}>
+                              <TooltipTrigger asChild>
+                                <Input
+                                  value={value}
+                                  onChange={(e) => updateCell(rowIndex, col.key as keyof RowData, e.target.value)}
+                                  className={`h-8 text-xs ${cellError ? 'border-red-500 bg-red-50 dark:bg-red-950' : ''}`}
+                                  placeholder={col.label}
+                                  data-testid={`input-${col.key}-${rowIndex}`}
+                                />
+                              </TooltipTrigger>
+                              {cellError && (
+                                <TooltipContent side="bottom" className="bg-red-500 text-white">
+                                  {cellError}
+                                </TooltipContent>
+                              )}
+                            </Tooltip>
+                          </td>
+                        );
+                      })}
+
+                      <td className="px-1 py-1 text-center">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                          onClick={() => removeRow(rowIndex)}
+                          disabled={rows.length === 1}
+                          data-testid={`button-remove-row-${rowIndex}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </ScrollArea>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <Button variant="outline" size="sm" onClick={addRow} className="gap-1" data-testid="button-add-row">
+            <Plus className="w-4 h-4" />
+            행 추가
           </Button>
-          
-          {state === 'paste' && (
+
+          <div className="flex items-center gap-2">
+            {errors.size > 0 && (
+              <Badge variant="destructive" className="gap-1">
+                <AlertTriangle className="w-3 h-3" />
+                {errors.size}개 오류
+              </Badge>
+            )}
+            <Button variant="outline" onClick={validate} disabled={isImporting} data-testid="button-validate">
+              유효성 검사
+            </Button>
             <Button 
-              onClick={handleValidate} 
-              disabled={gridData.length === 0}
-              data-testid="button-validate-import"
+              onClick={handleImport} 
+              disabled={isImporting || !isValidated || errors.size > 0}
+              data-testid="button-batch-import"
             >
-              {KO.pages.discover.validate}
+              {isImporting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  처리 중...
+                </>
+              ) : (
+                '일괄 추가'
+              )}
             </Button>
-          )}
-          
-          {state === 'validated' && (
-            <>
-              <Button 
-                variant="outline" 
-                onClick={() => setState('paste')}
-                data-testid="button-back-to-paste"
-              >
-                {KO.common.back}
-              </Button>
-              <Button 
-                onClick={handleImport} 
-                disabled={validation?.validRows === 0 || (validation?.invalidClientRows?.length ?? 0) > 0}
-                data-testid="button-execute-import"
-              >
-                {KO.pages.discover.executeImport}
-              </Button>
-            </>
-          )}
-          
-          {state === 'importing' && (
-            <Button disabled>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              {KO.pages.discover.importing}
-            </Button>
-          )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>

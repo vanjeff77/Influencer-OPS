@@ -101,6 +101,114 @@ export async function registerRoutes(
     res.status(201).json(inf);
   });
 
+  // Batch create influencers
+  app.post('/api/workspaces/:workspaceId/influencers/batch', async (req, res) => {
+    // Check authentication
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const wId = parseInt(req.params.workspaceId);
+    const { items } = req.body as { items: Array<{
+      nickname: string;
+      handle: string;
+      platform: string;
+      followers?: number | null;
+      contactPoint?: string | null;
+      memo?: string | null;
+      priceMemo?: string | null;
+    }> };
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ message: 'items array is required' });
+    }
+
+    // Normalize platform names
+    const normalizePlatform = (platform: string): string => {
+      const mapping: Record<string, string> = {
+        'instagram': 'Instagram',
+        'youtube': 'YouTube',
+        'tiktok': 'TikTok',
+        'x': 'X',
+        'twitter': 'X',
+        'blog': 'Blog',
+      };
+      return mapping[platform.toLowerCase()] || platform;
+    };
+
+    const results: Array<{ index: number; status: 'created' | 'failed'; reason?: string; influencerId?: number }> = [];
+    let createdCount = 0;
+    let failedCount = 0;
+
+    // Get existing influencers to check for duplicates
+    const existingInfluencers = await storage.getInfluencers(wId);
+    const existingHandles = new Set(
+      existingInfluencers.flatMap(inf => 
+        inf.accounts.map(acc => `${acc.platform.toLowerCase()}:${acc.handle.toLowerCase()}`)
+      )
+    );
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      
+      try {
+        // Validate required fields
+        if (!item.nickname?.trim() || !item.handle?.trim() || !item.platform?.trim()) {
+          results.push({ index: i, status: 'failed', reason: '필수 필드가 누락되었습니다' });
+          failedCount++;
+          continue;
+        }
+
+        const normalizedPlatform = normalizePlatform(item.platform);
+        
+        // Check for duplicates in DB
+        const handleKey = `${normalizedPlatform.toLowerCase()}:${item.handle.toLowerCase().replace(/^@/, '')}`;
+        if (existingHandles.has(handleKey)) {
+          results.push({ index: i, status: 'failed', reason: '이미 존재하는 계정입니다' });
+          failedCount++;
+          continue;
+        }
+
+        // Generate URL based on platform and handle
+        const generateUrl = (platform: string, handle: string): string => {
+          const cleanHandle = handle.replace(/^@/, '');
+          switch (platform.toLowerCase()) {
+            case 'instagram': return `https://instagram.com/${cleanHandle}`;
+            case 'youtube': return `https://youtube.com/@${cleanHandle}`;
+            case 'tiktok': return `https://tiktok.com/@${cleanHandle}`;
+            case 'x': return `https://x.com/${cleanHandle}`;
+            case 'blog': return `https://blog.naver.com/${cleanHandle}`;
+            default: return `https://${platform.toLowerCase()}.com/${cleanHandle}`;
+          }
+        };
+
+        // Create influencer
+        const inf = await storage.createInfluencer(wId, {
+          name: item.nickname.trim(),
+          email: item.contactPoint?.includes('@') ? item.contactPoint : undefined,
+          phone: item.contactPoint && !item.contactPoint.includes('@') ? item.contactPoint : undefined,
+          memo: item.memo || undefined,
+          priceMemo: item.priceMemo || undefined,
+          accounts: [{
+            platform: normalizedPlatform,
+            handle: item.handle.replace(/^@/, ''),
+            url: generateUrl(normalizedPlatform, item.handle),
+            followers: item.followers || undefined,
+          }]
+        });
+
+        existingHandles.add(handleKey);
+        results.push({ index: i, status: 'created', influencerId: inf.id });
+        createdCount++;
+      } catch (err: any) {
+        results.push({ index: i, status: 'failed', reason: err.message || '생성 실패' });
+        failedCount++;
+      }
+    }
+
+    res.json({ createdCount, failedCount, results });
+  });
+
   app.get(api.influencers.get.path, async (req, res) => {
     const inf = await storage.getInfluencer(parseInt(req.params.id));
     if (!inf) return res.status(404).json({ message: "Not found" });
