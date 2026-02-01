@@ -200,3 +200,112 @@ export function useDeleteCampaignContent(campaignId: number) {
     },
   });
 }
+
+// Settlement Work Queue Types
+export type SettlementQueueItem = CampaignInfluencer & { 
+  campaign?: { id: number; name: string; clientId?: number | null };
+  influencer?: Influencer & { accounts: InfluencerAccount[] };
+  client?: { id: number; name: string } | null;
+  settlementInfoComplete: boolean;
+};
+
+export type SettlementQueueKPI = {
+  pendingCount: number;
+  pendingTotal: number;
+  incompleteInfoCount: number;
+  holdCount: number;
+};
+
+export type SettlementQueueResult = {
+  kpi: SettlementQueueKPI;
+  items: SettlementQueueItem[];
+};
+
+export function useSettlementWorkQueue(workspaceId: number, filters?: {
+  clientId?: number;
+  campaignId?: number;
+  payoutStatus?: string;
+  settlementInfoComplete?: boolean;
+  uploadCompletedOnly?: boolean;
+}) {
+  return useQuery<SettlementQueueResult>({
+    queryKey: ['/api/settlement/queue', workspaceId, filters],
+    queryFn: async () => {
+      const params = new URLSearchParams({ workspaceId: workspaceId.toString() });
+      if (filters?.clientId) params.set('clientId', filters.clientId.toString());
+      if (filters?.campaignId) params.set('campaignId', filters.campaignId.toString());
+      if (filters?.payoutStatus) params.set('payoutStatus', filters.payoutStatus);
+      if (filters?.settlementInfoComplete !== undefined) params.set('settlementInfoComplete', filters.settlementInfoComplete.toString());
+      if (filters?.uploadCompletedOnly !== undefined) params.set('uploadCompletedOnly', filters.uploadCompletedOnly.toString());
+      
+      const res = await fetch(`/api/settlement/queue?${params.toString()}`);
+      if (!res.ok) throw new Error("Failed to fetch settlement queue");
+      return res.json();
+    },
+    enabled: !!workspaceId,
+  });
+}
+
+export function useUpdateLineItemPayout() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: {
+      payoutStatus?: string;
+      payoutAmountSupply?: number;
+      payoutVat?: number;
+      payoutTotal?: number;
+      payoutMemo?: string;
+      invoiceIssuedAt?: string;
+      payoutDueAt?: string;
+      paidAt?: string;
+    } }) => {
+      const res = await fetch(`/api/settlement/items/${id}/payout`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to update payout");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/settlement/queue'] });
+    },
+  });
+}
+
+export function useMarkPaid(workspaceId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (itemId: number) => {
+      const res = await fetch(`/api/settlement/items/${itemId}/mark-paid`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspaceId }),
+      });
+      if (!res.ok) throw new Error("Failed to mark as paid");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/settlement/queue'] });
+    },
+  });
+}
+
+export function useMarkUploadCompleted() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, completed }: { id: number; completed: boolean }) => {
+      const res = await fetch(`/api/settlement/items/${id}/upload-completed`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ completed }),
+      });
+      if (!res.ok) throw new Error("Failed to update upload status");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/settlement/queue'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/campaigns'] });
+    },
+  });
+}
