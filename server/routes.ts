@@ -451,14 +451,25 @@ export async function registerRoutes(
 
   app.post(api.email.sync.path, async (req, res) => {
     const accountId = parseInt(req.params.id);
-    await storage.createEmailThread({
-      accountId,
-      threadId: `thread-${Date.now()}`,
-      subject: "Re: Collaboration Proposal",
-      snippet: "Sounds good, let's proceed.",
-      lastMessageDate: new Date(),
-    });
-    res.json({ syncedCount: 1 });
+    
+    // Get existing threads to check for duplicates
+    const existingThreads = await storage.getEmailThreads(accountId);
+    const existingThreadIds = new Set(existingThreads.map(t => t.threadId));
+    
+    // Only create a demo thread if none exists (prevents duplicates)
+    if (existingThreads.length === 0) {
+      await storage.createEmailThread({
+        accountId,
+        threadId: `demo-thread-${accountId}`,
+        subject: "Re: Collaboration Proposal",
+        snippet: "Sounds good, let's proceed.",
+        lastMessageDate: new Date(),
+      });
+      res.json({ syncedCount: 1 });
+    } else {
+      // No new messages to sync
+      res.json({ syncedCount: 0, message: "이미 최신 상태입니다" });
+    }
   });
 
   app.get(api.email.threads.path, async (req, res) => {
