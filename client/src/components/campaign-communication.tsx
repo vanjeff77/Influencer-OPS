@@ -10,6 +10,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useToast } from "@/hooks/use-toast";
 import { KO } from "@/i18n/ko";
 import DOMPurify from "dompurify";
@@ -26,7 +28,8 @@ import {
   User,
   Loader2,
   Users,
-  FileText
+  FileText,
+  Wallet
 } from "lucide-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
@@ -583,6 +586,14 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
   const [email, setEmail] = useState(influencer?.email || "");
   const [phone, setPhone] = useState(influencer?.phone || "");
   const [tags, setTags] = useState(influencer?.tags?.join(", ") || "");
+  
+  const [settlementType, setSettlementType] = useState(influencer?.settlementType || "");
+  const [bankName, setBankName] = useState(influencer?.bankName || "");
+  const [accountHolder, setAccountHolder] = useState(influencer?.accountHolder || "");
+  const [accountNumber, setAccountNumber] = useState(influencer?.accountNumber || "");
+  const [businessName, setBusinessName] = useState(influencer?.businessName || "");
+  const [businessRegNo, setBusinessRegNo] = useState(influencer?.businessRegNo || "");
+  const [freelancerId, setFreelancerId] = useState(influencer?.freelancerId || "");
 
   const updateInfluencer = useMutation({
     mutationFn: (data: any) => apiRequest('PATCH', `/api/influencers/${influencer?.id}`, data),
@@ -602,7 +613,31 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
     });
   };
 
+  const handleSaveSettlement = () => {
+    if (!influencer?.id) return;
+    updateInfluencer.mutate({
+      settlementType,
+      bankName,
+      accountHolder,
+      accountNumber,
+      businessName,
+      businessRegNo,
+      freelancerId,
+      settlementInfoUpdatedAt: new Date().toISOString()
+    });
+  };
+
   if (!influencer) return null;
+
+  const isSettlementInfoComplete = () => {
+    const hasBank = bankName && accountHolder && accountNumber;
+    if (settlementType === '사업자') {
+      return hasBank && businessName && businessRegNo;
+    } else if (settlementType === '프리랜서') {
+      return hasBank && freelancerId;
+    }
+    return false;
+  };
 
   return (
     <ScrollArea className="h-full max-h-[600px]">
@@ -676,6 +711,120 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
             <><Save className="w-4 h-4 mr-2" />{KO.pages.communication.saveChanges}</>
           )}
         </Button>
+
+        <Accordion type="single" collapsible className="w-full">
+          <AccordionItem value="settlement">
+            <AccordionTrigger className="text-sm">
+              <div className="flex items-center gap-2">
+                <Wallet className="w-4 h-4" />
+                <span>{KO.pages.settlement.settlementInfo}</span>
+                {isSettlementInfoComplete() ? (
+                  <Badge variant="outline" className="ml-2 text-[10px] bg-green-100 text-green-700 border-0">
+                    <CheckCircle2 className="w-2.5 h-2.5 mr-0.5" />완료
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="ml-2 text-[10px] bg-orange-100 text-orange-700 border-0">
+                    미비
+                  </Badge>
+                )}
+              </div>
+            </AccordionTrigger>
+            <AccordionContent>
+              <div className="space-y-3 pt-2">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">{KO.pages.settlement.settlementType}</label>
+                  <Select value={settlementType} onValueChange={setSettlementType}>
+                    <SelectTrigger className="mt-1 h-8 text-sm" data-testid="select-settlement-type">
+                      <SelectValue placeholder="유형 선택" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="사업자">{KO.pages.settlement.business}</SelectItem>
+                      <SelectItem value="프리랜서">{KO.pages.settlement.freelancer}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">{KO.pages.settlement.bankName}</label>
+                  <Input 
+                    value={bankName}
+                    onChange={(e) => setBankName(e.target.value)}
+                    placeholder="은행명"
+                    className="mt-1 h-8 text-sm"
+                    data-testid="input-bank-name"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">{KO.pages.settlement.accountHolder}</label>
+                  <Input 
+                    value={accountHolder}
+                    onChange={(e) => setAccountHolder(e.target.value)}
+                    placeholder="예금주"
+                    className="mt-1 h-8 text-sm"
+                    data-testid="input-account-holder"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">{KO.pages.settlement.accountNumber}</label>
+                  <Input 
+                    value={accountNumber}
+                    onChange={(e) => setAccountNumber(e.target.value)}
+                    placeholder="계좌번호"
+                    className="mt-1 h-8 text-sm"
+                    data-testid="input-account-number"
+                  />
+                </div>
+                {settlementType === '사업자' && (
+                  <>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">{KO.pages.settlement.businessName}</label>
+                      <Input 
+                        value={businessName}
+                        onChange={(e) => setBusinessName(e.target.value)}
+                        placeholder="상호명"
+                        className="mt-1 h-8 text-sm"
+                        data-testid="input-business-name"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">{KO.pages.settlement.businessRegNo}</label>
+                      <Input 
+                        value={businessRegNo}
+                        onChange={(e) => setBusinessRegNo(e.target.value)}
+                        placeholder="000-00-00000"
+                        className="mt-1 h-8 text-sm"
+                        data-testid="input-business-reg-no"
+                      />
+                    </div>
+                  </>
+                )}
+                {settlementType === '프리랜서' && (
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">{KO.pages.settlement.freelancerId}</label>
+                    <Input 
+                      value={freelancerId}
+                      onChange={(e) => setFreelancerId(e.target.value)}
+                      placeholder="000000-0000000"
+                      className="mt-1 h-8 text-sm"
+                      data-testid="input-freelancer-id"
+                    />
+                  </div>
+                )}
+                <Button 
+                  onClick={handleSaveSettlement} 
+                  disabled={updateInfluencer.isPending}
+                  className="w-full"
+                  data-testid="button-save-settlement"
+                >
+                  {updateInfluencer.isPending ? (
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" />저장 중...</>
+                  ) : (
+                    <><Save className="w-4 h-4 mr-2" />정산정보 저장</>
+                  )}
+                </Button>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </div>
     </ScrollArea>
   );
