@@ -1573,6 +1573,124 @@ export async function registerRoutes(
     }
   });
 
+  // === LINE ITEM OPERATIONS ===
+  
+  // Get line item with full details (influencer + feedback notes)
+  app.get('/api/line-items/:id', async (req, res) => {
+    try {
+      const lineItemId = parseInt(req.params.id);
+      const lineItem = await storage.getLineItemWithDetails(lineItemId);
+      if (!lineItem) {
+        return res.status(404).json({ message: "Line item not found" });
+      }
+      res.json(lineItem);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Update line item operations data (stage, comm status, offer, contract, etc.)
+  app.patch('/api/line-items/:id/operations', async (req, res) => {
+    try {
+      const lineItemId = parseInt(req.params.id);
+      const updates = req.body;
+      
+      // Handle published confirmation timestamp
+      if (updates.isPublishedConfirmed === true && !updates.publishedConfirmedAt) {
+        updates.publishedConfirmedAt = new Date();
+      }
+      
+      updates.updatedAt = new Date();
+      
+      const updated = await storage.updateCampaignItem(lineItemId, updates);
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Get feedback notes for a line item
+  app.get('/api/line-items/:id/feedback-notes', async (req, res) => {
+    try {
+      const lineItemId = parseInt(req.params.id);
+      const notes = await storage.getFeedbackNotes(lineItemId);
+      res.json(notes);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Create a feedback note
+  app.post('/api/line-items/:id/feedback-notes', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      const lineItemId = parseInt(req.params.id);
+      const { body } = req.body;
+      
+      if (!body || !body.trim()) {
+        return res.status(400).json({ message: "Note body is required" });
+      }
+      
+      const note = await storage.createFeedbackNote({
+        lineItemId,
+        authorUserId: (req.user as any).id,
+        body: body.trim(),
+      });
+      
+      res.status(201).json(note);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Update a feedback note
+  app.patch('/api/feedback-notes/:id', async (req, res) => {
+    try {
+      const noteId = parseInt(req.params.id);
+      const { body, isSelectedForSummary, isPinned } = req.body;
+      
+      const updates: any = {};
+      if (body !== undefined) updates.body = body;
+      if (isSelectedForSummary !== undefined) updates.isSelectedForSummary = isSelectedForSummary;
+      if (isPinned !== undefined) updates.isPinned = isPinned;
+      
+      const updated = await storage.updateFeedbackNote(noteId, updates);
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Delete a feedback note
+  app.delete('/api/feedback-notes/:id', async (req, res) => {
+    try {
+      const noteId = parseInt(req.params.id);
+      await storage.deleteFeedbackNote(noteId);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Save feedback summary
+  app.patch('/api/line-items/:id/feedback-summary', async (req, res) => {
+    try {
+      const lineItemId = parseInt(req.params.id);
+      const { feedbackSummary } = req.body;
+      
+      const updated = await storage.updateCampaignItem(lineItemId, {
+        feedbackSummary,
+        feedbackSummaryUpdatedAt: new Date(),
+      });
+      
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   // === TRACKING ===
   app.get(api.tracking.list.path, async (req, res) => {
     const jobs = await storage.getTrackingJobs(parseInt(req.params.workspaceId));

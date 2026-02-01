@@ -24,7 +24,9 @@ import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { CampaignLineItem, CampaignContentWithInfluencer } from "@/hooks/use-campaigns";
 import { CampaignCommunication } from "@/components/campaign-communication";
+import { CampaignOperations } from "@/components/campaign-operations";
 import type { CampaignContent } from "@shared/schema";
+import { Settings2 } from "lucide-react";
 
 export default function CampaignDetail() {
   const [, params] = useRoute("/campaigns/:id");
@@ -177,6 +179,10 @@ export default function CampaignDetail() {
         <Tabs defaultValue="influencers" className="w-full">
           <TabsList className="mb-4 flex-wrap">
             <TabsTrigger value="influencers">인플루언서</TabsTrigger>
+            <TabsTrigger value="operations" className="flex items-center gap-1">
+              <Settings2 className="w-4 h-4" />
+              운영
+            </TabsTrigger>
             <TabsTrigger value="communication" className="flex items-center gap-1">
               <MessageCircle className="w-4 h-4" />
               {KO.pages.communication.title}
@@ -284,6 +290,10 @@ export default function CampaignDetail() {
                 </Table>
               </CardContent>
             </Card>
+          </TabsContent>
+          
+          <TabsContent value="operations">
+            <CampaignOperations campaignId={id} lineItems={campaign.items || []} />
           </TabsContent>
           
           <TabsContent value="communication">
