@@ -777,9 +777,12 @@ export default function Discover() {
                       />
                     </TableHead>
                     <TableHead className="px-2 text-xs font-semibold">{KO.pages.discover.name}</TableHead>
-                    <TableHead className="px-2 text-xs font-semibold w-24">{KO.pages.discover.platform}</TableHead>
-                    <TableHead className="px-2 text-xs font-semibold w-20 text-right">{KO.pages.discover.followers}</TableHead>
-                    <TableHead className="px-2 text-xs font-semibold w-28">{KO.pages.discover.client}</TableHead>
+                    <TableHead className="px-2 text-xs font-semibold w-16">{KO.pages.discover.platform}</TableHead>
+                    <TableHead className="px-2 text-xs font-semibold w-16 text-right">{KO.pages.discover.followers}</TableHead>
+                    <TableHead className="px-2 text-xs font-semibold w-24">{KO.pages.discover.client}</TableHead>
+                    <TableHead className="px-2 text-xs font-semibold w-20">{KO.pages.discover.tag1}</TableHead>
+                    <TableHead className="px-2 text-xs font-semibold w-20">{KO.pages.discover.tag2}</TableHead>
+                    <TableHead className="px-2 text-xs font-semibold w-20">{KO.pages.discover.tag3}</TableHead>
                     <TableHead className="px-2 text-xs font-semibold w-16 text-center">{KO.pages.discover.contactStatusLabel}</TableHead>
                     <TableHead className="px-2 text-xs font-semibold w-16 text-center">{KO.pages.discover.replyStatusLabel}</TableHead>
                     <TableHead className="px-2 text-xs font-semibold w-16 text-center">{KO.pages.discover.collabStatusLabel}</TableHead>
@@ -809,32 +812,40 @@ export default function Discover() {
                           />
                         </TableCell>
                         <TableCell className="px-2 py-1">
-                          <div className="flex items-center gap-2">
-                            <Avatar className="h-6 w-6 shrink-0">
-                              <AvatarFallback className="text-[10px] bg-gradient-to-br from-blue-100 to-blue-200 text-blue-700 font-medium">
-                                {inf.name.substring(0, 2)}
-                              </AvatarFallback>
-                            </Avatar>
+                          <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-0.5 shrink-0">
+                              {inf.accounts?.map((acc, idx) => (
+                                <PlatformIcon key={idx} p={acc.platform} />
+                              ))}
+                            </div>
                             <span className="text-sm font-medium truncate select-text">{inf.name}</span>
                           </div>
                         </TableCell>
                         <TableCell className="px-2 py-1">
-                          {mainAccount && (
-                            <div className="flex items-center gap-1">
-                              <PlatformIcon p={mainAccount.platform} />
-                              <span className="text-xs text-muted-foreground truncate select-text">{mainAccount.handle}</span>
-                            </div>
-                          )}
+                          <div className="flex items-center gap-0.5">
+                            {inf.accounts?.map((acc, idx) => (
+                              <PlatformIcon key={idx} p={acc.platform} />
+                            ))}
+                          </div>
                         </TableCell>
                         <TableCell className="px-2 py-1 text-right">
                           <span className="text-xs font-mono select-text">
-                            {formatFollowers((mainAccount as any)?.followers)}
+                            {formatFollowers(inf.accounts?.reduce((sum, acc: any) => sum + (acc.followers || 0), 0) || 0)}
                           </span>
                         </TableCell>
                         <TableCell className="px-2 py-1">
                           <span className="text-xs truncate select-text">
                             {inf.client || KO.pages.discover.noClient}
                           </span>
+                        </TableCell>
+                        <TableCell className="px-2 py-1">
+                          <span className="text-xs truncate select-text">{inf.tag1 || '-'}</span>
+                        </TableCell>
+                        <TableCell className="px-2 py-1">
+                          <span className="text-xs truncate select-text">{inf.tag2 || '-'}</span>
+                        </TableCell>
+                        <TableCell className="px-2 py-1">
+                          <span className="text-xs truncate select-text">{inf.tag3 || '-'}</span>
                         </TableCell>
                         <TableCell className="px-2 py-1 text-center">
                           {inf.contactStatus === 'Y' ? (
@@ -893,7 +904,7 @@ export default function Discover() {
                   
                   {influencers?.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={10} className="text-center py-12">
+                      <TableCell colSpan={13} className="text-center py-12">
                         <h3 className="text-sm font-medium text-muted-foreground">{KO.pages.discover.noResults}</h3>
                         <p className="text-xs text-muted-foreground/60 mt-1">{KO.pages.discover.noResultsHint}</p>
                       </TableCell>
@@ -1202,11 +1213,6 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
                       <label className="text-sm font-medium">{KO.pages.discover.phone}</label>
                       <Input value={phone} onChange={e => setPhone(e.target.value)} data-testid="input-influencer-phone" />
                     </div>
-                  </div>
-                  
-                  <div>
-                    <label className="text-sm font-medium">{KO.pages.discover.tags}</label>
-                    <Input value={tags} onChange={e => setTags(e.target.value)} placeholder={KO.pages.discover.tagsPlaceholder} data-testid="input-influencer-tags" />
                   </div>
                   
                   <div>
