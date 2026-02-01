@@ -98,6 +98,19 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (2026-02-01)
 
+### Email Account Registration Security
+- **Gmail Registration**: Uses Replit's Google Mail connector to fetch profile and register account
+- **IMAP/SMTP Registration**: Manual email configuration with server settings
+- **Security Features**:
+  - Authentication check (req.isAuthenticated() required)
+  - Workspace authorization (user must be workspace member)
+  - Zod validation for all request bodies
+  - IMAP password encryption (AES-256-CBC with random IV)
+- **API Endpoints**:
+  - `POST /api/email/gmail/register`: Register Gmail account using Replit connector
+  - `POST /api/email/imap/register`: Register IMAP/SMTP email account
+- **Storage**: Added `getWorkspaceMemberships(userId)` function to check workspace access
+
 ### Campaign Communication System (Gmail-Integrated Messenger)
 - **3-Pane Messenger Layout**: Left panel (influencer list with search), center panel (message thread with bubbles), right panel (influencer details editor)
 - **Gmail Integration**: Status indicator, message sync from Gmail threads, send emails via Gmail API
