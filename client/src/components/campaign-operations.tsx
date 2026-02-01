@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -20,7 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { 
   Search, Filter, AlertCircle, Clock, FileText, Calendar, MessageSquare, 
-  CheckCircle2, Copy, Plus, Trash2, Instagram, Youtube, Twitter,
+  CheckCircle2, Instagram, Youtube, Twitter,
   ExternalLink, Save, AlertTriangle
 } from "lucide-react";
 import type { CampaignInfluencer, Influencer, InfluencerAccount, FeedbackNote, User } from "@shared/schema";
@@ -129,45 +128,6 @@ export function CampaignOperations({ campaignId, lineItems }: CampaignOperations
       queryClient.invalidateQueries({ queryKey: ['/api/campaigns', campaignId] });
       queryClient.invalidateQueries({ queryKey: ['/api/line-items', selectedItemId] });
       toast({ title: KO.pages.operations.panel.saved });
-    }
-  });
-
-  const createNote = useMutation({
-    mutationFn: async ({ lineItemId, body }: { lineItemId: number; body: string }) => {
-      return apiRequest('POST', `/api/line-items/${lineItemId}/feedback-notes`, { body });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/line-items', selectedItemId] });
-      toast({ title: KO.pages.operations.panel.noteSaved });
-    }
-  });
-
-  const updateNote = useMutation({
-    mutationFn: async ({ id, updates }: { id: number; updates: Partial<FeedbackNote> }) => {
-      return apiRequest('PATCH', `/api/feedback-notes/${id}`, updates);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/line-items', selectedItemId] });
-    }
-  });
-
-  const deleteNote = useMutation({
-    mutationFn: async (id: number) => {
-      return apiRequest('DELETE', `/api/feedback-notes/${id}`, {});
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/line-items', selectedItemId] });
-      toast({ title: KO.pages.operations.panel.noteDeleted });
-    }
-  });
-
-  const saveFeedbackSummary = useMutation({
-    mutationFn: async ({ lineItemId, feedbackSummary }: { lineItemId: number; feedbackSummary: string }) => {
-      return apiRequest('PATCH', `/api/line-items/${lineItemId}/feedback-summary`, { feedbackSummary });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/line-items', selectedItemId] });
-      toast({ title: KO.pages.operations.panel.summarySaved });
     }
   });
 
@@ -448,10 +408,6 @@ export function CampaignOperations({ campaignId, lineItems }: CampaignOperations
             <OperationsPanel 
               item={selectedItem} 
               onUpdate={(updates) => updateOperations.mutate({ id: selectedItem.id, updates })}
-              onCreateNote={(body) => createNote.mutate({ lineItemId: selectedItem.id, body })}
-              onUpdateNote={(id, updates) => updateNote.mutate({ id, updates })}
-              onDeleteNote={(id) => deleteNote.mutate(id)}
-              onSaveSummary={(summary) => saveFeedbackSummary.mutate({ lineItemId: selectedItem.id, feedbackSummary: summary })}
               isSaving={updateOperations.isPending}
             />
           ) : null}
@@ -470,18 +426,11 @@ export function CampaignOperations({ campaignId, lineItems }: CampaignOperations
 interface OperationsPanelProps {
   item: LineItemWithDetails;
   onUpdate: (updates: Partial<CampaignInfluencer>) => void;
-  onCreateNote: (body: string) => void;
-  onUpdateNote: (id: number, updates: Partial<FeedbackNote>) => void;
-  onDeleteNote: (id: number) => void;
-  onSaveSummary: (summary: string) => void;
   isSaving: boolean;
 }
 
-function OperationsPanel({ item, onUpdate, onCreateNote, onUpdateNote, onDeleteNote, onSaveSummary, isSaving }: OperationsPanelProps) {
-  const { toast } = useToast();
+function OperationsPanel({ item, onUpdate, isSaving }: OperationsPanelProps) {
   const [localItem, setLocalItem] = useState(item);
-  const [newNoteBody, setNewNoteBody] = useState("");
-  const [feedbackSummary, setFeedbackSummary] = useState(item.feedbackSummary || "");
 
   const dueBadges = getDueBadges(item);
   const hasDanger = dueBadges.some(b => b.type === 'danger');
@@ -500,33 +449,7 @@ function OperationsPanel({ item, onUpdate, onCreateNote, onUpdateNote, onDeleteN
       contractFileId: localItem.contractFileId,
       draftDueAt: localItem.draftDueAt,
       uploadDueAt: localItem.uploadDueAt,
-      draftUrl: localItem.draftUrl,
-      draftFileId: localItem.draftFileId,
-      finalUrl: localItem.finalUrl,
-      finalFileId: localItem.finalFileId,
-      isPublishedConfirmed: localItem.isPublishedConfirmed,
     });
-  };
-
-  const handleAddNote = () => {
-    if (!newNoteBody.trim()) return;
-    onCreateNote(newNoteBody.trim());
-    setNewNoteBody("");
-  };
-
-  const generateSummaryFromSelected = () => {
-    const selectedNotes = item.feedbackNotes?.filter(n => n.isSelectedForSummary) || [];
-    if (selectedNotes.length === 0) {
-      toast({ title: KO.pages.operations.panel.selectNotesFirst, variant: "destructive" });
-      return;
-    }
-    const combined = selectedNotes.map(n => n.body).join("\n\n---\n\n");
-    setFeedbackSummary(combined);
-  };
-
-  const copyFeedbackSummary = () => {
-    navigator.clipboard.writeText(feedbackSummary);
-    toast({ title: KO.pages.operations.panel.copied });
   };
 
   return (
@@ -554,7 +477,7 @@ function OperationsPanel({ item, onUpdate, onCreateNote, onUpdateNote, onDeleteN
         </div>
       )}
 
-      <Accordion type="multiple" defaultValue={["status", "offer", "contract", "schedule", "content", "feedback"]} className="w-full">
+      <Accordion type="multiple" defaultValue={["status", "offer", "contract", "schedule"]} className="w-full">
         <AccordionItem value="status">
           <AccordionTrigger>{KO.pages.operations.panel.status}</AccordionTrigger>
           <AccordionContent className="space-y-4">
@@ -704,127 +627,6 @@ function OperationsPanel({ item, onUpdate, onCreateNote, onUpdateNote, onDeleteN
                   data-testid="input-upload-due"
                 />
               </div>
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-
-        <AccordionItem value="content">
-          <AccordionTrigger>{KO.pages.operations.panel.content}</AccordionTrigger>
-          <AccordionContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>{KO.pages.operations.panel.draftUrl}</Label>
-              <Input
-                value={localItem.draftUrl || ""}
-                onChange={(e) => setLocalItem({...localItem, draftUrl: e.target.value})}
-                placeholder="https://..."
-                data-testid="input-draft-url"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>{KO.pages.operations.panel.draftFileId}</Label>
-              <Input
-                value={localItem.draftFileId || ""}
-                onChange={(e) => setLocalItem({...localItem, draftFileId: e.target.value})}
-                placeholder="파일 ID"
-                data-testid="input-draft-file"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>{KO.pages.operations.panel.finalUrl}</Label>
-              <Input
-                value={localItem.finalUrl || ""}
-                onChange={(e) => setLocalItem({...localItem, finalUrl: e.target.value})}
-                placeholder="https://..."
-                data-testid="input-final-url"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>{KO.pages.operations.panel.finalFileId}</Label>
-              <Input
-                value={localItem.finalFileId || ""}
-                onChange={(e) => setLocalItem({...localItem, finalFileId: e.target.value})}
-                placeholder="파일 ID"
-                data-testid="input-final-file"
-              />
-            </div>
-            <div className="flex items-center gap-2 pt-2">
-              <Checkbox
-                id="publishedConfirmed"
-                checked={localItem.isPublishedConfirmed || false}
-                onCheckedChange={(checked) => setLocalItem({...localItem, isPublishedConfirmed: !!checked})}
-                data-testid="checkbox-published"
-              />
-              <Label htmlFor="publishedConfirmed">{KO.pages.operations.panel.publishedConfirmed}</Label>
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-
-        <AccordionItem value="feedback">
-          <AccordionTrigger>{KO.pages.operations.panel.feedback}</AccordionTrigger>
-          <AccordionContent className="space-y-4">
-            <div className="flex gap-2">
-              <Input
-                value={newNoteBody}
-                onChange={(e) => setNewNoteBody(e.target.value)}
-                placeholder={KO.pages.operations.panel.addNote}
-                data-testid="input-new-note"
-                onKeyDown={(e) => e.key === 'Enter' && handleAddNote()}
-              />
-              <Button size="sm" onClick={handleAddNote} data-testid="button-add-note">
-                <Plus className="w-4 h-4" />
-              </Button>
-            </div>
-            
-            <ScrollArea className="max-h-[200px]">
-              <div className="space-y-2">
-                {item.feedbackNotes?.map((note) => (
-                  <div key={note.id} className="border rounded-md p-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Checkbox
-                          checked={note.isSelectedForSummary || false}
-                          onCheckedChange={(checked) => onUpdateNote(note.id, { isSelectedForSummary: !!checked })}
-                          data-testid={`checkbox-note-${note.id}`}
-                        />
-                        <span className="text-xs text-muted-foreground">
-                          {note.author?.name || KO.pages.operations.panel.anonymous} · {note.createdAt ? format(new Date(note.createdAt), 'MM/dd HH:mm') : ''}
-                        </span>
-                      </div>
-                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onDeleteNote(note.id)}>
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
-                    </div>
-                    <p className="text-sm">{note.body}</p>
-                  </div>
-                ))}
-                {(!item.feedbackNotes || item.feedbackNotes.length === 0) && (
-                  <p className="text-sm text-muted-foreground text-center py-4">{KO.pages.operations.panel.noNotes}</p>
-                )}
-              </div>
-            </ScrollArea>
-
-            <div className="border-t pt-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>{KO.pages.operations.panel.feedbackSummary}</Label>
-                <div className="flex gap-1">
-                  <Button variant="outline" size="sm" onClick={generateSummaryFromSelected} data-testid="button-generate-summary">
-                    {KO.pages.operations.panel.generateSummary}
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={copyFeedbackSummary} data-testid="button-copy-summary">
-                    <Copy className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-              <Textarea
-                value={feedbackSummary}
-                onChange={(e) => setFeedbackSummary(e.target.value)}
-                placeholder={KO.pages.operations.panel.feedbackSummary}
-                rows={4}
-                data-testid="textarea-summary"
-              />
-              <Button size="sm" onClick={() => onSaveSummary(feedbackSummary)} data-testid="button-save-summary">
-                <Save className="w-4 h-4 mr-1" /> {KO.pages.operations.panel.saveSummary}
-              </Button>
             </div>
           </AccordionContent>
         </AccordionItem>
