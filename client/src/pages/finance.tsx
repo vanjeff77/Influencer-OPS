@@ -314,6 +314,7 @@ export default function Finance() {
 
       <SettlementDetailSheet 
         item={selectedItem} 
+        workspaceId={workspaceId || 0}
         onClose={() => setSelectedItem(null)} 
         onMarkPaid={handleMarkPaid}
         isMarkingPaid={markPaid.isPending}
@@ -322,13 +323,14 @@ export default function Finance() {
   );
 }
 
-function SettlementDetailSheet({ item, onClose, onMarkPaid, isMarkingPaid }: {
+function SettlementDetailSheet({ item, workspaceId, onClose, onMarkPaid, isMarkingPaid }: {
   item: SettlementQueueItem | null;
+  workspaceId: number;
   onClose: () => void;
   onMarkPaid: (item: SettlementQueueItem) => void;
   isMarkingPaid: boolean;
 }) {
-  const updatePayout = useUpdateLineItemPayout();
+  const updatePayout = useUpdateLineItemPayout(workspaceId);
   const { toast } = useToast();
   
   const [payoutStatus, setPayoutStatus] = useState('');
@@ -339,7 +341,7 @@ function SettlementDetailSheet({ item, onClose, onMarkPaid, isMarkingPaid }: {
   const inf = item.influencer;
   
   const handleSave = () => {
-    updatePayout.mutate({ id: item.id, data: { payoutStatus, payoutMemo } }, {
+    updatePayout.mutate({ id: item.id, data: { payoutStatus, payoutMemo, workspaceId } }, {
       onSuccess: () => toast({ title: "저장되었습니다." })
     });
   };

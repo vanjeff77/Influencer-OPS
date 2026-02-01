@@ -674,11 +674,21 @@ export async function registerRoutes(
     }
   });
 
-  // Update payout info for a line item
+  // Update payout info for a line item (MEMBER or OWNER only)
   app.patch('/api/settlement/items/:id/payout', async (req, res) => {
     try {
       const itemId = parseInt(req.params.id);
       const data = req.body;
+      const { workspaceId } = data;
+      
+      // Check role access (CLIENT cannot update payout)
+      if (req.isAuthenticated()) {
+        const userId = (req.user as any).id;
+        const member = await storage.getWorkspaceMember(userId, workspaceId);
+        if (member?.role === 'CLIENT') {
+          return res.status(403).json({ message: 'CLIENT role cannot update payout info' });
+        }
+      }
       
       // Parse dates if needed
       if (data.invoiceIssuedAt) data.invoiceIssuedAt = new Date(data.invoiceIssuedAt);

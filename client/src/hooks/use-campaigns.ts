@@ -246,10 +246,11 @@ export function useSettlementWorkQueue(workspaceId: number, filters?: {
   });
 }
 
-export function useUpdateLineItemPayout() {
+export function useUpdateLineItemPayout(workspaceId?: number) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, data }: { id: number; data: {
+      workspaceId?: number;
       payoutStatus?: string;
       payoutAmountSupply?: number;
       payoutVat?: number;
@@ -262,7 +263,7 @@ export function useUpdateLineItemPayout() {
       const res = await fetch(`/api/settlement/items/${id}/payout`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, workspaceId: data.workspaceId || workspaceId }),
       });
       if (!res.ok) throw new Error("Failed to update payout");
       return res.json();
