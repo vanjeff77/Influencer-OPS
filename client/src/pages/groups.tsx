@@ -65,53 +65,53 @@ export default function Groups() {
 
   return (
     <Layout>
-      <div className="flex gap-6 h-[calc(100vh-10rem)]">
+      <div className="flex flex-col md:flex-row gap-3 md:gap-6 h-[calc(100vh-8rem)] md:h-[calc(100vh-10rem)]">
         {/* Left: Group List */}
-        <div className="w-72 flex flex-col gap-4">
+        <div className="w-full md:w-56 lg:w-72 flex flex-col gap-2 md:gap-4 shrink-0">
           <div className="flex items-center justify-between">
-            <h1 className="text-xl font-bold">{KO.pages.groups.title}</h1>
+            <h1 className="text-lg md:text-xl font-bold">{KO.pages.groups.title}</h1>
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
               <DialogTrigger asChild>
-                <Button size="sm" data-testid="button-create-group">
-                  <Plus className="w-4 h-4" />
+                <Button size="sm" className="h-7 w-7 md:h-8 md:w-8 p-0" data-testid="button-create-group">
+                  <Plus className="w-3 h-3 md:w-4 md:h-4" />
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-w-[90vw] md:max-w-md">
                 <DialogHeader>
-                  <DialogTitle>{KO.pages.groups.newGroup}</DialogTitle>
-                  <DialogDescription>새로운 인플루언서 그룹을 만듭니다.</DialogDescription>
+                  <DialogTitle className="text-base md:text-lg">{KO.pages.groups.newGroup}</DialogTitle>
+                  <DialogDescription className="text-xs md:text-sm">새로운 인플루언서 그룹을 만듭니다.</DialogDescription>
                 </DialogHeader>
-                <div className="py-4">
-                  <label className="text-sm font-medium mb-2 block">{KO.pages.groups.groupName}</label>
-                  <Input value={newGroupName} onChange={e => setNewGroupName(e.target.value)} placeholder="예: 뷰티 블로거 2024" />
+                <div className="py-3 md:py-4">
+                  <label className="text-xs md:text-sm font-medium mb-1.5 md:mb-2 block">{KO.pages.groups.groupName}</label>
+                  <Input className="h-8 md:h-10 text-sm" value={newGroupName} onChange={e => setNewGroupName(e.target.value)} placeholder="예: 뷰티 블로거 2024" />
                 </div>
-                <Button onClick={handleCreate} disabled={createGroup.isPending} data-testid="button-submit-group">
+                <Button size="sm" onClick={handleCreate} disabled={createGroup.isPending} data-testid="button-submit-group">
                   {createGroup.isPending ? KO.nav.creating : KO.common.create}
                 </Button>
               </DialogContent>
             </Dialog>
           </div>
 
-          <ScrollArea className="flex-1">
-            <div className="space-y-2 pr-2">
+          <ScrollArea className="flex-1 max-h-32 md:max-h-none">
+            <div className="flex md:flex-col gap-1.5 md:gap-2 md:pr-2 overflow-x-auto md:overflow-x-visible pb-2 md:pb-0">
               {groups?.map(group => (
                 <Card 
                   key={group.id} 
-                  className={`cursor-pointer transition-all hover:shadow-md ${selectedGroupId === group.id ? 'ring-2 ring-primary' : ''}`}
+                  className={`cursor-pointer transition-all hover:shadow-md shrink-0 w-36 md:w-full ${selectedGroupId === group.id ? 'ring-2 ring-primary' : ''}`}
                   onClick={() => handleGroupClick(group.id)}
                   data-testid={`card-group-${group.id}`}
                 >
-                  <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between space-y-0">
-                    <CardTitle className="text-base font-medium">{group.name}</CardTitle>
-                    <Users className="w-4 h-4 text-muted-foreground" />
+                  <CardHeader className="p-2 md:p-4 pb-1 md:pb-2 flex flex-row items-center justify-between space-y-0 gap-1">
+                    <CardTitle className="text-xs md:text-base font-medium truncate">{group.name}</CardTitle>
+                    <Users className="w-3 h-3 md:w-4 md:h-4 text-muted-foreground shrink-0" />
                   </CardHeader>
-                  <CardContent className="p-4 pt-0">
-                    <div className="text-sm text-muted-foreground">{group.memberCount}명</div>
+                  <CardContent className="p-2 md:p-4 pt-0">
+                    <div className="text-[10px] md:text-sm text-muted-foreground">{group.memberCount}명</div>
                   </CardContent>
                 </Card>
               ))}
               {!groups?.length && !isLoading && (
-                <div className="text-center py-8 text-muted-foreground text-sm">
+                <div className="text-center py-4 md:py-8 text-muted-foreground text-xs md:text-sm w-full">
                   {KO.pages.groups.noGroups}
                 </div>
               )}
@@ -120,7 +120,7 @@ export default function Groups() {
         </div>
 
         {/* Right: Group Detail */}
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0 min-h-0">
           {selectedGroupId ? (
             <GroupDetailView 
               groupId={selectedGroupId} 
@@ -131,8 +131,8 @@ export default function Groups() {
           ) : (
             <div className="flex-1 flex items-center justify-center text-muted-foreground">
               <div className="text-center">
-                <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                그룹을 선택하세요
+                <Users className="w-8 h-8 md:w-12 md:h-12 mx-auto mb-2 md:mb-3 opacity-30" />
+                <span className="text-sm">그룹을 선택하세요</span>
               </div>
             </div>
           )}
@@ -195,86 +195,90 @@ function GroupDetailView({ groupId, workspaceId, isAddMemberOpen, setIsAddMember
 
   return (
     <>
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 md:mb-4 gap-2">
         <div>
-          <h2 className="text-2xl font-bold">{group.name}</h2>
-          <p className="text-muted-foreground">{group.description}</p>
+          <h2 className="text-lg md:text-2xl font-bold">{group.name}</h2>
+          <p className="text-muted-foreground text-xs md:text-base">{group.description}</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={handleDownloadCSV} data-testid="button-download-csv">
-            <Download className="w-4 h-4 mr-2" />
-            다운로드
+        <div className="flex gap-1.5 md:gap-2 w-full sm:w-auto">
+          <Button variant="outline" size="sm" className="text-xs h-7 md:h-8 flex-1 sm:flex-none" onClick={handleDownloadCSV} data-testid="button-download-csv">
+            <Download className="w-3 h-3 mr-1 md:mr-2" />
+            <span className="hidden sm:inline">다운로드</span>
+            <span className="sm:hidden">CSV</span>
           </Button>
-          <Button onClick={() => setIsAddMemberOpen(true)} data-testid="button-add-member">
-            <Plus className="w-4 h-4 mr-2" />
-            인플루언서 추가
+          <Button size="sm" className="text-xs h-7 md:h-8 flex-1 sm:flex-none" onClick={() => setIsAddMemberOpen(true)} data-testid="button-add-member">
+            <Plus className="w-3 h-3 mr-1 md:mr-2" />
+            <span className="hidden sm:inline">인플루언서 추가</span>
+            <span className="sm:hidden">추가</span>
           </Button>
         </div>
       </div>
 
       <Card className="flex-1 overflow-hidden">
         <ScrollArea className="h-full">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>인플루언서</TableHead>
-                <TableHead>플랫폼</TableHead>
-                <TableHead>핸들</TableHead>
-                <TableHead>태그</TableHead>
-                <TableHead className="w-[50px]"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {group.members.map(member => (
-                <TableRow key={member.id} data-testid={`row-member-${member.influencer.id}`}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback className="text-xs">{member.influencer.name.substring(0, 2)}</AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <div className="font-medium">{member.influencer.name}</div>
-                        <div className="text-xs text-muted-foreground">{member.influencer.email}</div>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {member.influencer.accounts?.[0] && (
-                      <PlatformIcon p={member.influencer.accounts[0].platform} />
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <span className="font-mono text-sm">{member.influencer.accounts?.[0]?.handle}</span>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-1 flex-wrap">
-                      {member.influencer.tags?.slice(0, 2).map((tag, i) => (
-                        <Badge key={i} variant="secondary" className="text-xs">{tag}</Badge>
-                      ))}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="text-destructive hover:text-destructive"
-                      onClick={() => handleRemove(member.influencer.id)}
-                      data-testid={`button-remove-member-${member.influencer.id}`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {group.members.length === 0 && (
+          <div className="overflow-x-auto">
+            <Table className="min-w-[400px]">
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                    멤버가 없습니다. 인플루언서를 추가해주세요.
-                  </TableCell>
+                  <TableHead className="text-xs md:text-sm">인플루언서</TableHead>
+                  <TableHead className="text-xs md:text-sm hidden md:table-cell">플랫폼</TableHead>
+                  <TableHead className="text-xs md:text-sm">핸들</TableHead>
+                  <TableHead className="text-xs md:text-sm hidden lg:table-cell">태그</TableHead>
+                  <TableHead className="w-[40px] md:w-[50px]"></TableHead>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {group.members.map(member => (
+                  <TableRow key={member.id} data-testid={`row-member-${member.influencer.id}`}>
+                    <TableCell className="py-2">
+                      <div className="flex items-center gap-2 md:gap-3">
+                        <Avatar className="h-6 w-6 md:h-8 md:w-8">
+                          <AvatarFallback className="text-[10px] md:text-xs">{member.influencer.name.substring(0, 2)}</AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0">
+                          <div className="font-medium text-xs md:text-sm truncate">{member.influencer.name}</div>
+                          <div className="text-[10px] md:text-xs text-muted-foreground truncate">{member.influencer.email}</div>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-2 hidden md:table-cell">
+                      {member.influencer.accounts?.[0] && (
+                        <PlatformIcon p={member.influencer.accounts[0].platform} />
+                      )}
+                    </TableCell>
+                    <TableCell className="py-2">
+                      <span className="font-mono text-xs md:text-sm">{member.influencer.accounts?.[0]?.handle}</span>
+                    </TableCell>
+                    <TableCell className="py-2 hidden lg:table-cell">
+                      <div className="flex gap-1 flex-wrap">
+                        {member.influencer.tags?.slice(0, 2).map((tag, i) => (
+                          <Badge key={i} variant="secondary" className="text-[10px] md:text-xs">{tag}</Badge>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-2">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="text-destructive hover:text-destructive h-6 w-6 md:h-8 md:w-8"
+                        onClick={() => handleRemove(member.influencer.id)}
+                        data-testid={`button-remove-member-${member.influencer.id}`}
+                      >
+                        <Trash2 className="w-3 h-3 md:w-4 md:h-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {group.members.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-6 md:py-8 text-muted-foreground text-xs md:text-sm">
+                      멤버가 없습니다. 인플루언서를 추가해주세요.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </ScrollArea>
       </Card>
 
@@ -333,43 +337,43 @@ function AddMemberModal({ open, onOpenChange, groupId, workspaceId, existingMemb
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-[90vw] md:max-w-lg">
         <DialogHeader>
-          <DialogTitle>인플루언서 추가</DialogTitle>
-          <DialogDescription>그룹에 추가할 인플루언서를 선택하세요.</DialogDescription>
+          <DialogTitle className="text-base md:text-lg">인플루언서 추가</DialogTitle>
+          <DialogDescription className="text-xs md:text-sm">그룹에 추가할 인플루언서를 선택하세요.</DialogDescription>
         </DialogHeader>
         
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Search className="absolute left-2.5 md:left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 md:w-4 md:h-4 text-muted-foreground" />
           <Input 
             placeholder="검색..." 
-            className="pl-9"
+            className="pl-8 md:pl-9 h-8 md:h-10 text-sm"
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
         </div>
 
-        <ScrollArea className="h-[300px] border rounded-lg">
-          <div className="p-2 space-y-1">
+        <ScrollArea className="h-[240px] md:h-[300px] border rounded-lg">
+          <div className="p-1.5 md:p-2 space-y-1">
             {filteredInfluencers.map(inf => (
               <div 
                 key={inf.id}
-                className={`p-3 rounded-lg cursor-pointer transition-colors flex items-center gap-3 ${selectedIds.has(inf.id) ? 'bg-primary/10 border border-primary' : 'hover:bg-muted border border-transparent'}`}
+                className={`p-2 md:p-3 rounded-lg cursor-pointer transition-colors flex items-center gap-2 md:gap-3 ${selectedIds.has(inf.id) ? 'bg-primary/10 border border-primary' : 'hover:bg-muted border border-transparent'}`}
                 onClick={() => toggleSelection(inf.id)}
                 data-testid={`add-member-option-${inf.id}`}
               >
-                <Checkbox checked={selectedIds.has(inf.id)} />
-                <Avatar className="h-8 w-8">
-                  <AvatarFallback className="text-xs">{inf.name.substring(0, 2)}</AvatarFallback>
+                <Checkbox checked={selectedIds.has(inf.id)} className="h-4 w-4" />
+                <Avatar className="h-6 w-6 md:h-8 md:w-8">
+                  <AvatarFallback className="text-[10px] md:text-xs">{inf.name.substring(0, 2)}</AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium truncate">{inf.name}</div>
-                  <div className="text-xs text-muted-foreground truncate">{inf.email}</div>
+                  <div className="font-medium text-xs md:text-sm truncate">{inf.name}</div>
+                  <div className="text-[10px] md:text-xs text-muted-foreground truncate">{inf.email}</div>
                 </div>
               </div>
             ))}
             {filteredInfluencers.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground">
+              <div className="text-center py-6 md:py-8 text-muted-foreground text-xs md:text-sm">
                 추가 가능한 인플루언서가 없습니다.
               </div>
             )}
@@ -377,8 +381,8 @@ function AddMemberModal({ open, onOpenChange, groupId, workspaceId, existingMemb
         </ScrollArea>
 
         <div className="flex justify-between items-center">
-          <span className="text-sm text-muted-foreground">{selectedIds.size}명 선택됨</span>
-          <Button onClick={handleAdd} disabled={addInfluencers.isPending || selectedIds.size === 0} data-testid="button-confirm-add-members">
+          <span className="text-xs md:text-sm text-muted-foreground">{selectedIds.size}명 선택됨</span>
+          <Button size="sm" onClick={handleAdd} disabled={addInfluencers.isPending || selectedIds.size === 0} data-testid="button-confirm-add-members">
             {addInfluencers.isPending ? "추가 중..." : "추가"}
           </Button>
         </div>

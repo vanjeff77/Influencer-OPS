@@ -33,44 +33,44 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/20 p-4">
-      <Card className="w-full max-w-md shadow-xl border-border/50">
-        <CardHeader className="space-y-1 text-center">
-          <CardTitle className="text-3xl font-display font-bold text-primary">{KO.pages.login.title}</CardTitle>
-          <CardDescription>{KO.pages.login.subtitle}</CardDescription>
+    <div className="min-h-screen flex items-center justify-center bg-muted/20 p-3 md:p-4">
+      <Card className="w-full max-w-sm md:max-w-md shadow-xl border-border/50">
+        <CardHeader className="space-y-0.5 md:space-y-1 text-center p-4 md:p-6">
+          <CardTitle className="text-xl md:text-3xl font-display font-bold text-primary">{KO.pages.login.title}</CardTitle>
+          <CardDescription className="text-xs md:text-sm">{KO.pages.login.subtitle}</CardDescription>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{KO.pages.login.username}</label>
+        <CardContent className="p-4 md:p-6 pt-0">
+          <form onSubmit={handleSubmit} className="space-y-3 md:space-y-4">
+            <div className="space-y-1.5 md:space-y-2">
+              <label className="text-xs md:text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{KO.pages.login.username}</label>
               <Input 
                 value={username} 
                 onChange={(e) => setUsername(e.target.value)} 
                 placeholder="demo@example.com"
-                className="bg-background"
+                className="bg-background h-9 md:h-10 text-sm"
                 data-testid="input-username"
               />
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{KO.pages.login.password}</label>
+            <div className="space-y-1.5 md:space-y-2">
+              <label className="text-xs md:text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">{KO.pages.login.password}</label>
               <Input 
                 type="password" 
                 value={password} 
                 onChange={(e) => setPassword(e.target.value)} 
                 placeholder="••••••"
-                className="bg-background"
+                className="bg-background h-9 md:h-10 text-sm"
                 data-testid="input-password"
               />
             </div>
             <Button 
               type="submit" 
-              className="w-full font-semibold" 
+              className="w-full font-semibold h-9 md:h-10 text-sm" 
               disabled={login.isPending}
               data-testid="button-login"
             >
               {login.isPending ? KO.pages.login.authenticating : KO.pages.login.signIn}
             </Button>
-            <div className="text-center text-xs text-muted-foreground mt-4">
+            <div className="text-center text-[10px] md:text-xs text-muted-foreground mt-3 md:mt-4">
               {KO.pages.login.demoCredentials}
             </div>
           </form>

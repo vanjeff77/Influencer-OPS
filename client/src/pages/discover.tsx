@@ -189,39 +189,39 @@ export default function Discover() {
 
   return (
     <Layout>
-      <div className="flex flex-col gap-4 h-full">
-        <div className="flex justify-between items-center">
+      <div className="flex flex-col gap-3 md:gap-4 h-full">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">{KO.pages.discover.title}</h1>
-            <p className="text-sm text-muted-foreground">{KO.pages.discover.subtitle}</p>
+            <h1 className="text-lg md:text-2xl font-bold tracking-tight">{KO.pages.discover.title}</h1>
+            <p className="text-xs md:text-sm text-muted-foreground">{KO.pages.discover.subtitle}</p>
           </div>
           
           <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
             <DialogTrigger asChild>
-              <Button size="sm" data-testid="button-add-influencer">
-                <Plus className="w-4 h-4 mr-1" />
+              <Button size="sm" className="text-xs md:text-sm h-7 md:h-8" data-testid="button-add-influencer">
+                <Plus className="w-3 h-3 md:w-4 md:h-4 mr-1" />
                 {KO.pages.discover.addInfluencer}
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-[90vw] md:max-w-md">
               <DialogHeader>
-                <DialogTitle>{KO.pages.discover.addNewInfluencer}</DialogTitle>
-                <DialogDescription>새로운 인플루언서 정보를 입력하세요.</DialogDescription>
+                <DialogTitle className="text-base md:text-lg">{KO.pages.discover.addNewInfluencer}</DialogTitle>
+                <DialogDescription className="text-xs md:text-sm">새로운 인플루언서 정보를 입력하세요.</DialogDescription>
               </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <label className="text-sm">{KO.pages.discover.name}</label>
-                  <Input value={newInfluencer.name} onChange={e => setNewInfluencer({...newInfluencer, name: e.target.value})} placeholder="홍길동" />
+              <div className="grid gap-3 md:gap-4 py-3 md:py-4">
+                <div className="grid gap-1.5 md:gap-2">
+                  <label className="text-xs md:text-sm">{KO.pages.discover.name}</label>
+                  <Input className="h-8 md:h-10 text-sm" value={newInfluencer.name} onChange={e => setNewInfluencer({...newInfluencer, name: e.target.value})} placeholder="홍길동" />
                 </div>
-                <div className="grid gap-2">
-                  <label className="text-sm">{KO.pages.discover.email}</label>
-                  <Input value={newInfluencer.email} onChange={e => setNewInfluencer({...newInfluencer, email: e.target.value})} placeholder="influencer@example.com" />
+                <div className="grid gap-1.5 md:gap-2">
+                  <label className="text-xs md:text-sm">{KO.pages.discover.email}</label>
+                  <Input className="h-8 md:h-10 text-sm" value={newInfluencer.email} onChange={e => setNewInfluencer({...newInfluencer, email: e.target.value})} placeholder="influencer@example.com" />
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   <div className="col-span-1">
-                     <label className="text-sm">{KO.pages.discover.platform}</label>
+                     <label className="text-xs md:text-sm">{KO.pages.discover.platform}</label>
                      <Select value={newInfluencer.platform} onValueChange={v => setNewInfluencer({...newInfluencer, platform: v})}>
-                       <SelectTrigger><SelectValue /></SelectTrigger>
+                       <SelectTrigger className="h-8 md:h-10 text-sm"><SelectValue /></SelectTrigger>
                        <SelectContent>
                          <SelectItem value="IG">Instagram</SelectItem>
                          <SelectItem value="YT">YouTube</SelectItem>
@@ -230,12 +230,12 @@ export default function Discover() {
                      </Select>
                   </div>
                   <div className="col-span-2">
-                     <label className="text-sm">{KO.pages.discover.handle}</label>
-                     <Input value={newInfluencer.handle} onChange={e => setNewInfluencer({...newInfluencer, handle: e.target.value})} placeholder="@username" />
+                     <label className="text-xs md:text-sm">{KO.pages.discover.handle}</label>
+                     <Input className="h-8 md:h-10 text-sm" value={newInfluencer.handle} onChange={e => setNewInfluencer({...newInfluencer, handle: e.target.value})} placeholder="@username" />
                   </div>
                 </div>
               </div>
-              <Button onClick={handleCreate} disabled={createInfluencer.isPending} data-testid="button-submit-influencer">
+              <Button size="sm" onClick={handleCreate} disabled={createInfluencer.isPending} data-testid="button-submit-influencer">
                 {createInfluencer.isPending ? "추가 중..." : "추가"}
               </Button>
             </DialogContent>
@@ -243,37 +243,37 @@ export default function Discover() {
         </div>
 
         {selectedIds.size > 0 && (
-          <div className="bg-primary/5 border border-primary/20 rounded-md px-3 py-2 flex items-center justify-between">
-            <span className="text-sm font-medium">{selectedIds.size}명 선택됨</span>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setIsGroupModalOpen(true)} data-testid="button-save-to-group">
+          <div className="bg-primary/5 border border-primary/20 rounded-md px-2 md:px-3 py-1.5 md:py-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+            <span className="text-xs md:text-sm font-medium">{selectedIds.size}명 선택됨</span>
+            <div className="flex flex-wrap gap-1.5 md:gap-2">
+              <Button variant="outline" size="sm" className="text-xs h-7 px-2" onClick={() => setIsGroupModalOpen(true)} data-testid="button-save-to-group">
                 <Users className="w-3 h-3 mr-1" />
                 그룹에 저장
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setIsCampaignModalOpen(true)} data-testid="button-assign-campaign">
+              <Button variant="outline" size="sm" className="text-xs h-7 px-2" onClick={() => setIsCampaignModalOpen(true)} data-testid="button-assign-campaign">
                 <Megaphone className="w-3 h-3 mr-1" />
                 캠페인에 배정
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setSelectedIds(new Set())}>
                 <X className="w-3 h-3" />
               </Button>
             </div>
           </div>
         )}
 
-        <div className="flex gap-3 items-center">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <div className="flex gap-2 md:gap-3 items-center">
+          <div className="relative flex-1 max-w-xs md:max-w-md">
+            <Search className="absolute left-2 md:left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 md:w-4 md:h-4 text-muted-foreground" />
             <Input 
               placeholder={KO.pages.discover.searchPlaceholder}
-              className="pl-8 h-8 text-sm"
+              className="pl-7 md:pl-8 h-7 md:h-8 text-xs md:text-sm"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               data-testid="input-search"
             />
           </div>
           <Select value={platformFilter} onValueChange={setPlatformFilter}>
-            <SelectTrigger className="w-[120px] h-8 text-sm" data-testid="select-platform-filter">
+            <SelectTrigger className="w-[90px] md:w-[120px] h-7 md:h-8 text-xs md:text-sm" data-testid="select-platform-filter">
               <SelectValue placeholder="플랫폼" />
             </SelectTrigger>
             <SelectContent>

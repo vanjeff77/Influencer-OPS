@@ -40,70 +40,72 @@ export default function Tracking() {
 
   return (
     <Layout>
-      <div className="flex flex-col gap-6">
-        <div className="flex justify-between items-center">
+      <div className="flex flex-col gap-4 md:gap-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-4">
           <div>
-             <h1 className="text-3xl font-bold tracking-tight">{KO.pages.tracking.title}</h1>
-             <p className="text-muted-foreground mt-1">{KO.pages.tracking.subtitle}</p>
+             <h1 className="text-xl md:text-3xl font-bold tracking-tight">{KO.pages.tracking.title}</h1>
+             <p className="text-muted-foreground text-xs md:text-base mt-0.5 md:mt-1">{KO.pages.tracking.subtitle}</p>
           </div>
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
-              <Button data-testid="button-add-tracking">
-                <Plus className="w-4 h-4 mr-2" />
+              <Button size="sm" className="text-xs md:text-sm" data-testid="button-add-tracking">
+                <Plus className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" />
                 {KO.pages.tracking.addTrackingJob}
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-[90vw] md:max-w-md">
               <DialogHeader>
-                <DialogTitle>{KO.pages.tracking.newTrackingJob}</DialogTitle>
+                <DialogTitle className="text-base md:text-lg">{KO.pages.tracking.newTrackingJob}</DialogTitle>
               </DialogHeader>
-              <div className="py-4">
-                <label className="text-sm font-medium mb-2 block">{KO.pages.tracking.keywordOrAccount}</label>
-                <Input value={newJobName} onChange={e => setNewJobName(e.target.value)} placeholder="#서머캠페인" />
+              <div className="py-3 md:py-4">
+                <label className="text-xs md:text-sm font-medium mb-1.5 md:mb-2 block">{KO.pages.tracking.keywordOrAccount}</label>
+                <Input className="h-8 md:h-10 text-sm" value={newJobName} onChange={e => setNewJobName(e.target.value)} placeholder="#서머캠페인" />
               </div>
-              <Button onClick={handleCreate} disabled={createJob.isPending} data-testid="button-submit-tracking">
+              <Button size="sm" onClick={handleCreate} disabled={createJob.isPending} data-testid="button-submit-tracking">
                 {KO.pages.tracking.createJob}
               </Button>
             </DialogContent>
           </Dialog>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-6">
           <Card className="md:col-span-1 h-fit">
-            <CardHeader>
-              <CardTitle>{KO.pages.tracking.activeJobs}</CardTitle>
+            <CardHeader className="p-3 md:p-6">
+              <CardTitle className="text-base md:text-xl">{KO.pages.tracking.activeJobs}</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="p-3 md:p-6 pt-0 space-y-1.5 md:space-y-2">
               {jobs?.map(job => (
                 <div 
                   key={job.id} 
                   onClick={() => setSelectedJobId(job.id)}
-                  className={`p-3 rounded-lg border cursor-pointer transition-colors ${selectedJobId === job.id ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted'}`}
+                  className={`p-2 md:p-3 rounded-lg border cursor-pointer transition-colors ${selectedJobId === job.id ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted'}`}
                   data-testid={`button-job-${job.id}`}
                 >
-                  <div className="font-medium">{job.name}</div>
-                  <div className="text-xs text-muted-foreground capitalize mt-1">{job.targetType} • {job.status === 'active' ? KO.status.active : job.status}</div>
+                  <div className="font-medium text-sm md:text-base">{job.name}</div>
+                  <div className="text-[10px] md:text-xs text-muted-foreground capitalize mt-0.5 md:mt-1">{job.targetType} • {job.status === 'active' ? KO.status.active : job.status}</div>
                 </div>
               ))}
-              {!jobs?.length && <div className="text-sm text-muted-foreground">{KO.pages.tracking.noActiveJobs}</div>}
+              {!jobs?.length && <div className="text-xs md:text-sm text-muted-foreground">{KO.pages.tracking.noActiveJobs}</div>}
             </CardContent>
           </Card>
 
-          <Card className="md:col-span-2 min-h-[400px]">
-            <CardHeader className="flex flex-row items-center justify-between">
+          <Card className="md:col-span-2 min-h-[280px] md:min-h-[400px]">
+            <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between p-3 md:p-6 gap-2">
               <div>
-                <CardTitle>{KO.pages.tracking.metricPerformance}</CardTitle>
-                <CardDescription>{KO.pages.tracking.dailyMentions}</CardDescription>
+                <CardTitle className="text-base md:text-xl">{KO.pages.tracking.metricPerformance}</CardTitle>
+                <CardDescription className="text-xs md:text-sm">{KO.pages.tracking.dailyMentions}</CardDescription>
               </div>
               {selectedJobId && (
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={() => mockUpdate.mutate()} disabled={mockUpdate.isPending} data-testid="button-update-data">
-                     <RefreshCcw className={`w-3 h-3 mr-2 ${mockUpdate.isPending ? 'animate-spin' : ''}`} />
-                     {KO.common.updateData}
+                <div className="flex items-center gap-1.5 md:gap-2 w-full md:w-auto">
+                  <Button variant="outline" size="sm" className="text-xs h-7 md:h-8 flex-1 md:flex-none" onClick={() => mockUpdate.mutate()} disabled={mockUpdate.isPending} data-testid="button-update-data">
+                     <RefreshCcw className={`w-3 h-3 mr-1 md:mr-2 ${mockUpdate.isPending ? 'animate-spin' : ''}`} />
+                     <span className="hidden sm:inline">{KO.common.updateData}</span>
+                     <span className="sm:hidden">업데이트</span>
                   </Button>
                   <Button 
                     variant="outline" 
-                    size="sm" 
+                    size="sm"
+                    className="text-xs h-7 md:h-8 flex-1 md:flex-none"
                     onClick={() => {
                       if (!metrics || metrics.length === 0) return;
                       const selectedJob = jobs?.find(j => j.id === selectedJobId);
@@ -125,15 +127,16 @@ export default function Tracking() {
                     disabled={!metrics || metrics.length === 0}
                     data-testid="button-export-csv"
                   >
-                    <Download className="w-3 h-3 mr-2" />
-                    CSV 내보내기
+                    <Download className="w-3 h-3 mr-1 md:mr-2" />
+                    <span className="hidden sm:inline">CSV 내보내기</span>
+                    <span className="sm:hidden">CSV</span>
                   </Button>
                 </div>
               )}
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-3 md:p-6 pt-0">
               {selectedJobId ? (
-                <div className="h-[300px] w-full">
+                <div className="h-[200px] md:h-[300px] w-full">
                   {metrics && metrics.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={metrics}>
@@ -142,18 +145,19 @@ export default function Tracking() {
                           dataKey="date" 
                           tickFormatter={(str) => format(new Date(str), 'MM.dd')}
                           stroke="hsl(var(--muted-foreground))"
-                          fontSize={12}
+                          fontSize={10}
                           tickLine={false}
                           axisLine={false}
                         />
                         <YAxis 
                           stroke="hsl(var(--muted-foreground))" 
-                          fontSize={12}
+                          fontSize={10}
                           tickLine={false}
                           axisLine={false}
+                          width={30}
                         />
                         <Tooltip 
-                          contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))' }}
+                          contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))', fontSize: '12px' }}
                           labelFormatter={(label) => format(new Date(label), 'yyyy.MM.dd')}
                         />
                         <Line 
@@ -161,19 +165,19 @@ export default function Tracking() {
                           dataKey="value" 
                           stroke="hsl(var(--primary))" 
                           strokeWidth={2} 
-                          dot={{ r: 4, fill: "hsl(var(--primary))" }}
-                          activeDot={{ r: 6 }}
+                          dot={{ r: 3, fill: "hsl(var(--primary))" }}
+                          activeDot={{ r: 5 }}
                         />
                       </LineChart>
                     </ResponsiveContainer>
                   ) : (
-                    <div className="h-full flex items-center justify-center text-muted-foreground">
+                    <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
                       {KO.pages.tracking.noDataYet}
                     </div>
                   )}
                 </div>
               ) : (
-                <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                <div className="h-[200px] md:h-[300px] flex items-center justify-center text-muted-foreground text-sm">
                   {KO.pages.tracking.selectJobToView}
                 </div>
               )}

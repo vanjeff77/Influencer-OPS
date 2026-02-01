@@ -75,42 +75,42 @@ export default function Campaigns() {
 
   return (
     <Layout>
-      <div className="flex flex-col gap-8">
-        <div className="flex justify-between items-center">
+      <div className="flex flex-col gap-4 md:gap-8">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">{KO.pages.campaigns.title}</h1>
-            <p className="text-muted-foreground mt-1">{KO.pages.campaigns.subtitle}</p>
+            <h1 className="text-xl md:text-3xl font-bold tracking-tight">{KO.pages.campaigns.title}</h1>
+            <p className="text-muted-foreground text-xs md:text-base mt-0.5 md:mt-1">{KO.pages.campaigns.subtitle}</p>
           </div>
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
-              <Button size="lg" className="shadow-lg shadow-primary/20" data-testid="button-new-campaign">
-                <Plus className="w-5 h-5 mr-2" />
+              <Button size="sm" className="shadow-lg shadow-primary/20 text-xs md:text-sm" data-testid="button-new-campaign">
+                <Plus className="w-4 h-4 mr-1 md:mr-2" />
                 {KO.pages.campaigns.newCampaign}
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-[90vw] md:max-w-md">
               <DialogHeader>
-                <DialogTitle>{KO.pages.campaigns.createNewCampaign}</DialogTitle>
+                <DialogTitle className="text-base md:text-lg">{KO.pages.campaigns.createNewCampaign}</DialogTitle>
               </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <label>{KO.pages.campaigns.campaignName}</label>
-                  <Input value={newCampaign.name} onChange={e => setNewCampaign({...newCampaign, name: e.target.value})} placeholder="서머 런칭 2024" />
+              <div className="grid gap-3 md:gap-4 py-3 md:py-4">
+                <div className="grid gap-1.5 md:gap-2">
+                  <label className="text-xs md:text-sm">{KO.pages.campaigns.campaignName}</label>
+                  <Input className="h-8 md:h-10 text-sm" value={newCampaign.name} onChange={e => setNewCampaign({...newCampaign, name: e.target.value})} placeholder="서머 런칭 2024" />
                 </div>
-                <div className="grid gap-2">
-                  <label>{KO.pages.campaigns.client}</label>
-                  <Input value={newCampaign.client} onChange={e => setNewCampaign({...newCampaign, client: e.target.value})} placeholder="ACME 코퍼레이션" />
+                <div className="grid gap-1.5 md:gap-2">
+                  <label className="text-xs md:text-sm">{KO.pages.campaigns.client}</label>
+                  <Input className="h-8 md:h-10 text-sm" value={newCampaign.client} onChange={e => setNewCampaign({...newCampaign, client: e.target.value})} placeholder="ACME 코퍼레이션" />
                 </div>
-                <div className="grid gap-2">
-                  <label>{KO.pages.campaigns.goal}</label>
-                  <Input value={newCampaign.goal} onChange={e => setNewCampaign({...newCampaign, goal: e.target.value})} placeholder="브랜드 인지도 향상" />
+                <div className="grid gap-1.5 md:gap-2">
+                  <label className="text-xs md:text-sm">{KO.pages.campaigns.goal}</label>
+                  <Input className="h-8 md:h-10 text-sm" value={newCampaign.goal} onChange={e => setNewCampaign({...newCampaign, goal: e.target.value})} placeholder="브랜드 인지도 향상" />
                 </div>
-                <div className="grid gap-2">
-                  <label>{KO.pages.campaigns.budget} (원)</label>
-                  <Input type="number" value={newCampaign.budget} onChange={e => setNewCampaign({...newCampaign, budget: Number(e.target.value)})} placeholder="5000000" />
+                <div className="grid gap-1.5 md:gap-2">
+                  <label className="text-xs md:text-sm">{KO.pages.campaigns.budget} (원)</label>
+                  <Input className="h-8 md:h-10 text-sm" type="number" value={newCampaign.budget} onChange={e => setNewCampaign({...newCampaign, budget: Number(e.target.value)})} placeholder="5000000" />
                 </div>
               </div>
-              <Button onClick={handleCreate} disabled={createCampaign.isPending} data-testid="button-submit-campaign">
+              <Button size="sm" onClick={handleCreate} disabled={createCampaign.isPending} data-testid="button-submit-campaign">
                 {createCampaign.isPending ? KO.pages.campaigns.creating : KO.pages.campaigns.createCampaign}
               </Button>
             </DialogContent>
@@ -118,7 +118,7 @@ export default function Campaigns() {
         </div>
 
         {/* Advertiser Filter Buttons */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
           {advertisers.map((adv) => (
             <Button
               key={adv.id}
@@ -126,7 +126,7 @@ export default function Campaigns() {
               size="sm"
               onClick={() => setAdvertiserFilter(adv.id)}
               data-testid={`button-advertiser-${adv.id}`}
-              className={advertiserFilter === adv.id ? "" : "bg-background"}
+              className={`text-xs md:text-sm h-7 md:h-8 px-2 md:px-3 ${advertiserFilter === adv.id ? "" : "bg-background"}`}
             >
               {adv.name}
             </Button>
@@ -134,32 +134,32 @@ export default function Campaigns() {
         </div>
 
         {isLoading ? (
-          <div>{KO.common.loading}</div>
+          <div className="text-sm">{KO.common.loading}</div>
         ) : (
-          <div className="grid gap-6">
+          <div className="grid gap-3 md:gap-6">
             {filteredCampaigns?.map((campaign) => (
               <Link key={campaign.id} href={`/campaigns/${campaign.id}`} className="block">
                 <Card className="hover:border-primary/50 transition-all hover:shadow-md cursor-pointer group" data-testid={`card-campaign-${campaign.id}`}>
-                  <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
-                    <div className="space-y-1">
-                      <CardTitle className="text-xl group-hover:text-primary transition-colors">{campaign.name}</CardTitle>
-                      <CardDescription>{campaign.client} • {KO.pages.campaigns.created} {format(new Date(campaign.createdAt || new Date()), 'yyyy.MM.dd')}</CardDescription>
+                  <CardHeader className="flex flex-row items-start justify-between space-y-0 p-3 md:p-6 pb-1 md:pb-2 gap-2">
+                    <div className="space-y-0.5 md:space-y-1 min-w-0">
+                      <CardTitle className="text-sm md:text-xl group-hover:text-primary transition-colors truncate">{campaign.name}</CardTitle>
+                      <CardDescription className="text-[10px] md:text-sm">{campaign.client} • {KO.pages.campaigns.created} {format(new Date(campaign.createdAt || new Date()), 'yyyy.MM.dd')}</CardDescription>
                     </div>
-                    <Badge variant="outline" className={`capitalize border-0 ${getStatusColor(campaign.status || 'draft')}`}>
+                    <Badge variant="outline" className={`capitalize border-0 text-[10px] md:text-xs shrink-0 ${getStatusColor(campaign.status || 'draft')}`}>
                       {getStatusLabel(campaign.status || 'draft')}
                     </Badge>
                   </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <DollarSign className="w-4 h-4" />
-                        <span>{KO.pages.campaigns.budget}: <span className="text-foreground font-medium">{campaign.budget?.toLocaleString()}원</span></span>
+                  <CardContent className="p-3 md:p-6 pt-0 md:pt-0">
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-4 mt-2 md:mt-4">
+                      <div className="flex items-center gap-1 md:gap-2 text-[10px] md:text-sm text-muted-foreground">
+                        <DollarSign className="w-3 h-3 md:w-4 md:h-4 shrink-0" />
+                        <span className="truncate">{KO.pages.campaigns.budget}: <span className="text-foreground font-medium">{campaign.budget?.toLocaleString()}원</span></span>
                       </div>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Calendar className="w-4 h-4" />
-                        <span>{KO.pages.campaigns.goal}: <span className="text-foreground font-medium">{campaign.goal || KO.pages.campaigns.notSet}</span></span>
+                      <div className="flex items-center gap-1 md:gap-2 text-[10px] md:text-sm text-muted-foreground">
+                        <Calendar className="w-3 h-3 md:w-4 md:h-4 shrink-0" />
+                        <span className="truncate">{KO.pages.campaigns.goal}: <span className="text-foreground font-medium">{campaign.goal || KO.pages.campaigns.notSet}</span></span>
                       </div>
-                      <div className="flex items-center justify-end text-primary text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="hidden md:flex items-center justify-end text-primary text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity">
                         {KO.common.viewDetails} <ArrowRight className="w-4 h-4 ml-1" />
                       </div>
                     </div>
@@ -169,8 +169,8 @@ export default function Campaigns() {
             ))}
             
             {filteredCampaigns?.length === 0 && (
-              <div className="text-center py-20 bg-muted/10 rounded-xl border border-dashed border-border">
-                <p className="text-muted-foreground">
+              <div className="text-center py-12 md:py-20 bg-muted/10 rounded-xl border border-dashed border-border">
+                <p className="text-muted-foreground text-sm">
                   {advertiserFilter === "all" ? KO.pages.campaigns.noCampaigns : "선택한 광고주의 캠페인이 없습니다."}
                 </p>
               </div>
