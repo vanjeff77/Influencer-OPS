@@ -8,6 +8,11 @@ export const userRoleEnum = z.enum(["MASTER", "EDITOR", "VIEWER"]);
 export const platformEnum = z.enum(["IG", "YT", "TikTok", "X", "Blog"]);
 export const jobStatusEnum = z.enum(["pending", "processing", "completed", "failed"]);
 
+// Campaign line item enums
+export const stageEnum = z.enum(["선정완료", "오퍼확정", "계약진행", "일정확정", "초안수신", "피드백중", "완성본확정", "완료"]);
+export const commStatusEnum = z.enum(["컨택전", "미응답", "협의중", "수락", "거절", "보류"]);
+export const reviewStatusEnum = z.enum(["초안대기", "검토중", "피드백전달", "승인완료", "업로드완료"]);
+
 // === USERS & WORKSPACES ===
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -125,6 +130,45 @@ export const campaignInfluencers = pgTable("campaign_influencers", {
   firstContactCompleted: boolean("first_contact_completed").default(false),
   firstContactAt: timestamp("first_contact_at"),
   firstContactMethod: text("first_contact_method"), // auto, manual
+  
+  // Operations stage (운영단계)
+  stage: text("stage").default("선정완료"), // 선정완료, 오퍼확정, 계약진행, 일정확정, 초안수신, 피드백중, 완성본확정, 완료
+  commStatus: text("comm_status").default("컨택전"), // 컨택전, 미응답, 협의중, 수락, 거절, 보류
+  reviewStatus: text("review_status").default("초안대기"), // 초안대기, 검토중, 피드백전달, 승인완료, 업로드완료
+  
+  // Offer details (오퍼 확정)
+  offerFee: integer("offer_fee"), // 진행비
+  offerVatIncluded: boolean("offer_vat_included").default(false),
+  offerUsageMonths: integer("offer_usage_months"), // 2차활용 기간(개월)
+  offerUsageNote: text("offer_usage_note"), // 범위/조건 메모
+  offerDeadlineNote: text("offer_deadline_note"), // 납기 메모
+  
+  // Contract details (계약)
+  contractUrl: text("contract_url"),
+  contractFileId: text("contract_file_id"),
+  
+  // Schedule (일정)
+  draftDueAt: timestamp("draft_due_at"), // 초안 수신 예정일
+  uploadDueAt: timestamp("upload_due_at"), // 업로드(게시) 예정일
+  
+  // Draft and final content (자료)
+  draftUrl: text("draft_url"),
+  draftFileId: text("draft_file_id"),
+  finalUrl: text("final_url"), // 게시 URL / 완성본 링크
+  finalFileId: text("final_file_id"),
+  
+  // Published confirmation (게시 확인)
+  isPublishedConfirmed: boolean("is_published_confirmed").default(false),
+  publishedConfirmedAt: timestamp("published_confirmed_at"),
+  
+  // Feedback summary (피드백 요약)
+  feedbackSummary: text("feedback_summary"),
+  feedbackSummaryUpdatedAt: timestamp("feedback_summary_updated_at"),
+  
+  // Last outbound for comm tracking
+  lastOutboundAt: timestamp("last_outbound_at"),
+  
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 // === EMAIL INTERNALIZATION ===
@@ -323,6 +367,17 @@ export const notifications = pgTable("notifications", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// === FEEDBACK NOTES (for campaign line item internal feedback) ===
+export const feedbackNotes = pgTable("feedback_notes", {
+  id: serial("id").primaryKey(),
+  lineItemId: integer("line_item_id").notNull(), // campaignInfluencer id
+  authorUserId: integer("author_user_id").notNull(),
+  body: text("body").notNull(),
+  isPinned: boolean("is_pinned").default(false),
+  isSelectedForSummary: boolean("is_selected_for_summary").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 
 // === RELATIONS ===
 export const workspaceRelations = relations(workspaces, ({ many }) => ({
@@ -381,6 +436,11 @@ export const campaignContentRelations = relations(campaignContents, ({ one }) =>
   influencer: one(influencers, { fields: [campaignContents.influencerId], references: [influencers.id] }),
 }));
 
+export const feedbackNoteRelations = relations(feedbackNotes, ({ one }) => ({
+  lineItem: one(campaignInfluencers, { fields: [feedbackNotes.lineItemId], references: [campaignInfluencers.id] }),
+  author: one(users, { fields: [feedbackNotes.authorUserId], references: [users.id] }),
+}));
+
 // === SCHEMAS ===
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export const insertWorkspaceSchema = createInsertSchema(workspaces).omit({ id: true, createdAt: true });
@@ -399,6 +459,8 @@ export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({ id: tru
 export const insertBulkEmailJobSchema = createInsertSchema(bulkEmailJobs).omit({ id: true, createdAt: true, completedAt: true });
 export const insertBulkEmailQueueItemSchema = createInsertSchema(bulkEmailQueueItems).omit({ id: true, createdAt: true });
 export const insertCampaignContentSchema = createInsertSchema(campaignContents).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertFeedbackNoteSchema = createInsertSchema(feedbackNotes).omit({ id: true, createdAt: true });
+export const insertCampaignInfluencerSchema = createInsertSchema(campaignInfluencers).omit({ id: true, updatedAt: true });
 
 // === TYPES ===
 export type User = typeof users.$inferSelect;
@@ -423,7 +485,10 @@ export type TrackingJob = typeof trackingJobs.$inferSelect;
 export type BulkEmailJob = typeof bulkEmailJobs.$inferSelect;
 export type BulkEmailQueueItem = typeof bulkEmailQueueItems.$inferSelect;
 export type CampaignContent = typeof campaignContents.$inferSelect;
+export type FeedbackNote = typeof feedbackNotes.$inferSelect;
 export type InsertCampaignContent = z.infer<typeof insertCampaignContentSchema>;
+export type InsertFeedbackNote = z.infer<typeof insertFeedbackNoteSchema>;
+export type InsertCampaignInfluencer = z.infer<typeof insertCampaignInfluencerSchema>;
 
 export type InsertConversation = z.infer<typeof insertConversationSchema>;
 export type InsertConversationMessage = z.infer<typeof insertConversationMessageSchema>;

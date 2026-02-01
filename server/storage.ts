@@ -2,7 +2,7 @@ import { db } from "./db";
 import {
   users, workspaces, workspaceMembers, influencers, influencerAccounts, groups, groupInfluencers, campaigns, campaignInfluencers,
   emailAccounts, emailThreads, trackingJobs, trackingMetrics, contents, timelineEvents, auditLogs, notifications,
-  conversations, conversationMessages, emailTemplates, bulkEmailJobs, bulkEmailQueueItems, campaignContents,
+  conversations, conversationMessages, emailTemplates, bulkEmailJobs, bulkEmailQueueItems, campaignContents, feedbackNotes,
   type User, type InsertUser, type Workspace, type InsertWorkspace,
   type Influencer, type CreateInfluencerWithAccounts, type InfluencerAccount,
   type Group, type GroupInfluencer, type Campaign, type CampaignInfluencer, type Content,
@@ -11,7 +11,8 @@ import {
   type Conversation, type ConversationMessage, type EmailTemplate,
   type InsertConversation, type InsertConversationMessage, type InsertEmailTemplate,
   type BulkEmailJob, type BulkEmailQueueItem, type InsertBulkEmailJob, type InsertBulkEmailQueueItem,
-  type CampaignContent, type InsertCampaignContent
+  type CampaignContent, type InsertCampaignContent,
+  type FeedbackNote, type InsertFeedbackNote
 } from "@shared/schema";
 import { eq, like, or, and, sql, inArray, desc } from "drizzle-orm";
 
@@ -102,6 +103,18 @@ export interface IStorage {
   createCampaignContent(content: InsertCampaignContent): Promise<CampaignContent>;
   updateCampaignContent(id: number, data: Partial<CampaignContent>): Promise<CampaignContent>;
   deleteCampaignContent(id: number): Promise<void>;
+  
+  // Feedback Notes
+  getFeedbackNotes(lineItemId: number): Promise<(FeedbackNote & { author?: User })[]>;
+  createFeedbackNote(note: InsertFeedbackNote): Promise<FeedbackNote>;
+  updateFeedbackNote(id: number, data: Partial<FeedbackNote>): Promise<FeedbackNote>;
+  deleteFeedbackNote(id: number): Promise<void>;
+  
+  // Line Item Operations
+  getLineItemWithDetails(id: number): Promise<(CampaignInfluencer & { 
+    influencer?: Influencer & { accounts: InfluencerAccount[] };
+    feedbackNotes?: (FeedbackNote & { author?: User })[];
+  }) | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -829,6 +842,55 @@ export class DatabaseStorage implements IStorage {
       }
       return { influencer: newInf, account: newAccount, isNew: true };
     }
+  }
+
+  // Feedback Notes
+  async getFeedbackNotes(lineItemId: number): Promise<(FeedbackNote & { author?: User })[]> {
+    const notes = await db.select().from(feedbackNotes)
+      .where(eq(feedbackNotes.lineItemId, lineItemId))
+      .orderBy(desc(feedbackNotes.createdAt));
+    
+    if (notes.length === 0) return [];
+    
+    const authorIds = [...new Set(notes.map(n => n.authorUserId))];
+    const allUsers = await db.select().from(users).where(inArray(users.id, authorIds));
+    
+    return notes.map(note => ({
+      ...note,
+      author: allUsers.find(u => u.id === note.authorUserId)
+    }));
+  }
+
+  async createFeedbackNote(note: InsertFeedbackNote): Promise<FeedbackNote> {
+    const [newNote] = await db.insert(feedbackNotes).values(note).returning();
+    return newNote;
+  }
+
+  async updateFeedbackNote(id: number, data: Partial<FeedbackNote>): Promise<FeedbackNote> {
+    const [updated] = await db.update(feedbackNotes).set(data).where(eq(feedbackNotes.id, id)).returning();
+    return updated;
+  }
+
+  async deleteFeedbackNote(id: number): Promise<void> {
+    await db.delete(feedbackNotes).where(eq(feedbackNotes.id, id));
+  }
+
+  async getLineItemWithDetails(id: number): Promise<(CampaignInfluencer & { 
+    influencer?: Influencer & { accounts: InfluencerAccount[] };
+    feedbackNotes?: (FeedbackNote & { author?: User })[];
+  }) | undefined> {
+    const [lineItem] = await db.select().from(campaignInfluencers).where(eq(campaignInfluencers.id, id));
+    if (!lineItem) return undefined;
+    
+    const [inf] = await db.select().from(influencers).where(eq(influencers.id, lineItem.influencerId));
+    const accounts = inf ? await db.select().from(influencerAccounts).where(eq(influencerAccounts.influencerId, inf.id)) : [];
+    const notes = await this.getFeedbackNotes(id);
+    
+    return {
+      ...lineItem,
+      influencer: inf ? { ...inf, accounts } : undefined,
+      feedbackNotes: notes
+    };
   }
 }
 
