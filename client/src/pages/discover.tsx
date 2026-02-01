@@ -49,7 +49,11 @@ export default function Discover() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
   const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
-  const [newInfluencer, setNewInfluencer] = useState({ name: "", email: "", handle: "", platform: "IG" });
+  const [newInfluencer, setNewInfluencer] = useState({ 
+    name: "", 
+    email: "", 
+    accounts: [{ platform: "IG", handle: "" }] 
+  });
   
   useEffect(() => {
     const params = new URLSearchParams(searchParams);
@@ -129,21 +133,32 @@ export default function Discover() {
     }
   };
 
+  const platformUrlMap: Record<string, string> = {
+    IG: 'instagram.com',
+    YT: 'youtube.com/@',
+    TikTok: 'tiktok.com/@',
+    X: 'x.com',
+    Blog: 'blog.naver.com',
+  };
+
   const handleCreate = () => {
     if (!newInfluencer.name) return;
+    const validAccounts = newInfluencer.accounts
+      .filter(acc => acc.handle.trim())
+      .map(acc => ({
+        platform: acc.platform,
+        handle: acc.handle,
+        url: `https://${platformUrlMap[acc.platform] || 'example.com'}/${acc.handle}`,
+        verified: false
+      }));
     createInfluencer.mutate({
       name: newInfluencer.name,
       email: newInfluencer.email,
-      accounts: newInfluencer.handle ? [{
-        platform: newInfluencer.platform,
-        handle: newInfluencer.handle,
-        url: `https://${newInfluencer.platform.toLowerCase()}.com/${newInfluencer.handle}`,
-        verified: false
-      }] : []
+      accounts: validAccounts
     }, {
       onSuccess: () => {
         setIsAddOpen(false);
-        setNewInfluencer({ name: "", email: "", handle: "", platform: "IG" });
+        setNewInfluencer({ name: "", email: "", accounts: [{ platform: "IG", handle: "" }] });
         toast({ title: "인플루언서가 추가되었습니다." });
       }
     });
@@ -211,28 +226,87 @@ export default function Discover() {
               <div className="grid gap-3 md:gap-4 py-3 md:py-4">
                 <div className="grid gap-1.5 md:gap-2">
                   <label className="text-xs md:text-sm">{KO.pages.discover.name}</label>
-                  <Input className="h-8 md:h-10 text-sm" value={newInfluencer.name} onChange={e => setNewInfluencer({...newInfluencer, name: e.target.value})} placeholder="홍길동" />
+                  <Input className="h-8 md:h-10 text-sm" value={newInfluencer.name} onChange={e => setNewInfluencer({...newInfluencer, name: e.target.value})} placeholder="홍길동" data-testid="input-influencer-name" />
                 </div>
                 <div className="grid gap-1.5 md:gap-2">
                   <label className="text-xs md:text-sm">{KO.pages.discover.email}</label>
-                  <Input className="h-8 md:h-10 text-sm" value={newInfluencer.email} onChange={e => setNewInfluencer({...newInfluencer, email: e.target.value})} placeholder="influencer@example.com" />
+                  <Input className="h-8 md:h-10 text-sm" value={newInfluencer.email} onChange={e => setNewInfluencer({...newInfluencer, email: e.target.value})} placeholder="influencer@example.com" data-testid="input-influencer-email" />
                 </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="col-span-1">
-                     <label className="text-xs md:text-sm">{KO.pages.discover.platform}</label>
-                     <Select value={newInfluencer.platform} onValueChange={v => setNewInfluencer({...newInfluencer, platform: v})}>
-                       <SelectTrigger className="h-8 md:h-10 text-sm"><SelectValue /></SelectTrigger>
-                       <SelectContent>
-                         <SelectItem value="IG">Instagram</SelectItem>
-                         <SelectItem value="YT">YouTube</SelectItem>
-                         <SelectItem value="TikTok">TikTok</SelectItem>
-                       </SelectContent>
-                     </Select>
+                
+                <div className="grid gap-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs md:text-sm font-medium">플랫폼 계정</label>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="sm" 
+                      className="h-6 text-xs"
+                      onClick={() => setNewInfluencer({
+                        ...newInfluencer, 
+                        accounts: [...newInfluencer.accounts, { platform: "IG", handle: "" }]
+                      })}
+                      data-testid="button-add-platform"
+                    >
+                      <Plus className="w-3 h-3 mr-1" />
+                      플랫폼 추가
+                    </Button>
                   </div>
-                  <div className="col-span-2">
-                     <label className="text-xs md:text-sm">{KO.pages.discover.handle}</label>
-                     <Input className="h-8 md:h-10 text-sm" value={newInfluencer.handle} onChange={e => setNewInfluencer({...newInfluencer, handle: e.target.value})} placeholder="@username" />
-                  </div>
+                  
+                  {newInfluencer.accounts.map((account, index) => (
+                    <div key={index} className="grid grid-cols-12 gap-2 items-center">
+                      <div className="col-span-4">
+                        <Select 
+                          value={account.platform} 
+                          onValueChange={v => {
+                            const newAccounts = [...newInfluencer.accounts];
+                            newAccounts[index] = { ...newAccounts[index], platform: v };
+                            setNewInfluencer({ ...newInfluencer, accounts: newAccounts });
+                          }}
+                        >
+                          <SelectTrigger className="h-8 text-sm" data-testid={`select-platform-${index}`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="IG">Instagram</SelectItem>
+                            <SelectItem value="YT">YouTube</SelectItem>
+                            <SelectItem value="TikTok">TikTok</SelectItem>
+                            <SelectItem value="X">X (Twitter)</SelectItem>
+                            <SelectItem value="Blog">네이버 블로그</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="col-span-7">
+                        <Input 
+                          className="h-8 text-sm" 
+                          value={account.handle} 
+                          onChange={e => {
+                            const newAccounts = [...newInfluencer.accounts];
+                            newAccounts[index] = { ...newAccounts[index], handle: e.target.value };
+                            setNewInfluencer({ ...newInfluencer, accounts: newAccounts });
+                          }}
+                          placeholder="@username 또는 블로그 ID" 
+                          data-testid={`input-handle-${index}`}
+                        />
+                      </div>
+                      {newInfluencer.accounts.length > 1 && (
+                        <div className="col-span-1">
+                          <Button 
+                            type="button" 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0"
+                            onClick={() => {
+                              const newAccounts = newInfluencer.accounts.filter((_, i) => i !== index);
+                              setNewInfluencer({ ...newInfluencer, accounts: newAccounts });
+                            }}
+                            data-testid={`button-remove-platform-${index}`}
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
               <Button size="sm" onClick={handleCreate} disabled={createInfluencer.isPending} data-testid="button-submit-influencer">
@@ -273,7 +347,7 @@ export default function Discover() {
             />
           </div>
           <Select value={platformFilter} onValueChange={setPlatformFilter}>
-            <SelectTrigger className="w-[90px] md:w-[120px] h-7 md:h-8 text-xs md:text-sm" data-testid="select-platform-filter">
+            <SelectTrigger className="w-[90px] md:w-[140px] h-7 md:h-8 text-xs md:text-sm" data-testid="select-platform-filter">
               <SelectValue placeholder="플랫폼" />
             </SelectTrigger>
             <SelectContent>
@@ -281,6 +355,8 @@ export default function Discover() {
               <SelectItem value="IG">Instagram</SelectItem>
               <SelectItem value="YT">YouTube</SelectItem>
               <SelectItem value="TikTok">TikTok</SelectItem>
+              <SelectItem value="X">X (Twitter)</SelectItem>
+              <SelectItem value="Blog">네이버 블로그</SelectItem>
             </SelectContent>
           </Select>
         </div>
