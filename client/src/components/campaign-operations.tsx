@@ -302,19 +302,58 @@ export function CampaignOperations({ campaignId, lineItems }: CampaignOperations
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className={getStageColor(item.stage || "선정완료")}>
-                            {item.stage || "선정완료"}
-                          </Badge>
+                          <Select 
+                            value={item.stage || "선정완료"} 
+                            onValueChange={(val) => {
+                              updateOperations.mutate({ id: item.id, updates: { stage: val } });
+                            }}
+                          >
+                            <SelectTrigger 
+                              className={`w-[100px] h-7 text-xs border-0 ${getStageColor(item.stage || "선정완료")}`}
+                              onClick={e => e.stopPropagation()}
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {STAGES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className={getCommStatusColor(item.commStatus || "컨택전")}>
-                            {item.commStatus || "컨택전"}
-                          </Badge>
+                          <Select 
+                            value={item.commStatus || "컨택전"} 
+                            onValueChange={(val) => {
+                              updateOperations.mutate({ id: item.id, updates: { commStatus: val } });
+                            }}
+                          >
+                            <SelectTrigger 
+                              className={`w-[90px] h-7 text-xs border-0 ${getCommStatusColor(item.commStatus || "컨택전")}`}
+                              onClick={e => e.stopPropagation()}
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {COMM_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className={getReviewStatusColor(item.reviewStatus || "초안대기")}>
-                            {item.reviewStatus || "초안대기"}
-                          </Badge>
+                          <Select 
+                            value={item.reviewStatus || "초안대기"} 
+                            onValueChange={(val) => {
+                              updateOperations.mutate({ id: item.id, updates: { reviewStatus: val } });
+                            }}
+                          >
+                            <SelectTrigger 
+                              className={`w-[100px] h-7 text-xs border-0 ${getReviewStatusColor(item.reviewStatus || "초안대기")}`}
+                              onClick={e => e.stopPropagation()}
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {REVIEW_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1">

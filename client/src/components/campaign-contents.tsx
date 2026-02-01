@@ -200,9 +200,22 @@ export function CampaignContents({ campaignId, lineItems }: CampaignContentsProp
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge className={`text-xs ${getReviewStatusColor(item.reviewStatus || "초안대기")}`}>
-                        {item.reviewStatus || "초안대기"}
-                      </Badge>
+                      <Select 
+                        value={item.reviewStatus || "초안대기"} 
+                        onValueChange={(val) => {
+                          updateContent.mutate({ id: item.id, updates: { reviewStatus: val } });
+                        }}
+                      >
+                        <SelectTrigger 
+                          className={`w-[100px] h-7 text-xs border-0 ${getReviewStatusColor(item.reviewStatus || "초안대기")}`}
+                          onClick={e => e.stopPropagation()}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {REVIEW_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
                     </TableCell>
                     <TableCell>
                       {item.draftUrl ? (

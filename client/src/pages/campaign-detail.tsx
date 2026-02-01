@@ -355,12 +355,20 @@ export default function CampaignDetail() {
                         </TableCell>
                         <TableCell>
                           <Select 
-                            defaultValue={item.status || 'contacted'} 
+                            value={item.status || 'contacted'} 
                             onValueChange={(val) => {
                               handleStatusUpdate(item.id, 'status', val);
                             }}
                           >
-                            <SelectTrigger className="w-[130px] h-8" onClick={e => e.stopPropagation()}>
+                            <SelectTrigger 
+                              className={`w-[120px] h-7 text-xs border-0 ${
+                                item.status === 'posted' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
+                                item.status === 'contracted' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
+                                item.status === 'negotiated' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                                'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400'
+                              }`} 
+                              onClick={e => e.stopPropagation()}
+                            >
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -372,20 +380,52 @@ export default function CampaignDetail() {
                           </Select>
                         </TableCell>
                         <TableCell>
-                          <Badge 
-                            variant={item.contractStatus === 'signed' ? 'default' : 'secondary'} 
-                            className={item.contractStatus === 'signed' ? 'bg-green-100 text-green-700 hover:bg-green-100' : ''}
+                          <Select 
+                            value={item.contractStatus || 'pending'} 
+                            onValueChange={(val) => {
+                              handleStatusUpdate(item.id, 'contractStatus', val);
+                            }}
                           >
-                            {getContractLabel(item.contractStatus || 'pending')}
-                          </Badge>
+                            <SelectTrigger 
+                              className={`w-[100px] h-7 text-xs border-0 ${
+                                item.contractStatus === 'signed' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
+                                item.contractStatus === 'sent' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
+                                'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400'
+                              }`} 
+                              onClick={e => e.stopPropagation()}
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="pending">대기 중</SelectItem>
+                              <SelectItem value="sent">발송됨</SelectItem>
+                              <SelectItem value="signed">서명 완료</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </TableCell>
                         <TableCell>
-                          <Badge 
-                            variant={item.paymentStatus === 'paid' ? 'default' : 'outline'}
-                            className={item.paymentStatus === 'paid' ? 'bg-blue-100 text-blue-700 hover:bg-blue-100' : ''}
+                          <Select 
+                            value={item.paymentStatus || 'pending'} 
+                            onValueChange={(val) => {
+                              handleStatusUpdate(item.id, 'paymentStatus', val);
+                            }}
                           >
-                            {getPaymentLabel(item.paymentStatus || 'pending')}
-                          </Badge>
+                            <SelectTrigger 
+                              className={`w-[100px] h-7 text-xs border-0 ${
+                                item.paymentStatus === 'paid' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
+                                item.paymentStatus === 'invoiced' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' :
+                                'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400'
+                              }`} 
+                              onClick={e => e.stopPropagation()}
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="pending">대기 중</SelectItem>
+                              <SelectItem value="invoiced">청구됨</SelectItem>
+                              <SelectItem value="paid">지급 완료</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </TableCell>
                         <TableCell className="text-right font-mono">
                           {item.payAmount?.toLocaleString()}원
