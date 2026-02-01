@@ -7,9 +7,10 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { RefreshCw, Send, Mail, User, Clock, Plus, ExternalLink, Loader2 } from "lucide-react";
+import { RefreshCw, Send, Mail, User, Clock, Plus, ExternalLink, Loader2, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -41,6 +42,7 @@ export default function EmailCenter() {
   const [connectType, setConnectType] = useState<"gmail" | "imap" | null>(null);
   const [emailPreset, setEmailPreset] = useState<string>("");
   const [imapData, setImapData] = useState({ email: "", password: "", imapServer: "", imapPort: "993", smtpServer: "", smtpPort: "587" });
+  const [deleteAccountId, setDeleteAccountId] = useState<number | null>(null);
 
   const handlePresetChange = (preset: string) => {
     setEmailPreset(preset);
@@ -74,10 +76,30 @@ export default function EmailCenter() {
       setIsConnectOpen(false);
       setConnectType(null);
       setImapData({ email: "", password: "", imapServer: "", imapPort: "993", smtpServer: "", smtpPort: "587" });
+      setEmailPreset("");
       toast({ title: "이메일 연결 완료", description: `${data.account?.email || ''} 계정이 추가되었습니다.` });
     },
     onError: (err: any) => {
       toast({ variant: "destructive", title: KO.pages.email.connectionFailed, description: err.message });
+    }
+  });
+
+  const deleteAccount = useMutation({
+    mutationFn: async (accountId: number) => {
+      const res = await apiRequest('DELETE', `/api/email/accounts/${accountId}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/workspaces/:workspaceId/email-accounts', workspaceId] });
+      if (selectedAccountId === deleteAccountId) {
+        setSelectedAccountId(null);
+        setSelectedThread(null);
+      }
+      setDeleteAccountId(null);
+      toast({ title: KO.pages.email.deleteAccount, description: KO.pages.email.deleteAccountSuccess });
+    },
+    onError: (err: any) => {
+      toast({ variant: "destructive", title: KO.pages.email.deleteAccountFailed, description: err.message });
     }
   });
 
@@ -112,6 +134,10 @@ export default function EmailCenter() {
   const handleConnectImap = () => {
     if (!imapData.email || !imapData.password) {
       toast({ variant: "destructive", title: "필수 정보 누락", description: "이메일과 비밀번호를 입력하세요." });
+      return;
+    }
+    if (!imapData.imapServer || !imapData.smtpServer) {
+      toast({ variant: "destructive", title: "서버 정보 누락", description: KO.pages.email.missingServerInfo });
       return;
     }
     registerImap.mutate(imapData);
@@ -281,20 +307,57 @@ export default function EmailCenter() {
             </div>
             
             {accounts?.map(acc => (
-              <button
+              <div
                 key={acc.id}
-                onClick={() => { setSelectedAccountId(acc.id); setSelectedThread(null); }}
-                className={`flex items-center gap-3 p-3 rounded-lg text-left transition-all ${selectedAccountId === acc.id ? 'bg-primary text-primary-foreground shadow-md' : 'hover:bg-muted'}`}
-                data-testid={`button-account-${acc.id}`}
+                className={`flex items-center gap-3 p-3 rounded-lg text-left transition-all group ${selectedAccountId === acc.id ? 'bg-primary text-primary-foreground shadow-md' : 'hover:bg-muted'}`}
               >
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${selectedAccountId === acc.id ? 'bg-white/20' : 'bg-primary/10 text-primary'}`}>
-                  <Mail className="w-4 h-4" />
-                </div>
-                <div className="overflow-hidden">
-                   <div className="font-medium truncate text-sm">{acc.email}</div>
-                   <div className={`text-xs truncate ${selectedAccountId === acc.id ? 'text-white/80' : 'text-muted-foreground'}`}>{acc.provider}</div>
-                </div>
-              </button>
+                <button
+                  onClick={() => { setSelectedAccountId(acc.id); setSelectedThread(null); }}
+                  className="flex items-center gap-3 flex-1 min-w-0"
+                  data-testid={`button-account-${acc.id}`}
+                >
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${selectedAccountId === acc.id ? 'bg-white/20' : 'bg-primary/10 text-primary'}`}>
+                    <Mail className="w-4 h-4" />
+                  </div>
+                  <div className="overflow-hidden min-w-0">
+                     <div className="font-medium truncate text-sm">{acc.email}</div>
+                     <div className={`text-xs truncate ${selectedAccountId === acc.id ? 'text-white/80' : 'text-muted-foreground'}`}>{acc.provider}</div>
+                  </div>
+                </button>
+                <AlertDialog open={deleteAccountId === acc.id} onOpenChange={(open) => !open && setDeleteAccountId(null)}>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={`shrink-0 opacity-0 group-hover:opacity-100 transition-opacity ${selectedAccountId === acc.id ? 'text-white' : ''}`}
+                      onClick={(e) => { e.stopPropagation(); setDeleteAccountId(acc.id); }}
+                      data-testid={`button-delete-account-${acc.id}`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle data-testid="text-delete-account-title">{KO.pages.email.deleteAccount}</AlertDialogTitle>
+                      <AlertDialogDescription data-testid="text-delete-account-desc">
+                        {KO.pages.email.deleteAccountConfirm}
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel data-testid="button-cancel-delete-account">{KO.common.cancel}</AlertDialogCancel>
+                      <AlertDialogAction
+                        className="bg-destructive text-destructive-foreground"
+                        onClick={() => deleteAccount.mutate(acc.id)}
+                        disabled={deleteAccount.isPending}
+                        data-testid="button-confirm-delete-account"
+                      >
+                        {deleteAccount.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                        {KO.common.delete}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
             ))}
             {!accounts?.length && (
               <div className="text-sm text-muted-foreground p-2 text-center py-8">

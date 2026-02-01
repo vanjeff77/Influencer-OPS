@@ -141,6 +141,11 @@ export const KO = {
       connect: "연결하기",
       connectionFailed: "연결에 실패했습니다. 설정 값을 확인해주세요.",
       yesterday: "어제",
+      deleteAccount: "계정 삭제",
+      deleteAccountConfirm: "정말 이 계정을 삭제하시겠습니까? 관련된 모든 이메일 스레드도 함께 삭제됩니다.",
+      deleteAccountSuccess: "이메일 계정이 삭제되었습니다.",
+      deleteAccountFailed: "삭제 실패",
+      missingServerInfo: "IMAP 서버와 SMTP 서버 정보를 입력하세요.",
     },
     communication: {
       title: "커뮤니케이션",

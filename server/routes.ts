@@ -519,6 +519,37 @@ export async function registerRoutes(
     res.json(accounts);
   });
 
+  // Delete email account
+  app.delete('/api/email/accounts/:id', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const accountId = parseInt(req.params.id);
+      const userId = (req.user as any).id;
+      
+      // Get account to verify workspace access
+      const account = await storage.getEmailAccountById(accountId);
+      if (!account) {
+        return res.status(404).json({ message: "Account not found" });
+      }
+      
+      // Check workspace membership
+      const memberships = await storage.getWorkspaceMemberships(userId);
+      const hasAccess = memberships.some(m => m.workspaceId === account.workspaceId);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied to this workspace" });
+      }
+      
+      await storage.deleteEmailAccount(accountId);
+      res.json({ message: "Account deleted successfully" });
+    } catch (err: any) {
+      console.error('Delete email account error:', err);
+      res.status(500).json({ message: err.message || "Failed to delete account" });
+    }
+  });
+
   // Test IMAP connection
   app.post('/api/email/imap/test', async (req, res) => {
     try {
