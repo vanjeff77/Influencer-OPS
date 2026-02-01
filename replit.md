@@ -96,9 +96,18 @@ Preferred communication style: Simple, everyday language.
 - `xlsx`: Excel file generation for exports
 - `nodemailer`: Email sending capability
 
-## Recent Changes (2026-01-31)
+## Recent Changes (2026-02-01)
 
-### Updates Today
+### Mobile UI Optimization
+- **Responsive Sidebar**: Mobile-first navigation using Sheet component overlay with hamburger menu toggle
+- **All Pages Mobile-Optimized**: Responsive layouts using Tailwind breakpoints (md:, lg:)
+- **Responsive Typography**: text-xs md:text-sm pattern for mobile-first text sizing
+- **Responsive Components**: Button heights (h-7 md:h-8), card padding, spacing throughout
+- **Mobile Tables**: Horizontal scrolling with min-width constraints, column hiding on smaller screens
+- **Grid Layouts**: grid-cols-2 md:grid-cols-3 patterns for cards and summary sections
+- **Pages Updated**: Home, Discover, Campaigns, Groups, Finance, Tracking, Login
+
+### Previous Updates (2026-01-31)
 - **Finance Page**: Now fetches real data from `/api/finance/summary` endpoint - displays paid amounts, pending payments, and average cost per influencer from actual campaign line items
 - **Tracking Page**: Added CSV export button for metrics data (날짜, 값, Job 이름 headers with UTF-8 BOM support)
 - **Campaigns Page**: Added advertiser filter buttons (전체, 코딩밸리, Grab, Voye) for client-side filtering
