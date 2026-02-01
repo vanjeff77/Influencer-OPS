@@ -7,14 +7,44 @@ import { api } from "@shared/routes";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
-import { campaignInfluencers, campaigns } from "@shared/schema";
+import { campaignInfluencers, campaigns, users, workspaceMembers } from "@shared/schema";
 import { eq, and, inArray } from "drizzle-orm";
+
+async function ensureWorkspaceMembers() {
+  try {
+    const allWorkspaces = await storage.getWorkspaces();
+    const allUsers = await db.select().from(users);
+    
+    if (allWorkspaces.length > 0 && allUsers.length > 0) {
+      const existingMembers = await db.select().from(workspaceMembers);
+      
+      if (existingMembers.length === 0) {
+        console.log("[init] No workspace members found, creating default assignments...");
+        
+        const firstWorkspace = allWorkspaces[0];
+        const firstUser = allUsers[0];
+        
+        await db.insert(workspaceMembers).values({
+          workspaceId: firstWorkspace.id,
+          userId: firstUser.id,
+          role: 'WORKSPACE_OWNER'
+        });
+        
+        console.log(`[init] Assigned user ${firstUser.email} as WORKSPACE_OWNER to ${firstWorkspace.name}`);
+      }
+    }
+  } catch (error) {
+    console.error("[init] Error ensuring workspace members:", error);
+  }
+}
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
   setupAuth(app);
+  
+  await ensureWorkspaceMembers();
 
   // === AUTH ===
   app.post(api.auth.login.path, (req, res, next) => {
