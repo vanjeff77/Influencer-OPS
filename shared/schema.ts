@@ -453,6 +453,19 @@ export const feedbackNotes = pgTable("feedback_notes", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// === CONTRACT TEMPLATES ===
+export const contractTemplates = pgTable("contract_templates", {
+  id: serial("id").primaryKey(),
+  workspaceId: integer("workspace_id").notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  content: text("content").notNull(), // Template content with {{variables}}
+  variables: text("variables").array(), // List of available variables
+  isDefault: boolean("is_default").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 
 // === RELATIONS ===
 export const workspaceRelations = relations(workspaces, ({ many }) => ({
@@ -538,6 +551,10 @@ export const feedbackNoteRelations = relations(feedbackNotes, ({ one }) => ({
   author: one(users, { fields: [feedbackNotes.authorUserId], references: [users.id] }),
 }));
 
+export const contractTemplateRelations = relations(contractTemplates, ({ one }) => ({
+  workspace: one(workspaces, { fields: [contractTemplates.workspaceId], references: [workspaces.id] }),
+}));
+
 // === SCHEMAS ===
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export const insertWorkspaceSchema = createInsertSchema(workspaces).omit({ id: true, createdAt: true });
@@ -560,6 +577,7 @@ export const insertBulkEmailQueueItemSchema = createInsertSchema(bulkEmailQueueI
 export const insertCampaignContentSchema = createInsertSchema(campaignContents).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertFeedbackNoteSchema = createInsertSchema(feedbackNotes).omit({ id: true, createdAt: true });
 export const insertCampaignInfluencerSchema = createInsertSchema(campaignInfluencers).omit({ id: true, updatedAt: true });
+export const insertContractTemplateSchema = createInsertSchema(contractTemplates).omit({ id: true, createdAt: true, updatedAt: true });
 
 // === TYPES ===
 export type User = typeof users.$inferSelect;
@@ -591,6 +609,8 @@ export type FeedbackNote = typeof feedbackNotes.$inferSelect;
 export type InsertCampaignContent = z.infer<typeof insertCampaignContentSchema>;
 export type InsertFeedbackNote = z.infer<typeof insertFeedbackNoteSchema>;
 export type InsertCampaignInfluencer = z.infer<typeof insertCampaignInfluencerSchema>;
+export type ContractTemplate = typeof contractTemplates.$inferSelect;
+export type InsertContractTemplate = z.infer<typeof insertContractTemplateSchema>;
 
 export type InsertConversation = z.infer<typeof insertConversationSchema>;
 export type InsertConversationMessage = z.infer<typeof insertConversationMessageSchema>;
