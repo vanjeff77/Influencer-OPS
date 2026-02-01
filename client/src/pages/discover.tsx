@@ -34,6 +34,10 @@ export default function Discover() {
   const [search, setSearch] = useState("");
   const [platformFilter, setPlatformFilter] = useState<string>("");
   const [clientFilter, setClientFilter] = useState<string>("");
+  const [followerFilter, setFollowerFilter] = useState<string>("");
+  const [contactFilter, setContactFilter] = useState<string>("");
+  const [replyFilter, setReplyFilter] = useState<string>("");
+  const [collabFilter, setCollabFilter] = useState<string>("");
   const { data: influencers, isLoading } = useInfluencers(workspaceId || 0, { search, platform: platformFilter || undefined });
   const { data: campaigns } = useCampaigns(workspaceId || 0);
   const createInfluencer = useCreateInfluencer(workspaceId || 0);
@@ -118,12 +122,57 @@ export default function Discover() {
     return Array.from(clients).sort();
   }, [influencers]);
 
-  // Filter influencers by client
+  // Filter influencers by all criteria
   const filteredInfluencers = useMemo(() => {
     if (!influencers) return [];
-    if (!clientFilter) return influencers;
-    return influencers.filter(inf => inf.client === clientFilter);
-  }, [influencers, clientFilter]);
+    
+    return influencers.filter(inf => {
+      // Client filter
+      if (clientFilter && inf.client !== clientFilter) return false;
+      
+      // Platform filter (already applied at API level, but double-check if needed)
+      if (platformFilter) {
+        const hasPlatform = inf.accounts?.some(acc => acc.platform === platformFilter);
+        if (!hasPlatform) return false;
+      }
+      
+      // Follower filter - check max followers across all accounts
+      if (followerFilter) {
+        const maxFollowers = Math.max(...(inf.accounts?.map(acc => acc.followers || 0) || [0]));
+        switch (followerFilter) {
+          case 'under1k':
+            if (maxFollowers >= 1000) return false;
+            break;
+          case '1k-10k':
+            if (maxFollowers < 1000 || maxFollowers >= 10000) return false;
+            break;
+          case '10k-100k':
+            if (maxFollowers < 10000 || maxFollowers >= 100000) return false;
+            break;
+          case '100k-1m':
+            if (maxFollowers < 100000 || maxFollowers >= 1000000) return false;
+            break;
+          case 'over1m':
+            if (maxFollowers < 1000000) return false;
+            break;
+        }
+      }
+      
+      // Contact status filter
+      if (contactFilter === 'Y' && inf.contactStatus !== 'Y') return false;
+      if (contactFilter === 'N' && inf.contactStatus === 'Y') return false;
+      
+      // Reply status filter
+      if (replyFilter === 'Y' && inf.replyStatus !== 'Y') return false;
+      if (replyFilter === 'N' && inf.replyStatus === 'Y') return false;
+      
+      // Collab status filter
+      if (collabFilter === 'Y' && inf.collabStatus !== 'Y') return false;
+      if (collabFilter === 'N' && inf.collabStatus === 'Y') return false;
+      
+      return true;
+    });
+  }, [influencers, clientFilter, platformFilter, followerFilter, contactFilter, replyFilter, collabFilter]);
 
   const influencerCampaignData = useMemo(() => {
     if (!allCampaignItems || !campaigns) return new Map();
@@ -488,8 +537,8 @@ export default function Discover() {
           </DialogContent>
         </Dialog>
 
-        <div className="flex gap-2 md:gap-3 items-center">
-          <div className="relative flex-1 max-w-xs md:max-w-md">
+        <div className="flex flex-wrap gap-2 md:gap-3 items-center">
+          <div className="relative flex-1 min-w-[150px] max-w-xs md:max-w-md">
             <Search className="absolute left-2 md:left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 md:w-4 md:h-4 text-muted-foreground" />
             <Input 
               placeholder={KO.pages.discover.searchPlaceholder}
@@ -499,8 +548,8 @@ export default function Discover() {
               data-testid="input-search"
             />
           </div>
-          <Select value={platformFilter} onValueChange={setPlatformFilter}>
-            <SelectTrigger className="w-[90px] md:w-[140px] h-7 md:h-8 text-xs md:text-sm" data-testid="select-platform-filter">
+          <Select value={platformFilter || "all"} onValueChange={(v) => setPlatformFilter(v === "all" ? "" : v)}>
+            <SelectTrigger className="w-[90px] md:w-[120px] h-7 md:h-8 text-xs md:text-sm" data-testid="select-platform-filter">
               <SelectValue placeholder="플랫폼" />
             </SelectTrigger>
             <SelectContent>
@@ -510,6 +559,49 @@ export default function Discover() {
               <SelectItem value="TikTok">TikTok</SelectItem>
               <SelectItem value="X">X (Twitter)</SelectItem>
               <SelectItem value="Blog">네이버 블로그</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={followerFilter || "all"} onValueChange={(v) => setFollowerFilter(v === "all" ? "" : v)}>
+            <SelectTrigger className="w-[80px] md:w-[110px] h-7 md:h-8 text-xs md:text-sm" data-testid="select-follower-filter">
+              <SelectValue placeholder="팔로워" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체</SelectItem>
+              <SelectItem value="under1k">1천 미만</SelectItem>
+              <SelectItem value="1k-10k">1천~1만</SelectItem>
+              <SelectItem value="10k-100k">1만~10만</SelectItem>
+              <SelectItem value="100k-1m">10만~100만</SelectItem>
+              <SelectItem value="over1m">100만+</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={contactFilter || "all"} onValueChange={(v) => setContactFilter(v === "all" ? "" : v)}>
+            <SelectTrigger className="w-[70px] md:w-[90px] h-7 md:h-8 text-xs md:text-sm" data-testid="select-contact-filter">
+              <SelectValue placeholder="컨택" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체</SelectItem>
+              <SelectItem value="Y">컨택 Y</SelectItem>
+              <SelectItem value="N">컨택 N</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={replyFilter || "all"} onValueChange={(v) => setReplyFilter(v === "all" ? "" : v)}>
+            <SelectTrigger className="w-[70px] md:w-[90px] h-7 md:h-8 text-xs md:text-sm" data-testid="select-reply-filter">
+              <SelectValue placeholder="회신" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체</SelectItem>
+              <SelectItem value="Y">회신 Y</SelectItem>
+              <SelectItem value="N">회신 N</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={collabFilter || "all"} onValueChange={(v) => setCollabFilter(v === "all" ? "" : v)}>
+            <SelectTrigger className="w-[70px] md:w-[90px] h-7 md:h-8 text-xs md:text-sm" data-testid="select-collab-filter">
+              <SelectValue placeholder="협업" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체</SelectItem>
+              <SelectItem value="Y">협업 Y</SelectItem>
+              <SelectItem value="N">협업 N</SelectItem>
             </SelectContent>
           </Select>
         </div>
