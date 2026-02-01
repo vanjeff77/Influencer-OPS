@@ -292,16 +292,20 @@ export default function CampaignDetail() {
         <Tabs defaultValue="influencers" className="w-full">
           <TabsList className="mb-4 flex-wrap">
             <TabsTrigger value="influencers">인플루언서</TabsTrigger>
-            <TabsTrigger value="communication" className="flex items-center gap-1">
-              <MessageCircle className="w-4 h-4" />
-              {KO.pages.communication.title}
-            </TabsTrigger>
-            <TabsTrigger value="operations" className="flex items-center gap-1">
-              <Settings2 className="w-4 h-4" />
-              운영
-            </TabsTrigger>
-            <TabsTrigger value="content">콘텐츠</TabsTrigger>
-            <TabsTrigger value="finance">정산</TabsTrigger>
+            {campaign.clientId && (
+              <>
+                <TabsTrigger value="communication" className="flex items-center gap-1">
+                  <MessageCircle className="w-4 h-4" />
+                  {KO.pages.communication.title}
+                </TabsTrigger>
+                <TabsTrigger value="operations" className="flex items-center gap-1">
+                  <Settings2 className="w-4 h-4" />
+                  운영
+                </TabsTrigger>
+                <TabsTrigger value="content">콘텐츠</TabsTrigger>
+                <TabsTrigger value="finance">정산</TabsTrigger>
+              </>
+            )}
           </TabsList>
           
           <TabsContent value="influencers">
