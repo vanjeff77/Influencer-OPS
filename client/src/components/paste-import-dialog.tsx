@@ -151,10 +151,16 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
       });
 
       onImportComplete();
-    } catch (err) {
+    } catch (err: any) {
+      let errorMessage = KO.pages.discover.importFailedDesc;
+      if (err?.message) {
+        errorMessage = err.message;
+      } else if (err instanceof Error) {
+        errorMessage = err.message;
+      }
       toast({
         title: KO.pages.discover.importFailed,
-        description: KO.pages.discover.importFailedDesc,
+        description: errorMessage,
         variant: "destructive"
       });
       setState('validated');
