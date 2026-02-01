@@ -600,7 +600,12 @@ export default function SettingsPage() {
       )}
 
       {editingUser && (
-        <Dialog open={!!editingUser} onOpenChange={(open) => !open && resetUserForm()}>
+        <Dialog open={!!editingUser} onOpenChange={(open) => {
+          if (!open) {
+            setEditingUser(null);
+            resetUserForm();
+          }
+        }}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>{KO.settings.role} 변경</DialogTitle>
@@ -650,7 +655,7 @@ export default function SettingsPage() {
                 </div>
               )}
               <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={resetUserForm}>{KO.common.cancel}</Button>
+                <Button variant="outline" onClick={() => { setEditingUser(null); resetUserForm(); }}>{KO.common.cancel}</Button>
                 <Button onClick={handleUserSubmit} disabled={updateUserRoleMutation.isPending}>
                   {KO.common.save}
                 </Button>
