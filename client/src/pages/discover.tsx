@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useState, useEffect, useMemo } from "react";
-import { Search, Plus, Instagram, Youtube, Twitter, X, Users, Megaphone, Save, Clock, ExternalLink, ClipboardPaste, Copy, Trash2 } from "lucide-react";
+import { Search, Plus, Instagram, Youtube, Twitter, X, Users, Megaphone, Save, Clock, ExternalLink, ClipboardPaste, Copy, Trash2, ChevronDown, Check } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -32,13 +33,13 @@ export default function Discover() {
   const workspaceId = workspaces?.[0]?.id;
   
   const [search, setSearch] = useState("");
-  const [platformFilter, setPlatformFilter] = useState<string>("");
+  const [platformFilter, setPlatformFilter] = useState<string[]>([]);
   const [clientFilter, setClientFilter] = useState<string>("");
-  const [followerFilter, setFollowerFilter] = useState<string>("");
-  const [contactFilter, setContactFilter] = useState<string>("");
-  const [replyFilter, setReplyFilter] = useState<string>("");
-  const [collabFilter, setCollabFilter] = useState<string>("");
-  const { data: influencers, isLoading } = useInfluencers(workspaceId || 0, { search, platform: platformFilter || undefined });
+  const [followerFilter, setFollowerFilter] = useState<string[]>([]);
+  const [contactFilter, setContactFilter] = useState<string[]>([]);
+  const [replyFilter, setReplyFilter] = useState<string[]>([]);
+  const [collabFilter, setCollabFilter] = useState<string[]>([]);
+  const { data: influencers, isLoading } = useInfluencers(workspaceId || 0, { search, platform: undefined });
   const { data: campaigns } = useCampaigns(workspaceId || 0);
   const createInfluencer = useCreateInfluencer(workspaceId || 0);
   const { toast } = useToast();
@@ -130,45 +131,57 @@ export default function Discover() {
       // Client filter
       if (clientFilter && inf.client !== clientFilter) return false;
       
-      // Platform filter (already applied at API level, but double-check if needed)
-      if (platformFilter) {
-        const hasPlatform = inf.accounts?.some(acc => acc.platform === platformFilter);
+      // Platform filter - check if any selected platform matches
+      if (platformFilter.length > 0) {
+        const hasPlatform = inf.accounts?.some(acc => platformFilter.includes(acc.platform));
         if (!hasPlatform) return false;
       }
       
-      // Follower filter - check max followers across all accounts
-      if (followerFilter) {
+      // Follower filter - check max followers across all accounts (multi-select)
+      if (followerFilter.length > 0) {
         const maxFollowers = Math.max(...(inf.accounts?.map(acc => acc.followers || 0) || [0]));
-        switch (followerFilter) {
-          case 'under1k':
-            if (maxFollowers >= 1000) return false;
-            break;
-          case '1k-10k':
-            if (maxFollowers < 1000 || maxFollowers >= 10000) return false;
-            break;
-          case '10k-100k':
-            if (maxFollowers < 10000 || maxFollowers >= 100000) return false;
-            break;
-          case '100k-1m':
-            if (maxFollowers < 100000 || maxFollowers >= 1000000) return false;
-            break;
-          case 'over1m':
-            if (maxFollowers < 1000000) return false;
-            break;
-        }
+        const matchesAnyRange = followerFilter.some(range => {
+          switch (range) {
+            case 'under1k': return maxFollowers < 1000;
+            case '1k-10k': return maxFollowers >= 1000 && maxFollowers < 10000;
+            case '10k-100k': return maxFollowers >= 10000 && maxFollowers < 100000;
+            case '100k-1m': return maxFollowers >= 100000 && maxFollowers < 1000000;
+            case 'over1m': return maxFollowers >= 1000000;
+            default: return false;
+          }
+        });
+        if (!matchesAnyRange) return false;
       }
       
-      // Contact status filter
-      if (contactFilter === 'Y' && inf.contactStatus !== 'Y') return false;
-      if (contactFilter === 'N' && inf.contactStatus === 'Y') return false;
+      // Contact status filter (multi-select)
+      if (contactFilter.length > 0) {
+        const matchesContact = contactFilter.some(status => {
+          if (status === 'Y') return inf.contactStatus === 'Y';
+          if (status === 'N') return inf.contactStatus !== 'Y';
+          return false;
+        });
+        if (!matchesContact) return false;
+      }
       
-      // Reply status filter
-      if (replyFilter === 'Y' && inf.replyStatus !== 'Y') return false;
-      if (replyFilter === 'N' && inf.replyStatus === 'Y') return false;
+      // Reply status filter (multi-select)
+      if (replyFilter.length > 0) {
+        const matchesReply = replyFilter.some(status => {
+          if (status === 'Y') return inf.replyStatus === 'Y';
+          if (status === 'N') return inf.replyStatus !== 'Y';
+          return false;
+        });
+        if (!matchesReply) return false;
+      }
       
-      // Collab status filter
-      if (collabFilter === 'Y' && inf.collabStatus !== 'Y') return false;
-      if (collabFilter === 'N' && inf.collabStatus === 'Y') return false;
+      // Collab status filter (multi-select)
+      if (collabFilter.length > 0) {
+        const matchesCollab = collabFilter.some(status => {
+          if (status === 'Y') return inf.collabStatus === 'Y';
+          if (status === 'N') return inf.collabStatus !== 'Y';
+          return false;
+        });
+        if (!matchesCollab) return false;
+      }
       
       return true;
     });
@@ -548,62 +561,176 @@ export default function Discover() {
               data-testid="input-search"
             />
           </div>
-          <Select value={platformFilter || "all"} onValueChange={(v) => setPlatformFilter(v === "all" ? "" : v)}>
-            <SelectTrigger className="w-[90px] md:w-[120px] h-7 md:h-8 text-xs md:text-sm" data-testid="select-platform-filter">
-              <SelectValue placeholder="플랫폼" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">전체</SelectItem>
-              <SelectItem value="IG">Instagram</SelectItem>
-              <SelectItem value="YT">YouTube</SelectItem>
-              <SelectItem value="TikTok">TikTok</SelectItem>
-              <SelectItem value="X">X (Twitter)</SelectItem>
-              <SelectItem value="Blog">네이버 블로그</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={followerFilter || "all"} onValueChange={(v) => setFollowerFilter(v === "all" ? "" : v)}>
-            <SelectTrigger className="w-[80px] md:w-[110px] h-7 md:h-8 text-xs md:text-sm" data-testid="select-follower-filter">
-              <SelectValue placeholder="팔로워" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">전체</SelectItem>
-              <SelectItem value="under1k">1천 미만</SelectItem>
-              <SelectItem value="1k-10k">1천~1만</SelectItem>
-              <SelectItem value="10k-100k">1만~10만</SelectItem>
-              <SelectItem value="100k-1m">10만~100만</SelectItem>
-              <SelectItem value="over1m">100만+</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={contactFilter || "all"} onValueChange={(v) => setContactFilter(v === "all" ? "" : v)}>
-            <SelectTrigger className="w-[70px] md:w-[90px] h-7 md:h-8 text-xs md:text-sm" data-testid="select-contact-filter">
-              <SelectValue placeholder="컨택" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">전체</SelectItem>
-              <SelectItem value="Y">컨택 Y</SelectItem>
-              <SelectItem value="N">컨택 N</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={replyFilter || "all"} onValueChange={(v) => setReplyFilter(v === "all" ? "" : v)}>
-            <SelectTrigger className="w-[70px] md:w-[90px] h-7 md:h-8 text-xs md:text-sm" data-testid="select-reply-filter">
-              <SelectValue placeholder="회신" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">전체</SelectItem>
-              <SelectItem value="Y">회신 Y</SelectItem>
-              <SelectItem value="N">회신 N</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={collabFilter || "all"} onValueChange={(v) => setCollabFilter(v === "all" ? "" : v)}>
-            <SelectTrigger className="w-[70px] md:w-[90px] h-7 md:h-8 text-xs md:text-sm" data-testid="select-collab-filter">
-              <SelectValue placeholder="협업" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">전체</SelectItem>
-              <SelectItem value="Y">협업 Y</SelectItem>
-              <SelectItem value="N">협업 N</SelectItem>
-            </SelectContent>
-          </Select>
+          {/* Platform filter - multi-select */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-7 md:h-8 text-xs md:text-sm gap-1 min-w-[90px]" data-testid="button-platform-filter">
+                플랫폼 {platformFilter.length > 0 && <Badge variant="secondary" className="h-4 px-1 text-[10px]">{platformFilter.length}</Badge>}
+                <ChevronDown className="w-3 h-3 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-40 p-2" align="start">
+              <div className="space-y-1">
+                {[
+                  { value: 'IG', label: 'Instagram' },
+                  { value: 'YT', label: 'YouTube' },
+                  { value: 'TikTok', label: 'TikTok' },
+                  { value: 'X', label: 'X (Twitter)' },
+                  { value: 'Blog', label: '네이버 블로그' },
+                ].map(item => (
+                  <label key={item.value} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer text-sm">
+                    <Checkbox 
+                      checked={platformFilter.includes(item.value)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setPlatformFilter([...platformFilter, item.value]);
+                        } else {
+                          setPlatformFilter(platformFilter.filter(v => v !== item.value));
+                        }
+                      }}
+                      data-testid={`checkbox-platform-${item.value}`}
+                    />
+                    {item.label}
+                  </label>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+
+          {/* Follower filter - multi-select */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-7 md:h-8 text-xs md:text-sm gap-1 min-w-[80px]" data-testid="button-follower-filter">
+                팔로워 {followerFilter.length > 0 && <Badge variant="secondary" className="h-4 px-1 text-[10px]">{followerFilter.length}</Badge>}
+                <ChevronDown className="w-3 h-3 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-36 p-2" align="start">
+              <div className="space-y-1">
+                {[
+                  { value: 'under1k', label: '1천 미만' },
+                  { value: '1k-10k', label: '1천~1만' },
+                  { value: '10k-100k', label: '1만~10만' },
+                  { value: '100k-1m', label: '10만~100만' },
+                  { value: 'over1m', label: '100만+' },
+                ].map(item => (
+                  <label key={item.value} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer text-sm">
+                    <Checkbox 
+                      checked={followerFilter.includes(item.value)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setFollowerFilter([...followerFilter, item.value]);
+                        } else {
+                          setFollowerFilter(followerFilter.filter(v => v !== item.value));
+                        }
+                      }}
+                      data-testid={`checkbox-follower-${item.value}`}
+                    />
+                    {item.label}
+                  </label>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+
+          {/* Contact filter - multi-select */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-7 md:h-8 text-xs md:text-sm gap-1 min-w-[70px]" data-testid="button-contact-filter">
+                컨택 {contactFilter.length > 0 && <Badge variant="secondary" className="h-4 px-1 text-[10px]">{contactFilter.length}</Badge>}
+                <ChevronDown className="w-3 h-3 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-28 p-2" align="start">
+              <div className="space-y-1">
+                {[
+                  { value: 'Y', label: 'Y' },
+                  { value: 'N', label: 'N' },
+                ].map(item => (
+                  <label key={item.value} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer text-sm">
+                    <Checkbox 
+                      checked={contactFilter.includes(item.value)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setContactFilter([...contactFilter, item.value]);
+                        } else {
+                          setContactFilter(contactFilter.filter(v => v !== item.value));
+                        }
+                      }}
+                      data-testid={`checkbox-contact-${item.value}`}
+                    />
+                    {item.label}
+                  </label>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+
+          {/* Reply filter - multi-select */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-7 md:h-8 text-xs md:text-sm gap-1 min-w-[70px]" data-testid="button-reply-filter">
+                회신 {replyFilter.length > 0 && <Badge variant="secondary" className="h-4 px-1 text-[10px]">{replyFilter.length}</Badge>}
+                <ChevronDown className="w-3 h-3 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-28 p-2" align="start">
+              <div className="space-y-1">
+                {[
+                  { value: 'Y', label: 'Y' },
+                  { value: 'N', label: 'N' },
+                ].map(item => (
+                  <label key={item.value} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer text-sm">
+                    <Checkbox 
+                      checked={replyFilter.includes(item.value)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setReplyFilter([...replyFilter, item.value]);
+                        } else {
+                          setReplyFilter(replyFilter.filter(v => v !== item.value));
+                        }
+                      }}
+                      data-testid={`checkbox-reply-${item.value}`}
+                    />
+                    {item.label}
+                  </label>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+
+          {/* Collab filter - multi-select */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-7 md:h-8 text-xs md:text-sm gap-1 min-w-[70px]" data-testid="button-collab-filter">
+                협업 {collabFilter.length > 0 && <Badge variant="secondary" className="h-4 px-1 text-[10px]">{collabFilter.length}</Badge>}
+                <ChevronDown className="w-3 h-3 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-28 p-2" align="start">
+              <div className="space-y-1">
+                {[
+                  { value: 'Y', label: 'Y' },
+                  { value: 'N', label: 'N' },
+                ].map(item => (
+                  <label key={item.value} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer text-sm">
+                    <Checkbox 
+                      checked={collabFilter.includes(item.value)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setCollabFilter([...collabFilter, item.value]);
+                        } else {
+                          setCollabFilter(collabFilter.filter(v => v !== item.value));
+                        }
+                      }}
+                      data-testid={`checkbox-collab-${item.value}`}
+                    />
+                    {item.label}
+                  </label>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
 
         {/* Client filter buttons */}
