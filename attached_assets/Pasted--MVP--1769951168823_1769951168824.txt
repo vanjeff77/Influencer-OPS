@@ -1,0 +1,188 @@
+# (MVP+) 캠페인 상세: 인플루언서 운영(라인아이템) 디벨롭 프롬프트
+중요: 이번 작업 범위는 “캠페인 상세 화면 내부(인플루언서 운영/콘텐츠/계약 관련)”만.
+탐색/그룹/분석/정산 메뉴의 구조나 라우팅, 전체 UI는 변경하지 말 것.
+언어: 사용자 화면 텍스트는 한국어.
+
+────────────────────────────────────────
+[목표]
+캠페인에서 인플루언서를 실질 운영하기 위해,
+캠페인-인플루언서 단위(라인아이템)로 아래 흐름을 한 화면에서 관리 가능하게 한다.
+
+흐름:
+(1) 최종 선정
+(2) 오퍼 확정(조건 합의 기록)
+(3) 계약 진행(계약서 링크/파일)
+(4) 일정 확정(초안/업로드 예정일)
+(5) 초안 수신(링크/파일)
+(6) 내부 검토/피드백(메모 여러 개 + 요약)
+(7) 완성본/게시 확인(링크 + 확인 체크)
+
+MVP 원칙: “상태값 3개 축만” 추가한다. (운영단계 + 커뮤니케이션 상태 + 검수 상태)
+복잡한 자동화/알림은 선택(나중 확장).
+
+────────────────────────────────────────
+[1) 데이터 모델(최소)]
+캠페인 라인아이템 = campaignInfluencer (또는 campaignLineItem)
+
+필수 필드(최소):
+- id
+- campaignId
+- influencerId
+
+### (A) 운영 단계(stage) — 일이 어디까지 진행됐나
+enum stage:
+- 선정완료
+- 오퍼확정
+- 계약진행
+- 일정확정
+- 초안수신
+- 피드백중
+- 완성본확정
+- 완료
+
+### (B) 커뮤니케이션 상태(commStatus) — 상대가 지금 어떤 상태인가
+enum commStatus:
+- 컨택전
+- 미응답
+- 협의중
+- 수락
+- 거절
+- 보류
+
+### (C) 검수 상태(reviewStatus) — 콘텐츠 검수 프로세스가 어디까지 갔나
+enum reviewStatus:
+- 초안대기
+- 검토중
+- 피드백전달
+- 승인완료
+- 업로드완료
+
+### 오퍼(조건 합의 기록) — MVP 최소 필드
+- offerFee (number or string)
+- offerVatIncluded (boolean)
+- offerUsageMonths (number|null)  # 2차활용 기간(개월) optional
+- offerUsageNote (string|null)    # 범위/조건 메모 optional
+- offerDeadlineNote (string|null) # 납기 관련 메모 optional
+
+### 계약
+- contractUrl (string|null)
+- contractFileId (string|null)  # 업로드 파일 참조
+- contractStatus (enum optional): 미첨부|링크만|파일만|둘다
+
+### 일정
+- draftDueAt (date|null)         # 초안 수신 예정일
+- uploadDueAt (date|null)        # 업로드(게시) 예정일
+
+### 자료(링크/파일)
+- draftUrl (string|null)
+- draftFileId (string|null)
+- finalUrl (string|null)         # 게시 URL / 완성본 링크
+- finalFileId (string|null)      # 선택
+
+### 게시 확인
+- isPublishedConfirmed (boolean default false)
+- publishedConfirmedAt (date|null)
+
+### 내부 피드백 메모(다중)
+feedbackNote 테이블(또는 campaignInfluencerNote):
+- id, campaignId, influencerId(or lineItemId)
+- authorUserId
+- body (text)
+- createdAt
+- (optional) isPinned / isSelectedForSummary (boolean)
+
+### 피드백 요약(외부 전달용 1개)
+- feedbackSummary (text|null)
+- feedbackSummaryUpdatedAt
+
+────────────────────────────────────────
+[2) UI: 캠페인 상세에 ‘운영’ 탭 추가(또는 기존 인플루언서 탭 내 운영 섹션)]
+탭명: “운영”
+
+운영 탭 레이아웃:
+- 상단: 라인아이템 테이블(캠페인 참여 인플루언서 리스트)
+- 우측(또는 Drawer): 선택한 인플루언서 운영 상세 패널
+
+“클릭해도 변화 없음” 절대 금지:
+- 행 클릭 시 selected 하이라이트 + 상세 패널 열림 + 로딩 표시.
+
+────────────────────────────────────────
+[3) 라인아이템 테이블(필수 컬럼)]
+행 = 캠페인-인플루언서 1명
+
+최소 컬럼:
+- 인플루언서(닉네임/플랫폼/팔로워)
+- stage(운영단계 배지)
+- commStatus(커뮤니케이션 배지)
+- reviewStatus(검수 배지)
+- 계약(링크/파일 존재 배지)
+- 초안 예정일(draftDueAt)
+- 업로드 예정일(uploadDueAt)
+- 초안(링크/파일 존재)
+- 완성본 링크(finalUrl)
+- 피드백 메모 수(n)
+- 마지막 업데이트
+
+테이블 상단 필터(간단):
+- stage 필터
+- commStatus 필터
+- reviewStatus 필터
+
+────────────────────────────────────────
+[4) 운영 상세 패널(섹션/탭 구성)]
+패널은 탭 또는 아코디언으로 구성:
+
+A. 상태(필수)
+- 운영단계(stage) 드롭다운
+- 커뮤니케이션 상태(commStatus) 드롭다운
+- 검수 상태(reviewStatus) 드롭다운
+- (선택) 담당자 지정
+
+B. 오퍼 확정(필수)
+- 진행비(offerFee)
+- VAT 포함 여부(offerVatIncluded)
+- 2차활용 기간(offerUsageMonths) + 범위 메모(offerUsageNote)
+- 납기 메모(offerDeadlineNote)
+버튼: [오퍼 확정 저장]
+오퍼 저장 시 stage를 최소 “오퍼확정”으로 올릴 수 있게(자동/수동 중 택1)
+
+C. 계약(필수)
+- 계약서 링크 입력(contractUrl)
+- 계약서 파일 첨부(contractFileId)
+- 현재 계약 상태 배지(미첨부/링크만/파일만/둘다)
+계약이 첨부되면 stage를 최소 “계약진행”으로 올릴 수 있게(자동/수동 중 택1)
+
+D. 일정(필수)
+- 초안 수신 예정일(draftDueAt)
+- 업로드(게시) 예정일(uploadDueAt)
+일정 입력 시 stage를 최소 “일정확정”으로 올릴 수 있게(자동/수동 중 택1)
+
+E. 초안/완성본(필수)
+- 초안 링크(draftUrl) 텍스트 폼
+- 초안 파일(draftFileId) 첨부
+- 완성본 링크/게시URL(finalUrl) 텍스트 폼
+- (선택) 완성본 파일(finalFileId) 첨부
+- 게시 확인 체크: [게시 확인 완료] 토글(isPublishedConfirmed)
+  - 체크 시 publishedConfirmedAt 저장
+초안 링크/파일이 있으면 stage를 최소 “초안수신”, reviewStatus를 최소 “검토중”으로 올릴 수 있게(자동/수동 중 택1)
+finalUrl + 게시확인 시 stage “완성본확정” 또는 “완료”로 전환 가능
+
+F. 내부 피드백(핵심)
+- 메모 리스트(최신순): 작성자/시간/본문
+- 메모 작성 입력창 + [추가]
+- 메모는 여러 개 가능해야 함(스레드형)
+- 각 메모에 체크박스 “요약에 포함”
+- 버튼: [선택 메모로 요약 만들기]
+  - 체크된 메모 본문을 합쳐 feedbackSummary 텍스트 영역에 자동 채우기(초안 생성)
+- feedbackSummary 텍스트 박스(수정 가능) + [요약 저장] + [복사]
+=> 실무자가 외부로 피드백 전달할 때 “복사”로 바로 전달 가능
+
+────────────────────────────────────────
+[5) 완료 기준(테스트 시나리오)]
+1) 캠페인 운영 탭에서 인플루언서 행을 클릭하면 상세 패널이 열리고 상태/오퍼/계약/일정/자료/피드백이 보인다.
+2) 계약서 링크 또는 파일을 넣을 수 있고 저장 후 유지된다.
+3) 초안 예정일/업로드 예정일을 입력하고 저장 후 유지된다.
+4) 초안 링크/파일, 완성본 링크를 입력할 수 있고 저장 후 유지된다.
+5) 내부 피드백 메모를 여러 개 추가할 수 있고, 체크 후 요약 생성/저장/복사가 된다.
+6) stage/commStatus/reviewStatus를 변경하면 테이블 배지에도 즉시 반영된다.
+7) 다른 메뉴/페이지의 구조나 UI는 변경하지 않는다.

@@ -68,7 +68,7 @@ export default function Discover() {
       });
     } catch (err) {
       toast({
-        title: "복사 실패",
+        title: KO.pages.discover.copyFailed,
         variant: "destructive"
       });
     }
@@ -182,7 +182,7 @@ export default function Discover() {
       onSuccess: () => {
         setIsAddOpen(false);
         setNewInfluencer({ name: "", email: "", accounts: [{ platform: "IG", handle: "" }] });
-        toast({ title: "인플루언서가 추가되었습니다." });
+        toast({ title: KO.pages.discover.influencerAddedToast });
       }
     });
   };
@@ -591,6 +591,13 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
   const [name, setName] = useState("");
   const [accounts, setAccounts] = useState<{ platform: string; handle: string }[]>([]);
   const [newContentLink, setNewContentLink] = useState("");
+  const [contactPoint, setContactPoint] = useState("");
+  const [client, setClient] = useState("");
+  const [subType, setSubType] = useState("");
+  const [contactStatus, setContactStatus] = useState<string>("");
+  const [replyStatus, setReplyStatus] = useState<string>("");
+  const [collabStatus, setCollabStatus] = useState<string>("");
+  const [finalContentUrl, setFinalContentUrl] = useState("");
 
   const platformUrlMap: Record<string, string> = {
     IG: 'instagram.com',
@@ -608,6 +615,13 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
       setPhone(influencer.phone || "");
       setName(influencer.name || "");
       setAccounts(influencer.accounts?.map(acc => ({ platform: acc.platform, handle: acc.handle })) || []);
+      setContactPoint(influencer.contactPoint || "");
+      setClient(influencer.client || "");
+      setSubType(influencer.subType || "");
+      setContactStatus(influencer.contactStatus || "");
+      setReplyStatus(influencer.replyStatus || "");
+      setCollabStatus(influencer.collabStatus || "");
+      setFinalContentUrl(influencer.finalContentUrl || "");
     }
   }, [influencer]);
 
@@ -628,10 +642,17 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
         tags: tags.split(",").map(t => t.trim()).filter(Boolean),
         email,
         phone,
-        accounts: validAccounts
+        accounts: validAccounts,
+        contactPoint,
+        client,
+        subType,
+        contactStatus: contactStatus || null,
+        replyStatus: replyStatus || null,
+        collabStatus: collabStatus || null,
+        finalContentUrl
       }
     }, {
-      onSuccess: () => toast({ title: "저장되었습니다." })
+      onSuccess: () => toast({ title: KO.pages.discover.savedToast })
     });
   };
 
@@ -654,7 +675,7 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
     addContent.mutate({ link: newContentLink, publishedAt: new Date() }, {
       onSuccess: () => {
         setNewContentLink("");
-        toast({ title: "콘텐츠가 추가되었습니다." });
+        toast({ title: KO.pages.discover.contentAddedToast });
       }
     });
   };
@@ -697,39 +718,63 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
             </SheetHeader>
 
             <Tabs defaultValue="info" className="mt-6">
-              <TabsList className="w-full grid grid-cols-4">
-                <TabsTrigger value="info">기본정보</TabsTrigger>
-                <TabsTrigger value="content">콘텐츠</TabsTrigger>
-                <TabsTrigger value="timeline">타임라인</TabsTrigger>
-                <TabsTrigger value="memo">메모</TabsTrigger>
+              <TabsList className="w-full grid grid-cols-3">
+                <TabsTrigger value="info">{KO.pages.discover.basicInfo}</TabsTrigger>
+                <TabsTrigger value="collab">{KO.pages.discover.collabHistory}</TabsTrigger>
+                <TabsTrigger value="content">{KO.pages.discover.content}</TabsTrigger>
               </TabsList>
 
               <TabsContent value="info" className="space-y-4 mt-4">
                 <div className="space-y-3">
                   <div>
-                    <label className="text-sm font-medium">이름</label>
+                    <label className="text-sm font-medium">{KO.pages.discover.nickname}</label>
                     <Input value={name} onChange={e => setName(e.target.value)} data-testid="input-influencer-name" />
                   </div>
-                  <div>
-                    <label className="text-sm font-medium">이메일</label>
-                    <Input value={email} onChange={e => setEmail(e.target.value)} data-testid="input-influencer-email" />
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-sm font-medium">{KO.pages.discover.client}</label>
+                      <Input value={client} onChange={e => setClient(e.target.value)} placeholder="클라이언트" data-testid="input-influencer-client" />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">{KO.pages.discover.subType}</label>
+                      <Input value={subType} onChange={e => setSubType(e.target.value)} placeholder="세부유형" data-testid="input-influencer-subtype" />
+                    </div>
                   </div>
+                  
                   <div>
-                    <label className="text-sm font-medium">전화번호</label>
-                    <Input value={phone} onChange={e => setPhone(e.target.value)} data-testid="input-influencer-phone" />
+                    <label className="text-sm font-medium">{KO.pages.discover.contactPoint}</label>
+                    <Input value={contactPoint} onChange={e => setContactPoint(e.target.value)} placeholder="이메일, DM 등" data-testid="input-influencer-contactpoint" />
                   </div>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-sm font-medium">{KO.pages.discover.email}</label>
+                      <Input value={email} onChange={e => setEmail(e.target.value)} data-testid="input-influencer-email" />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">{KO.pages.discover.phone}</label>
+                      <Input value={phone} onChange={e => setPhone(e.target.value)} data-testid="input-influencer-phone" />
+                    </div>
+                  </div>
+                  
                   <div>
-                    <label className="text-sm font-medium">태그 (쉼표로 구분)</label>
-                    <Input value={tags} onChange={e => setTags(e.target.value)} placeholder="뷰티, 패션, 라이프스타일" data-testid="input-influencer-tags" />
+                    <label className="text-sm font-medium">{KO.pages.discover.tags}</label>
+                    <Input value={tags} onChange={e => setTags(e.target.value)} placeholder={KO.pages.discover.tagsPlaceholder} data-testid="input-influencer-tags" />
+                  </div>
+                  
+                  <div>
+                    <label className="text-sm font-medium">{KO.pages.discover.memo}</label>
+                    <Textarea value={memo} onChange={e => setMemo(e.target.value)} placeholder={KO.pages.discover.memo} className="min-h-[80px]" data-testid="input-influencer-memo" />
                   </div>
                 </div>
 
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium">플랫폼 계정</label>
+                    <label className="text-sm font-medium">{KO.pages.discover.platformAccounts}</label>
                     <Button variant="outline" size="sm" onClick={addAccount} data-testid="button-add-account">
                       <Plus className="w-3 h-3 mr-1" />
-                      추가
+                      {KO.pages.discover.addAccount}
                     </Button>
                   </div>
                   {accounts.map((acc, index) => (
@@ -743,13 +788,13 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
                           <SelectItem value="YT">YouTube</SelectItem>
                           <SelectItem value="TikTok">TikTok</SelectItem>
                           <SelectItem value="X">X</SelectItem>
-                          <SelectItem value="Blog">네이버 블로그</SelectItem>
+                          <SelectItem value="Blog">Blog</SelectItem>
                         </SelectContent>
                       </Select>
                       <Input 
                         value={acc.handle} 
                         onChange={e => updateAccount(index, 'handle', e.target.value)} 
-                        placeholder="@handle" 
+                        placeholder={KO.pages.discover.handlePlaceholder} 
                         className="flex-1"
                         data-testid={`input-account-handle-${index}`}
                       />
@@ -764,20 +809,112 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
                     </div>
                   ))}
                   {accounts.length === 0 && (
-                    <div className="text-sm text-muted-foreground text-center py-2">등록된 플랫폼 계정이 없습니다.</div>
+                    <div className="text-sm text-muted-foreground text-center py-2">{KO.pages.discover.noAccounts}</div>
                   )}
                 </div>
 
                 <Button onClick={handleSave} disabled={updateInfluencer.isPending} className="w-full" data-testid="button-save-info">
                   <Save className="w-4 h-4 mr-2" />
-                  {updateInfluencer.isPending ? "저장 중..." : "저장"}
+                  {updateInfluencer.isPending ? KO.pages.discover.saving : KO.pages.discover.saveChanges}
                 </Button>
+              </TabsContent>
+
+              <TabsContent value="collab" className="mt-4 space-y-4">
+                <div className="space-y-3">
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="text-sm font-medium">{KO.pages.discover.contactStatus}</label>
+                      <Select value={contactStatus} onValueChange={setContactStatus}>
+                        <SelectTrigger data-testid="select-contact-status">
+                          <SelectValue placeholder="-" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Y">Y</SelectItem>
+                          <SelectItem value="N">N</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">{KO.pages.discover.replyStatus}</label>
+                      <Select value={replyStatus} onValueChange={setReplyStatus}>
+                        <SelectTrigger data-testid="select-reply-status">
+                          <SelectValue placeholder="-" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Y">Y</SelectItem>
+                          <SelectItem value="N">N</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">{KO.pages.discover.collabStatus}</label>
+                      <Select value={collabStatus} onValueChange={setCollabStatus}>
+                        <SelectTrigger data-testid="select-collab-status">
+                          <SelectValue placeholder="-" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Y">Y</SelectItem>
+                          <SelectItem value="N">N</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="text-sm font-medium">{KO.pages.discover.finalContentUrl}</label>
+                    <div className="flex gap-2">
+                      <Input 
+                        value={finalContentUrl} 
+                        onChange={e => setFinalContentUrl(e.target.value)} 
+                        placeholder="콘텐츠 완성본 URL" 
+                        className="flex-1"
+                        data-testid="input-final-content-url" 
+                      />
+                      {finalContentUrl && (
+                        <Button variant="outline" size="icon" asChild>
+                          <a href={finalContentUrl} target="_blank" rel="noopener noreferrer">
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                <Button onClick={handleSave} disabled={updateInfluencer.isPending} className="w-full" data-testid="button-save-collab">
+                  <Save className="w-4 h-4 mr-2" />
+                  {updateInfluencer.isPending ? KO.pages.discover.saving : KO.pages.discover.saveChanges}
+                </Button>
+                
+                <div className="border-t pt-4 mt-4">
+                  <h3 className="text-sm font-medium mb-3">{KO.pages.discover.timeline}</h3>
+                  <ScrollArea className="h-[200px]">
+                    <div className="space-y-3">
+                      {influencer.timeline?.map(event => (
+                        <div key={event.id} className="flex gap-3">
+                          <div className="w-2 h-2 rounded-full bg-primary mt-2 shrink-0" />
+                          <div>
+                            <div className="font-medium text-sm">{event.title}</div>
+                            <div className="text-xs text-muted-foreground">{event.description}</div>
+                            <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {event.createdAt && format(new Date(event.createdAt), 'yyyy.MM.dd HH:mm')}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      {(!influencer.timeline || influencer.timeline.length === 0) && (
+                        <div className="text-center text-muted-foreground py-4 text-sm">{KO.pages.discover.noTimeline}</div>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </div>
               </TabsContent>
 
               <TabsContent value="content" className="mt-4 space-y-4">
                 <div className="flex gap-2">
                   <Input 
-                    placeholder="콘텐츠 링크 추가" 
+                    placeholder={KO.pages.discover.contentLinkPlaceholder} 
                     value={newContentLink} 
                     onChange={e => setNewContentLink(e.target.value)}
                     data-testid="input-content-link"
@@ -809,47 +946,10 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
                       </Card>
                     ))}
                     {(!influencer.contents || influencer.contents.length === 0) && (
-                      <div className="text-center text-muted-foreground py-8">콘텐츠가 없습니다.</div>
+                      <div className="text-center text-muted-foreground py-8">{KO.pages.discover.noContent}</div>
                     )}
                   </div>
                 </ScrollArea>
-              </TabsContent>
-
-              <TabsContent value="timeline" className="mt-4">
-                <ScrollArea className="h-[400px]">
-                  <div className="space-y-4">
-                    {influencer.timeline?.map(event => (
-                      <div key={event.id} className="flex gap-3">
-                        <div className="w-2 h-2 rounded-full bg-primary mt-2 shrink-0" />
-                        <div>
-                          <div className="font-medium text-sm">{event.title}</div>
-                          <div className="text-xs text-muted-foreground">{event.description}</div>
-                          <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {event.createdAt && format(new Date(event.createdAt), 'yyyy.MM.dd HH:mm')}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                    {(!influencer.timeline || influencer.timeline.length === 0) && (
-                      <div className="text-center text-muted-foreground py-8">이력이 없습니다.</div>
-                    )}
-                  </div>
-                </ScrollArea>
-              </TabsContent>
-
-              <TabsContent value="memo" className="mt-4 space-y-4">
-                <Textarea 
-                  placeholder="인플루언서에 대한 메모를 작성하세요..." 
-                  value={memo} 
-                  onChange={e => setMemo(e.target.value)}
-                  className="min-h-[200px]"
-                  data-testid="textarea-memo"
-                />
-                <Button onClick={handleSave} disabled={updateInfluencer.isPending} className="w-full" data-testid="button-save-memo">
-                  <Save className="w-4 h-4 mr-2" />
-                  저장
-                </Button>
               </TabsContent>
             </Tabs>
           </>
@@ -881,10 +981,10 @@ function GroupSelectionModal({ open, onOpenChange, workspaceId, selectedIds, onS
         createGroup: { workspaceId, name: newGroupName }
       }, {
         onSuccess: () => {
-          toast({ title: "그룹에 저장되었습니다." });
+          toast({ title: KO.pages.discover.savedToGroupToast });
           onSuccess();
         },
-        onError: () => toast({ variant: "destructive", title: "저장 실패" })
+        onError: () => toast({ variant: "destructive", title: KO.pages.discover.saveFailed })
       });
     } else if (selectedGroupId) {
       saveToGroup.mutate({
@@ -892,10 +992,10 @@ function GroupSelectionModal({ open, onOpenChange, workspaceId, selectedIds, onS
         groupId: selectedGroupId
       }, {
         onSuccess: () => {
-          toast({ title: "그룹에 저장되었습니다." });
+          toast({ title: KO.pages.discover.savedToGroupToast });
           onSuccess();
         },
-        onError: () => toast({ variant: "destructive", title: "저장 실패" })
+        onError: () => toast({ variant: "destructive", title: KO.pages.discover.saveFailed })
       });
     }
   };

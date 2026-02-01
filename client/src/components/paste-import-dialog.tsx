@@ -153,8 +153,8 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
       onImportComplete();
     } catch (err) {
       toast({
-        title: "가져오기 실패",
-        description: "데이터를 가져오는 중 오류가 발생했습니다.",
+        title: KO.pages.discover.importFailed,
+        description: KO.pages.discover.importFailedDesc,
         variant: "destructive"
       });
       setState('validated');
@@ -203,7 +203,7 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
                               <th key={i} className="px-2 py-1 text-left font-medium border-r whitespace-nowrap">
                                 {h}
                                 {!ALLOWED_COLUMNS.includes(h.trim()) && (
-                                  <Badge variant="outline" className="ml-1 text-orange-500 border-orange-300">제외</Badge>
+                                  <Badge variant="outline" className="ml-1 text-orange-500 border-orange-300">{KO.pages.discover.excludedBadge}</Badge>
                                 )}
                               </th>
                             ))}

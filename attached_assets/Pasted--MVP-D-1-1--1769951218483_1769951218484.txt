@@ -1,0 +1,117 @@
+# (추가 구현, MVP-안전) D-1 리마인드/지연 상태 자동 표시 + “오늘의 할 일” 연동
+중요: 이번 추가 구현은
+(1) 캠페인 상세 > 운영(라인아이템) 화면에 “임박/지연” 배지와 필터를 붙이고,
+(2) Overview(개요) > 오늘의 할 일(Task Engine)에 라인아이템 기반 업무를 자동 생성하는 것만 한다.
+기존 탐색/그룹/분석/전체 UI 구조는 변경하지 말 것.
+언어: 사용자 화면 텍스트는 한국어.
+
+────────────────────────────────────────
+[1) 라인아이템 기반 “임박/지연” 계산 로직(서버/클라 어디든 OK)]
+기준: 캠페인-인플루언서 라인아이템(campaignInfluencer / campaignLineItem)
+
+## 1-1. 임박(dueSoon) & 지연(overdue) 정의
+- 오늘 날짜를 기준으로 계산(시간대는 Asia/Seoul)
+- draftDueAt(초안 예정일), uploadDueAt(업로드 예정일) 각각 계산
+
+### 초안(draft) 기준
+- draftDueAt이 있고, draftUrl/draftFileId가 비어있으면 “미제출”
+  - D-1 임박: draftDueAt - 오늘 = 1일 → badge: “초안 D-1”
+  - D-0 오늘: draftDueAt - 오늘 = 0일 → badge: “초안 D-day”
+  - 지연: draftDueAt < 오늘 → badge: “초안 지연”
+
+### 업로드(upload) 기준
+- uploadDueAt이 있고, finalUrl이 비어있거나 isPublishedConfirmed=false 이면 “미완료”
+  - D-1 임박: uploadDueAt - 오늘 = 1일 → badge: “업로드 D-1”
+  - D-0 오늘: uploadDueAt - 오늘 = 0일 → badge: “업로드 D-day”
+  - 지연: uploadDueAt < 오늘 → badge: “업로드 지연”
+
+## 1-2. 추가: 커뮤니케이션 미응답 임박/지연(선택)
+- commStatus=미응답이고, lastOutboundAt(마지막 발신일)이 존재하면
+  - D-3: 마지막 발신 후 3일 이상 답장 없음 → badge: “미응답 3일+”
+※ lastOutboundAt이 없으면 이 배지는 생략(데이터 없는 MVP 보호)
+
+────────────────────────────────────────
+[2) 캠페인 상세 > 운영 탭 UI 개선(임박/지연 표시)]
+## 2-1. 테이블 컬럼 추가(1개)
+- 컬럼명: “임박/지연”
+- 표시 우선순위:
+  1) 업로드 지연
+  2) 초안 지연
+  3) 업로드 D-day
+  4) 초안 D-day
+  5) 업로드 D-1
+  6) 초안 D-1
+  7) 미응답 3일+ (선택)
+- 한 행에서 여러 개가 해당되면 최대 2개 배지까지만 표시하고 “+n”으로 축약
+
+## 2-2. 필터 2개 추가(간단)
+- “임박만 보기”(초안/업로드 D-1, D-day)
+- “지연만 보기”(초안/업로드 지연)
+※ 필터는 URL query로도 반영 가능(선택)
+
+## 2-3. 상세 패널(Drawer) 상단에 경고 배너(선택)
+- 해당 라인아이템이 지연이면 상단에 노란/빨간 배너로 “초안 지연” 또는 “업로드 지연” 표시
+- CTA: “콘텐츠 입력하기”(초안/완성본 섹션으로 스크롤)
+
+────────────────────────────────────────
+[3) Overview(개요) > “오늘의 할 일” 자동 생성: 라인아이템 연동]
+기존 Overview Task Engine(오늘의 할 일)에 아래 규칙을 추가한다.
+MVP 기준: “자동 생성만” 하고, 알림 푸시/이메일 자동발송은 하지 않는다.
+
+## 3-1. Task 생성 규칙(라인아이템 기반)
+R1) 초안 D-1 / D-day / 지연
+- 조건: draftDueAt 존재 + (draftUrl/draftFileId 없음)
+- 분류:
+  - D-1: priority=high
+  - D-day: priority=high
+  - 지연: priority=high (최상단)
+- title 예시:
+  - “[초안] 내일까지 수신 필요”
+  - “[초안] 오늘 마감”
+  - “[초안] 지연 발생”
+- subtitle 예시:
+  - “{캠페인명} · {인플루언서 닉네임}”
+- CTA:
+  - label: “운영 열기”
+  - route: /campaigns/{campaignId}?tab=운영&influencerId={influencerId}
+
+R2) 업로드 D-1 / D-day / 지연
+- 조건: uploadDueAt 존재 + (finalUrl 없음 OR isPublishedConfirmed=false)
+- 우선순위: 지연>오늘>내일 (모두 high)
+- title 예시:
+  - “[업로드] 내일까지 게시 확인 필요”
+  - “[업로드] 오늘 게시 확인”
+  - “[업로드] 지연 발생”
+- CTA 동일: 운영 열기 + 해당 라인아이템으로 스크롤/포커스
+
+R3) 미응답 3일+(선택)
+- 조건: commStatus=미응답 + lastOutboundAt 기준 3일 이상
+- priority=medium
+- title: “[커뮤니케이션] 3일 이상 미응답”
+- CTA: 커뮤니케이션 탭 또는 운영 탭(둘 중 존재하는 곳)
+  - /campaigns/{campaignId}?tab=커뮤니케이션&influencerId={influencerId}
+  - 커뮤니케이션 탭이 없으면 운영 탭으로 이동
+
+## 3-2. “오늘의 할 일” 표시 정책(개요 UI)
+- 최대 15개 표시, 우선순위 높은 것부터
+- 완료 체크는 사용자 개인 기준(localStorage 또는 DB)
+- “지연” 태스크는 상단에 고정
+
+────────────────────────────────────────
+[4) API/구현 방식(최소)]
+선택 1) 서버에서 태스크/임박 계산:
+- GET /api/overview/tasks -> lineItem 기반으로 생성한 tasks 반환
+- GET /api/campaigns/:id/line-items -> 각 라인아이템에 dueBadge 정보 포함(optional)
+
+선택 2) 클라이언트에서 계산:
+- 라인아이템 데이터에 draftDueAt/uploadDueAt/draftUrl/finalUrl/isPublishedConfirmed만 있으면 계산 가능
+
+MVP 권장: 클라이언트 계산로 먼저 빠르게 구현하고, 추후 서버로 이전 가능.
+
+────────────────────────────────────────
+[5) 완료 기준(테스트)]
+1) 캠페인 운영 탭에서 “임박/지연” 배지가 실제로 뜬다(샘플 데이터 OK)
+2) “지연만 보기” 필터를 켜면 지연 항목만 필터링된다
+3) Overview의 오늘의 할 일에 최소 5개 이상의 태스크가 생성되고(더미 OK),
+   라인아이템의 draftDueAt/uploadDueAt 상태에 따라 “지연/D-day/D-1”이 우선순위대로 정렬된다
+4) Overview 태스크 CTA를 누르면 해당 캠페인 운영 탭으로 이동하며, 해당 인플루언서 라인아이템이 선택/포커스된다

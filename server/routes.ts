@@ -102,13 +102,16 @@ export async function registerRoutes(
     'blog': 'Blog', 'Blog': 'Blog', '블로그': 'Blog', 'naver': 'Blog', '네이버': 'Blog',
   };
 
-  function parsePlatform(val: string | undefined | null): string {
-    if (!val) return 'other';
+  const VALID_PLATFORMS = ['IG', 'YT', 'TikTok', 'X', 'Blog'];
+  
+  function parsePlatform(val: string | undefined | null): string | null {
+    if (!val) return null;
     const normalized = val.trim().toLowerCase();
     for (const [key, mapped] of Object.entries(PLATFORM_MAP)) {
       if (key.toLowerCase() === normalized) return mapped;
     }
-    return 'other';
+    // Unknown platform - return null to indicate invalid
+    return null;
   }
 
   function parseFollowers(val: string | number | undefined | null): number | null {
@@ -199,6 +202,27 @@ export async function registerRoutes(
         let handle = platformAccount || extractHandleFromUrl(channelUrl);
         const url = channelUrl;
 
+        // Validate platform if provided - must be a known platform
+        if (platformRaw && !platform) {
+          results.errors.push({ row: rowIdx + 1, reason: `알 수 없는 플랫폼: ${platformRaw}` });
+          continue;
+        }
+
+        // Validate status fields (must be Y, N, or empty)
+        const validStatusValues = ['Y', 'N', ''];
+        if (contactStatus && !validStatusValues.includes(contactStatus)) {
+          results.errors.push({ row: rowIdx + 1, reason: `컨택여부 값이 올바르지 않음: ${contactStatus}` });
+          continue;
+        }
+        if (replyStatus && !validStatusValues.includes(replyStatus)) {
+          results.errors.push({ row: rowIdx + 1, reason: `회신 여부 값이 올바르지 않음: ${replyStatus}` });
+          continue;
+        }
+        if (collabStatus && !validStatusValues.includes(collabStatus)) {
+          results.errors.push({ row: rowIdx + 1, reason: `협업 여부 값이 올바르지 않음: ${collabStatus}` });
+          continue;
+        }
+
         // Validate: need at least nickname OR (platform + handle) OR (platform + url)
         if (!nickname && !handle && !url) {
           results.errors.push({ row: rowIdx + 1, reason: '필수 키(닉네임, 플랫폼 계정, 채널 URL) 없음' });
@@ -209,7 +233,7 @@ export async function registerRoutes(
           // Find existing influencer
           const existing = await storage.findInfluencerByKey(
             workspaceId,
-            platform !== 'other' ? platform : null,
+            platform,
             handle || null,
             url || null,
             nickname || null
@@ -227,8 +251,8 @@ export async function registerRoutes(
             finalContentUrl: finalContentUrl || null
           };
 
-          const accountData = (platform !== 'other' || handle || url) ? {
-            platform: platform !== 'other' ? platform : 'IG',
+          const accountData = (platform || handle || url) ? {
+            platform: platform || 'IG',
             handle: handle || nickname || 'unknown',
             url: url || '',
             followers: followers || 0
