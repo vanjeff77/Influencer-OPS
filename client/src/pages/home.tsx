@@ -215,23 +215,6 @@ export default function Home() {
   return (
     <Layout>
       <div className="space-y-6 md:space-y-8 max-w-[1400px] mx-auto">
-        <div className="relative overflow-hidden rounded-xl md:rounded-2xl bg-gradient-to-r from-primary to-blue-600 p-4 md:p-8 text-white shadow-xl">
-          <div className="relative z-10">
-            <h1 className="text-xl md:text-3xl font-bold font-display mb-1 md:mb-2" data-testid="text-welcome-title">
-              {KO.pages.home.welcomeBack}, {user?.name?.split(' ')[0] || 'User'}!
-            </h1>
-            <p className="text-blue-100 max-w-xl text-sm md:text-base mb-4" data-testid="text-welcome-subtitle">
-              {KO.pages.home.activeCampaigns} {kpiData.activeCampaigns}개 · {KO.pages.home.pendingResponses} {kpiData.pendingResponses}명 · {KO.pages.home.todayTasks} {tasks.filter(t => t.dueIn <= 0 && !t.completed).length}개
-            </p>
-            <Link href="/campaigns">
-              <Button size="sm" variant="secondary" className="font-semibold shadow-lg" data-testid="button-go-campaigns">
-                {KO.pages.home.goToCampaigns} <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          </div>
-          <div className="absolute right-0 top-0 h-full w-1/2 bg-[url('https://images.unsplash.com/photo-1557683316-973673baf926?auto=format&fit=crop&w=800&q=80')] bg-cover opacity-10 mix-blend-overlay"></div>
-        </div>
-
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
           {kpiCards.map((kpi, index) => (
             <Link key={index} href={kpi.href}>
