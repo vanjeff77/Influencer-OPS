@@ -415,8 +415,13 @@ export async function registerRoutes(
       const { workspaceId, email, password, imapServer, imapPort, smtpServer, smtpPort } = parsed.data;
       
       // Check workspace access
-      const memberships = await storage.getWorkspaceMemberships((req.user as any).id);
-      if (!memberships.some(m => m.workspaceId === workspaceId)) {
+      const userId = (req.user as any).id;
+      const memberships = await storage.getWorkspaceMemberships(userId);
+      console.log('IMAP register debug:', { userId, workspaceId, memberships });
+      
+      const hasAccess = memberships.some(m => m.workspaceId === workspaceId);
+      if (!hasAccess) {
+        console.log('Access denied - membership check failed:', { memberships, requestedWorkspaceId: workspaceId });
         return res.status(403).json({ message: "Access denied to this workspace" });
       }
       
