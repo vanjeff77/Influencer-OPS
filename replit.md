@@ -98,6 +98,20 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (2026-02-01)
 
+### Attach Existing Email Thread Feature (기존 메일 연결)
+- **4-Step Wizard Modal**: Account selection → Search method → Thread selection → Confirm
+- **IMAP Search**: Search by recipient email, subject/keyword, or message ID
+- **Thread Attachment**: Links external email threads to campaign-influencer conversations
+- **Auto Message Import**: Fetches all messages from attached thread via IMAP
+- **Security**: Workspace membership validation for email account access
+- **Key Components**:
+  - `client/src/components/attach-email-thread-dialog.tsx`: 4-step attach workflow
+  - `server/imap.ts`: `searchThreads()`, `fetchThreadMessages()` functions
+- **API Endpoints**:
+  - `GET /api/workspaces/:id/email-accounts`: List email accounts with workspace auth
+  - `POST /api/email/search-threads`: Search IMAP for threads by various criteria
+  - `POST /api/conversations/attach-thread`: Attach external thread to line item
+
 ### Bulk Email Sending System (SMTP Queue-Based)
 - **Queue-Based Delivery**: Individual 1:1 emails (no BCC) with 5-second throttle + random jitter to avoid spam classification
 - **WYSIWYG Editor**: react-quill-new integration for rich HTML email templates

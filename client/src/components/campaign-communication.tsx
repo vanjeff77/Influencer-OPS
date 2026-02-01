@@ -32,6 +32,7 @@ import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { BulkEmailDialog } from "./bulk-email-dialog";
 import { BulkEmailLogDialog } from "./bulk-email-log-dialog";
+import { AttachEmailThreadDialog } from "./attach-email-thread-dialog";
 
 interface CampaignLineItem {
   id: number;
@@ -89,16 +90,18 @@ interface ConversationDetail {
 interface CampaignCommunicationProps {
   campaignId: number;
   campaignName?: string;
+  workspaceId: number;
   lineItems: CampaignLineItem[];
 }
 
-export function CampaignCommunication({ campaignId, campaignName, lineItems }: CampaignCommunicationProps) {
+export function CampaignCommunication({ campaignId, campaignName, workspaceId, lineItems }: CampaignCommunicationProps) {
   const { toast } = useToast();
   const [selectedLineItemId, setSelectedLineItemId] = useState<number | null>(null);
   const [showFullMessage, setShowFullMessage] = useState<ConversationMessage | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [bulkEmailOpen, setBulkEmailOpen] = useState(false);
   const [bulkEmailLogOpen, setBulkEmailLogOpen] = useState(false);
+  const [attachEmailOpen, setAttachEmailOpen] = useState(false);
   
   const { data: gmailStatus, isLoading: isLoadingGmail } = useQuery<{ connected: boolean; email?: string }>({
     queryKey: ['/api/email/gmail/status'],
@@ -338,16 +341,27 @@ export function CampaignCommunication({ campaignId, campaignName, lineItems }: C
                   <div className="text-xs text-muted-foreground truncate">{selectedLineItem.influencer?.email || KO.pages.communication.noEmail}</div>
                 </div>
               </div>
-              <Button 
-                size="sm" 
-                variant="outline"
-                onClick={() => existingConv && syncMessages.mutate(existingConv.id)}
-                disabled={syncMessages.isPending || !existingConv}
-                data-testid="button-sync-messages"
-              >
-                <RefreshCw className={`w-4 h-4 mr-1 ${syncMessages.isPending ? 'animate-spin' : ''}`} />
-                <span className="hidden sm:inline">{KO.pages.communication.syncMessages}</span>
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  onClick={() => setAttachEmailOpen(true)}
+                  data-testid="button-attach-email"
+                >
+                  <Mail className="w-4 h-4 mr-1" />
+                  <span className="hidden sm:inline">{KO.pages.attachEmail.title}</span>
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  onClick={() => existingConv && syncMessages.mutate(existingConv.id)}
+                  disabled={syncMessages.isPending || !existingConv}
+                  data-testid="button-sync-messages"
+                >
+                  <RefreshCw className={`w-4 h-4 mr-1 ${syncMessages.isPending ? 'animate-spin' : ''}`} />
+                  <span className="hidden sm:inline">{KO.pages.communication.syncMessages}</span>
+                </Button>
+              </div>
             </div>
             <ScrollArea className="flex-1 p-4">
               {isLoadingMessages ? (
@@ -426,6 +440,18 @@ export function CampaignCommunication({ campaignId, campaignName, lineItems }: C
         onOpenChange={setBulkEmailLogOpen}
         campaignId={campaignId}
       />
+
+      {/* Attach Email Thread Dialog */}
+      {selectedLineItem && (
+        <AttachEmailThreadDialog
+          open={attachEmailOpen}
+          onOpenChange={setAttachEmailOpen}
+          lineItemId={selectedLineItem.id}
+          influencerEmail={selectedLineItem.influencer?.email}
+          campaignId={campaignId}
+          workspaceId={workspaceId}
+        />
+      )}
     </div>
   );
 }

@@ -637,6 +637,187 @@ export async function registerRoutes(
     }
   });
 
+  // === EMAIL ACCOUNTS BY WORKSPACE ===
+  app.get('/api/workspaces/:workspaceId/email-accounts', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      const workspaceId = parseInt(req.params.workspaceId);
+      const userId = (req.user as any).id;
+      
+      const memberships = await storage.getWorkspaceMemberships(userId);
+      if (!memberships.some(m => m.workspaceId === workspaceId)) {
+        return res.status(403).json({ message: "이 워크스페이스에 대한 접근 권한이 없습니다" });
+      }
+      
+      const accounts = await storage.getEmailAccounts(workspaceId);
+      const safeAccounts = accounts.map(acc => ({
+        id: acc.id,
+        email: acc.email,
+        provider: acc.provider,
+        imapHost: acc.imapHost,
+        smtpHost: acc.smtpHost,
+      }));
+      res.json(safeAccounts);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // === EMAIL THREAD SEARCH ===
+  const threadSearchSchema = z.object({
+    accountId: z.number(),
+    searchMode: z.enum(['email', 'subject', 'messageId']),
+    query: z.string().min(1),
+  });
+
+  app.post('/api/email/search-threads', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const parsed = threadSearchSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid request", errors: parsed.error.errors });
+      }
+      
+      const { accountId, searchMode, query } = parsed.data;
+      const account = await storage.getEmailAccountById(accountId);
+      
+      if (!account) {
+        return res.status(404).json({ message: "이메일 계정을 찾을 수 없습니다" });
+      }
+      
+      if (account.provider === 'imap' && account.accessToken) {
+        const { searchThreads, decryptPassword } = await import('./imap');
+        
+        const settings = JSON.parse(account.accessToken);
+        const password = decryptPassword(account.refreshToken || '');
+        
+        const imapConfig = {
+          user: account.email,
+          password: password,
+          host: settings.imapServer,
+          port: parseInt(settings.imapPort) || 993,
+          tls: true,
+        };
+        
+        const threads = await searchThreads(imapConfig, searchMode, query, 20);
+        return res.json({ threads, accountEmail: account.email });
+      } else if (account.provider === 'gmail') {
+        return res.status(501).json({ message: "Gmail 검색은 아직 지원되지 않습니다. IMAP 계정을 사용해 주세요." });
+      }
+      
+      res.status(400).json({ message: "지원되지 않는 이메일 제공자입니다" });
+    } catch (err: any) {
+      console.error('Thread search error:', err);
+      res.status(500).json({ message: err.message || "스레드 검색 중 오류가 발생했습니다" });
+    }
+  });
+
+  // === ATTACH THREAD TO CONVERSATION ===
+  const attachThreadSchema = z.object({
+    lineItemId: z.number(),
+    accountId: z.number(),
+    threadId: z.string(),
+    threadSubject: z.string(),
+  });
+
+  app.post('/api/conversations/attach-thread', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const parsed = attachThreadSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid request", errors: parsed.error.errors });
+      }
+      
+      const { lineItemId, accountId, threadId, threadSubject } = parsed.data;
+      const userId = (req.user as any).id;
+      
+      const account = await storage.getEmailAccountById(accountId);
+      if (!account) {
+        return res.status(404).json({ message: "이메일 계정을 찾을 수 없습니다" });
+      }
+      
+      const memberships = await storage.getWorkspaceMemberships(userId);
+      if (!memberships.some(m => m.workspaceId === account.workspaceId)) {
+        return res.status(403).json({ message: "이 이메일 계정에 대한 접근 권한이 없습니다" });
+      }
+      
+      let conversation = await storage.getConversationByLineItem(lineItemId);
+      
+      if (conversation) {
+        conversation = await storage.updateConversation(conversation.id, {
+          emailAccountId: accountId,
+          gmailThreadId: threadId,
+          subjectPrefix: threadSubject,
+        });
+      } else {
+        conversation = await storage.createConversation({
+          campaignLineItemId: lineItemId,
+          emailAccountId: accountId,
+          gmailThreadId: threadId,
+          subjectPrefix: threadSubject,
+          status: 'active',
+        });
+      }
+      
+      if (account.provider === 'imap' && account.accessToken) {
+        const { fetchThreadMessages, decryptPassword } = await import('./imap');
+        
+        const settings = JSON.parse(account.accessToken);
+        const password = decryptPassword(account.refreshToken || '');
+        
+        const imapConfig = {
+          user: account.email,
+          password: password,
+          host: settings.imapServer,
+          port: parseInt(settings.imapPort) || 993,
+          tls: true,
+        };
+        
+        try {
+          const messages = await fetchThreadMessages(imapConfig, threadSubject);
+          
+          for (const msg of messages) {
+            const direction = msg.from === account.email ? 'outbound' : 'inbound';
+            await storage.createConversationMessage({
+              conversationId: conversation.id,
+              direction,
+              snippet: `[${msg.subject}] ${msg.snippet}`,
+              bodyHtml: msg.body,
+              bodyText: msg.snippet,
+              sendStatus: 'sent',
+              sentAt: direction === 'outbound' ? msg.date : null,
+              receivedAt: direction === 'inbound' ? msg.date : null,
+              gmailMessageId: msg.messageId,
+            });
+          }
+          
+          if (messages.length > 0) {
+            const lastMsg = messages[messages.length - 1];
+            await storage.updateConversation(conversation.id, {
+              lastMessageAt: lastMsg.date,
+            });
+          }
+        } catch (fetchErr: any) {
+          console.error('Error fetching thread messages:', fetchErr);
+        }
+      }
+      
+      const updatedConv = await storage.getConversation(conversation.id);
+      res.json({ success: true, conversation: updatedConv });
+    } catch (err: any) {
+      console.error('Attach thread error:', err);
+      res.status(500).json({ message: err.message || "스레드 연결 중 오류가 발생했습니다" });
+    }
+  });
+
   // === CONVERSATIONS (Messenger-style email threads) ===
   app.get('/api/conversations', async (req, res) => {
     const campaignId = parseInt(req.query.campaignId as string);

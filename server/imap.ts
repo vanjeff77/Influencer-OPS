@@ -162,6 +162,247 @@ export async function fetchEmails(config: ImapConfig, folder: string = 'INBOX', 
   });
 }
 
+export interface ThreadSearchResult {
+  threadId: string;
+  subject: string;
+  from: string;
+  to: string;
+  date: Date;
+  snippet: string;
+  messageCount: number;
+}
+
+export async function searchThreads(
+  config: ImapConfig, 
+  searchMode: 'email' | 'subject' | 'messageId',
+  query: string,
+  limit: number = 20
+): Promise<ThreadSearchResult[]> {
+  const imap = await createImapConnection(config);
+  
+  return new Promise((resolve, reject) => {
+    imap.openBox('INBOX', true, (err, box) => {
+      if (err) {
+        imap.end();
+        reject(err);
+        return;
+      }
+
+      let searchCriteria: any[];
+      switch (searchMode) {
+        case 'email':
+          searchCriteria = [['OR', ['FROM', query], ['TO', query]]];
+          break;
+        case 'subject':
+          searchCriteria = [['SUBJECT', query]];
+          break;
+        case 'messageId':
+          searchCriteria = [['HEADER', 'MESSAGE-ID', query]];
+          break;
+        default:
+          searchCriteria = [['OR', ['FROM', query], ['TO', query]]];
+      }
+
+      imap.search(searchCriteria, (searchErr, results) => {
+        if (searchErr) {
+          imap.end();
+          reject(searchErr);
+          return;
+        }
+
+        if (!results || results.length === 0) {
+          imap.end();
+          resolve([]);
+          return;
+        }
+
+        const recentResults = results.slice(-limit * 3);
+        const threadsMap = new Map<string, ThreadSearchResult>();
+        let processedCount = 0;
+        const totalToProcess = recentResults.length;
+
+        if (totalToProcess === 0) {
+          imap.end();
+          resolve([]);
+          return;
+        }
+
+        const fetch = imap.fetch(recentResults, {
+          bodies: 'HEADER.FIELDS (FROM TO SUBJECT DATE MESSAGE-ID REFERENCES IN-REPLY-TO)',
+          struct: true,
+        });
+
+        fetch.on('message', (msg, seqno) => {
+          let headerBuffer = '';
+          
+          msg.on('body', (stream) => {
+            stream.on('data', (chunk) => {
+              headerBuffer += chunk.toString('utf8');
+            });
+          });
+
+          msg.once('end', async () => {
+            try {
+              const parsed = await simpleParser(headerBuffer);
+              const subject = parsed.subject || '(제목 없음)';
+              const threadKey = subject.replace(/^(Re:|Fwd:|RE:|FW:)\s*/gi, '').trim().toLowerCase();
+              
+              const fromAddress = Array.isArray(parsed.from?.value) 
+                ? parsed.from.value[0]?.address || '' 
+                : '';
+              const toAddress = Array.isArray(parsed.to) 
+                ? (parsed.to[0] as any)?.value?.[0]?.address || ''
+                : (parsed.to as any)?.value?.[0]?.address || '';
+              const messageId = parsed.messageId || `msg-${seqno}`;
+              const date = parsed.date || new Date();
+
+              if (threadsMap.has(threadKey)) {
+                const existing = threadsMap.get(threadKey)!;
+                existing.messageCount++;
+                if (date > existing.date) {
+                  existing.date = date;
+                  existing.subject = subject;
+                  existing.from = fromAddress;
+                }
+              } else {
+                threadsMap.set(threadKey, {
+                  threadId: messageId,
+                  subject: subject,
+                  from: fromAddress,
+                  to: toAddress,
+                  date: date,
+                  snippet: '',
+                  messageCount: 1,
+                });
+              }
+            } catch (parseErr) {
+              console.error('Error parsing header:', parseErr);
+            }
+            
+            processedCount++;
+            if (processedCount >= totalToProcess) {
+              imap.end();
+              const threads = Array.from(threadsMap.values())
+                .sort((a, b) => b.date.getTime() - a.date.getTime())
+                .slice(0, limit);
+              resolve(threads);
+            }
+          });
+        });
+
+        fetch.once('error', (fetchErr) => {
+          imap.end();
+          reject(fetchErr);
+        });
+
+        fetch.once('end', () => {
+          setTimeout(() => {
+            if (processedCount < totalToProcess) {
+              imap.end();
+              const threads = Array.from(threadsMap.values())
+                .sort((a, b) => b.date.getTime() - a.date.getTime())
+                .slice(0, limit);
+              resolve(threads);
+            }
+          }, 2000);
+        });
+      });
+    });
+  });
+}
+
+export async function fetchThreadMessages(
+  config: ImapConfig,
+  threadSubject: string
+): Promise<EmailMessage[]> {
+  const imap = await createImapConnection(config);
+  
+  return new Promise((resolve, reject) => {
+    imap.openBox('INBOX', true, (err, box) => {
+      if (err) {
+        imap.end();
+        reject(err);
+        return;
+      }
+
+      const normalizedSubject = threadSubject.replace(/^(Re:|Fwd:|RE:|FW:)\s*/gi, '').trim();
+      
+      imap.search([['SUBJECT', normalizedSubject]], (searchErr, results) => {
+        if (searchErr) {
+          imap.end();
+          reject(searchErr);
+          return;
+        }
+
+        if (!results || results.length === 0) {
+          imap.end();
+          resolve([]);
+          return;
+        }
+
+        const messages: EmailMessage[] = [];
+        const fetch = imap.fetch(results, {
+          bodies: '',
+          struct: true,
+        });
+
+        fetch.on('message', (msg, seqno) => {
+          let buffer = '';
+          
+          msg.on('body', (stream) => {
+            stream.on('data', (chunk) => {
+              buffer += chunk.toString('utf8');
+            });
+          });
+
+          msg.once('attributes', (attrs) => {
+            msg.once('end', async () => {
+              try {
+                const parsed = await simpleParser(buffer);
+                const fromAddress = Array.isArray(parsed.from?.value) 
+                  ? parsed.from.value[0]?.address || '' 
+                  : '';
+                const toAddress = Array.isArray(parsed.to) 
+                  ? (parsed.to[0] as any)?.value?.[0]?.address || ''
+                  : (parsed.to as any)?.value?.[0]?.address || '';
+                
+                const textBody = parsed.text || '';
+                const snippet = textBody.substring(0, 100).replace(/\n/g, ' ').trim();
+                
+                messages.push({
+                  messageId: parsed.messageId || `msg-${seqno}`,
+                  subject: parsed.subject || '(제목 없음)',
+                  from: fromAddress,
+                  to: toAddress,
+                  date: parsed.date || new Date(),
+                  snippet: snippet || '(내용 없음)',
+                  body: parsed.html || parsed.text || '',
+                  isRead: attrs.flags?.includes('\\Seen') || false,
+                });
+              } catch (parseErr) {
+                console.error('Error parsing email:', parseErr);
+              }
+            });
+          });
+        });
+
+        fetch.once('error', (fetchErr) => {
+          imap.end();
+          reject(fetchErr);
+        });
+
+        fetch.once('end', () => {
+          imap.end();
+          setTimeout(() => {
+            messages.sort((a, b) => a.date.getTime() - b.date.getTime());
+            resolve(messages);
+          }, 500);
+        });
+      });
+    });
+  });
+}
+
 export async function testImapConnection(config: ImapConfig): Promise<{ success: boolean; message: string; folders?: string[] }> {
   try {
     const imap = await createImapConnection(config);

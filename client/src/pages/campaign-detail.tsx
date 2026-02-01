@@ -290,6 +290,7 @@ export default function CampaignDetail() {
             <CampaignCommunication 
               campaignId={id}
               campaignName={campaign.name}
+              workspaceId={workspaceId || 1}
               lineItems={campaign.items?.map(item => ({
                 id: item.id,
                 campaignId: item.campaignId,
