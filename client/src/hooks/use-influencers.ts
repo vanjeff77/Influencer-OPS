@@ -107,6 +107,21 @@ export function useDeleteContent() {
   });
 }
 
+export function useDeleteInfluencer() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (influencerId: number) => {
+      const res = await fetch(`/api/influencers/${influencerId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete influencer");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/influencers'] });
+      queryClient.invalidateQueries({ queryKey: [api.influencers.list.path] });
+    },
+  });
+}
+
 // Bulk operations
 export function useSaveToGroup() {
   const queryClient = useQueryClient();

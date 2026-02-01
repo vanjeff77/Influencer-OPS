@@ -31,6 +31,7 @@ export interface IStorage {
   getInfluencer(id: number): Promise<(Influencer & { accounts: InfluencerAccount[]; contents: Content[]; timeline: TimelineEvent[] }) | undefined>;
   createInfluencer(workspaceId: number, data: Omit<CreateInfluencerWithAccounts, 'workspaceId'>): Promise<Influencer & { accounts: InfluencerAccount[] }>;
   updateInfluencer(id: number, data: Partial<Influencer> & { accounts?: Array<{ platform: string; handle: string; url?: string }> }): Promise<Influencer & { accounts?: InfluencerAccount[] }>;
+  deleteInfluencer(id: number): Promise<void>;
 
   // Influencer Contents
   getInfluencerContents(influencerId: number): Promise<Content[]>;
@@ -283,6 +284,17 @@ export class DatabaseStorage implements IStorage {
     }
     
     return inf;
+  }
+
+  async deleteInfluencer(id: number): Promise<void> {
+    // Delete related data first (cascade manually)
+    await db.delete(influencerAccounts).where(eq(influencerAccounts.influencerId, id));
+    await db.delete(contents).where(eq(contents.influencerId, id));
+    await db.delete(timelineEvents).where(eq(timelineEvents.influencerId, id));
+    await db.delete(groupInfluencers).where(eq(groupInfluencers.influencerId, id));
+    await db.delete(campaignInfluencers).where(eq(campaignInfluencers.influencerId, id));
+    // Finally delete the influencer
+    await db.delete(influencers).where(eq(influencers.id, id));
   }
 
   async getInfluencerContents(influencerId: number): Promise<Content[]> {

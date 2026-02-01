@@ -155,6 +155,12 @@ export const KO = {
       savedToGroupToast: "그룹에 저장되었습니다.",
       excludedBadge: "제외",
       saveFailed: "저장 실패",
+      deleteInfluencer: "인플루언서 삭제",
+      deleteInfluencerConfirm: "정말 이 인플루언서를 삭제하시겠습니까?",
+      deleteInfluencerWarning: "삭제하면 모든 관련 데이터(캠페인 기록, 그룹 멤버십, 콘텐츠 등)가 함께 삭제됩니다. 이 작업은 되돌릴 수 없습니다.",
+      deleteInfluencerSuccess: "인플루언서가 삭제되었습니다.",
+      deleteInfluencerFailed: "삭제에 실패했습니다.",
+      deleting: "삭제 중...",
     },
     campaigns: {
       title: "캠페인",

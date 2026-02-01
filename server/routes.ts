@@ -95,6 +95,18 @@ export async function registerRoutes(
     }
   });
 
+  // Delete influencer
+  app.delete('/api/influencers/:id', async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteInfluencer(id);
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error('Failed to delete influencer:', err);
+      res.status(500).json({ message: "인플루언서 삭제 실패", error: err.message });
+    }
+  });
+
   // === INFLUENCER IMPORT (PASTE/TSV) ===
   const ALLOWED_COLUMNS = [
     '닉네임', '플랫폼', '플랫폼 계정', '채널 URL', '팔로워', '컨택포인트',

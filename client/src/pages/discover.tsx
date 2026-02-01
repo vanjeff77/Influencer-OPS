@@ -1,6 +1,6 @@
 import Layout from "@/components/layout";
 import { useWorkspaces } from "@/hooks/use-workspaces";
-import { useInfluencers, useCreateInfluencer, useInfluencer, useUpdateInfluencer, useAddContent, useSaveToGroup, useAssignToCampaign } from "@/hooks/use-influencers";
+import { useInfluencers, useCreateInfluencer, useInfluencer, useUpdateInfluencer, useAddContent, useSaveToGroup, useAssignToCampaign, useDeleteInfluencer } from "@/hooks/use-influencers";
 import { useGroups } from "@/hooks/use-groups";
 import { useCampaigns } from "@/hooks/use-campaigns";
 import { Input } from "@/components/ui/input";
@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useState, useEffect, useMemo } from "react";
-import { Search, Plus, Instagram, Youtube, Twitter, X, Users, Megaphone, Save, Clock, ExternalLink, ClipboardPaste, Copy } from "lucide-react";
+import { Search, Plus, Instagram, Youtube, Twitter, X, Users, Megaphone, Save, Clock, ExternalLink, ClipboardPaste, Copy, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -586,8 +587,10 @@ export default function Discover() {
 function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influencerId: number | null; onClose: () => void; workspaceId: number }) {
   const { data: influencer, isLoading } = useInfluencer(influencerId || 0);
   const updateInfluencer = useUpdateInfluencer();
+  const deleteInfluencer = useDeleteInfluencer();
   const addContent = useAddContent(influencerId || 0);
   const { toast } = useToast();
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   
   const [memo, setMemo] = useState("");
   const [priceMemo, setPriceMemo] = useState("");
@@ -689,6 +692,20 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
     });
   };
 
+  const handleDelete = () => {
+    if (!influencerId) return;
+    deleteInfluencer.mutate(influencerId, {
+      onSuccess: () => {
+        toast({ title: KO.pages.discover.deleteInfluencerSuccess });
+        setIsDeleteDialogOpen(false);
+        onClose();
+      },
+      onError: () => {
+        toast({ title: KO.pages.discover.deleteInfluencerFailed, variant: "destructive" });
+      }
+    });
+  };
+
   const PlatformIcon = ({ p }: { p: string }) => {
     switch(p) {
       case 'IG': return <Instagram className="w-4 h-4 text-pink-600" />;
@@ -712,7 +729,7 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
                     {influencer.name.substring(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
-                <div>
+                <div className="flex-1">
                   <SheetTitle className="text-xl">{influencer.name}</SheetTitle>
                   <div className="flex gap-2 mt-2">
                     {influencer.accounts?.map(acc => (
@@ -723,6 +740,27 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
                     ))}
                   </div>
                 </div>
+                <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" data-testid="button-delete-influencer">
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>{KO.pages.discover.deleteInfluencerConfirm}</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {KO.pages.discover.deleteInfluencerWarning}
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>{KO.common.cancel}</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleDelete} disabled={deleteInfluencer.isPending} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" data-testid="button-confirm-delete">
+                        {deleteInfluencer.isPending ? KO.pages.discover.deleting : KO.common.delete}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             </SheetHeader>
 
