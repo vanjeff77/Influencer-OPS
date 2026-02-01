@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -113,6 +114,7 @@ export function CampaignOperations({ campaignId, lineItems }: CampaignOperations
   const [commFilter, setCommFilter] = useState<string>("all");
   const [reviewFilter, setReviewFilter] = useState<string>("all");
   const [dueFilter, setDueFilter] = useState<string>("all");
+  const [contractDialogItem, setContractDialogItem] = useState<LineItemWithDetails | null>(null);
 
   const { data: selectedItem, isLoading: isLoadingDetails } = useQuery<LineItemWithDetails>({
     queryKey: ['/api/line-items', selectedItemId],
@@ -260,13 +262,14 @@ export function CampaignOperations({ campaignId, lineItems }: CampaignOperations
                   <TableHead>{KO.pages.operations.contract}</TableHead>
                   <TableHead>{KO.pages.operations.draftDue}</TableHead>
                   <TableHead>{KO.pages.operations.uploadDue}</TableHead>
+                  <TableHead>{KO.pages.operations.contractGenerate}</TableHead>
                   <TableHead>{KO.pages.operations.notes}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredItems.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                       {KO.pages.operations.noItems}
                     </TableCell>
                   </TableRow>
@@ -382,11 +385,41 @@ export function CampaignOperations({ campaignId, lineItems }: CampaignOperations
                             <Badge variant="outline" className="text-muted-foreground">미첨부</Badge>
                           )}
                         </TableCell>
-                        <TableCell className="text-xs">
-                          {item.draftDueAt ? format(new Date(item.draftDueAt), 'MM/dd') : '-'}
+                        <TableCell className="text-xs" onClick={(e) => e.stopPropagation()}>
+                          <Input
+                            type="date"
+                            className="h-7 w-28 text-xs"
+                            value={item.draftDueAt ? format(new Date(item.draftDueAt), 'yyyy-MM-dd') : ''}
+                            onChange={(e) => {
+                              const newDate = e.target.value ? new Date(e.target.value) : null;
+                              updateOperations.mutate({ id: item.id, updates: { draftDueAt: newDate } });
+                            }}
+                            data-testid={`input-draft-due-${item.id}`}
+                          />
                         </TableCell>
-                        <TableCell className="text-xs">
-                          {item.uploadDueAt ? format(new Date(item.uploadDueAt), 'MM/dd') : '-'}
+                        <TableCell className="text-xs" onClick={(e) => e.stopPropagation()}>
+                          <Input
+                            type="date"
+                            className="h-7 w-28 text-xs"
+                            value={item.uploadDueAt ? format(new Date(item.uploadDueAt), 'yyyy-MM-dd') : ''}
+                            onChange={(e) => {
+                              const newDate = e.target.value ? new Date(e.target.value) : null;
+                              updateOperations.mutate({ id: item.id, updates: { uploadDueAt: newDate } });
+                            }}
+                            data-testid={`input-upload-due-${item.id}`}
+                          />
+                        </TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() => setContractDialogItem(item)}
+                            data-testid={`button-contract-generate-${item.id}`}
+                          >
+                            <FileText className="w-3 h-3 mr-1" />
+                            작성
+                          </Button>
                         </TableCell>
                         <TableCell>
                           <Badge variant="secondary" className="text-xs">
@@ -424,6 +457,12 @@ export function CampaignOperations({ campaignId, lineItems }: CampaignOperations
           ) : null}
         </SheetContent>
       </Sheet>
+
+      <ContractGenerateDialog 
+        item={contractDialogItem}
+        campaignId={campaignId}
+        onClose={() => setContractDialogItem(null)}
+      />
     </div>
   );
 }
@@ -798,5 +837,173 @@ function OperationsPanel({ item, onUpdate, onCreateNote, onUpdateNote, onDeleteN
         </Button>
       </div>
     </div>
+  );
+}
+
+// Contract Generate Dialog Component
+interface ContractGenerateDialogProps {
+  item: LineItemWithDetails | null;
+  campaignId: number;
+  onClose: () => void;
+}
+
+interface ContractTemplate {
+  id: number;
+  workspaceId: number;
+  name: string;
+  description: string | null;
+  content: string;
+  variables: string[] | null;
+  isDefault: boolean | null;
+}
+
+function ContractGenerateDialog({ item, campaignId, onClose }: ContractGenerateDialogProps) {
+  const { toast } = useToast();
+  const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  
+  const workspaceId = 1; // TODO: Get from context
+
+  const { data: templates = [], isLoading: isLoadingTemplates } = useQuery<ContractTemplate[]>({
+    queryKey: ['/api/workspaces', workspaceId, 'contract-templates'],
+    queryFn: () => fetch(`/api/workspaces/${workspaceId}/contract-templates`).then(r => r.json()),
+    enabled: !!item,
+  });
+
+  const handleGenerateDocx = async () => {
+    if (!selectedTemplateId || !item) return;
+    setIsGenerating(true);
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}/contract-templates/${selectedTemplateId}/generate-docx`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lineItemId: item.id }),
+      });
+      
+      if (!response.ok) throw new Error('Failed to generate DOCX');
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `계약서_${item.influencer?.name || 'contract'}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast({ title: 'DOCX 파일이 다운로드되었습니다.' });
+    } catch (err) {
+      toast({ title: '계약서 생성 실패', variant: 'destructive' });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleGeneratePdf = async () => {
+    if (!selectedTemplateId || !item) return;
+    setIsGenerating(true);
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}/contract-templates/${selectedTemplateId}/generate-pdf`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lineItemId: item.id }),
+      });
+      
+      if (!response.ok) throw new Error('Failed to generate PDF');
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `계약서_${item.influencer?.name || 'contract'}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast({ title: 'PDF 파일이 다운로드되었습니다.' });
+    } catch (err) {
+      toast({ title: '계약서 생성 실패', variant: 'destructive' });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  if (!item) return null;
+
+  return (
+    <Dialog open={!!item} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{KO.contractTemplates.generate}</DialogTitle>
+          <DialogDescription>
+            {item.influencer?.name}님의 계약서를 생성합니다.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          <div>
+            <Label>{KO.contractTemplates.selectTemplate}</Label>
+            {isLoadingTemplates ? (
+              <Skeleton className="h-10 w-full" />
+            ) : templates.length === 0 ? (
+              <div className="text-sm text-muted-foreground p-4 text-center border rounded-md">
+                {KO.contractTemplates.noTemplates}
+                <br />
+                <span className="text-xs">설정에서 템플릿을 먼저 등록해주세요.</span>
+              </div>
+            ) : (
+              <Select
+                value={selectedTemplateId?.toString() || ""}
+                onValueChange={(val) => setSelectedTemplateId(parseInt(val))}
+              >
+                <SelectTrigger data-testid="select-contract-template">
+                  <SelectValue placeholder="템플릿 선택" />
+                </SelectTrigger>
+                <SelectContent>
+                  {templates.map((t) => (
+                    <SelectItem key={t.id} value={t.id.toString()}>
+                      {t.name}
+                      {t.isDefault && <Badge variant="secondary" className="ml-2 text-xs">기본</Badge>}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+
+          {selectedTemplateId && (
+            <div className="text-xs text-muted-foreground p-3 bg-muted rounded-md">
+              <strong>사용 가능 변수:</strong><br />
+              {KO.contractTemplates.variableHint}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={onClose} data-testid="button-cancel-contract">
+            취소
+          </Button>
+          <Button 
+            variant="outline"
+            onClick={handleGeneratePdf}
+            disabled={!selectedTemplateId || isGenerating}
+            data-testid="button-generate-pdf"
+          >
+            <FileText className="w-4 h-4 mr-1" />
+            {isGenerating ? KO.contractTemplates.generating : KO.contractTemplates.downloadPdf}
+          </Button>
+          <Button 
+            onClick={handleGenerateDocx}
+            disabled={!selectedTemplateId || isGenerating}
+            data-testid="button-generate-docx"
+          >
+            <FileText className="w-4 h-4 mr-1" />
+            {isGenerating ? KO.contractTemplates.generating : KO.contractTemplates.downloadDocx}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
