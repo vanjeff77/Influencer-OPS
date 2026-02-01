@@ -98,6 +98,30 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (2026-02-01)
 
+### Excel Paste Import System (Discover Tab)
+- **4-Step Import Wizard**: Paste → Validate → Import → Results flow
+- **TSV Parsing**: Supports tab-separated data from Excel/Google Sheets
+- **Spreadsheet Preview**: Visual table with validation highlights and excluded column badges
+- **Column Validation**: Recognizes 13 columns (닉네임, 플랫폼, 플랫폼 계정, etc.)
+- **Platform Normalization**: Converts Korean/English names to IG, YT, TikTok, X, Blog
+- **Status Fields**: contactStatus, replyStatus, collabStatus (Y/N values only)
+- **Upsert Logic**: Updates existing influencers by nickname match, creates new otherwise
+- **Server Validation**: Rejects unknown platforms, enforces Y/N/empty for status fields
+- **Template Button**: Copies TSV header template to clipboard
+- **Key Components**:
+  - `client/src/components/paste-import-dialog.tsx`: 4-step import wizard
+  - API: `POST /api/workspaces/:id/influencers/import`
+
+### Discover Tab Enhancements
+- **New Status Columns**: 컨택 (contact), 회신 (reply), 협업 (collab) with Y/N colored badges
+- **Detail Drawer Redesign**: Consolidated from 4 tabs to 3 tabs
+  - 기본정보: Nickname, email, phone, tags, contact point, client, sub-type, memo, platform accounts
+  - 협업 내역: contactStatus, replyStatus, collabStatus dropdowns + timeline
+  - 콘텐츠: Final content URL, content list
+- **i18n Complete**: All UI strings migrated to ko.ts (30+ new keys)
+
+
+
 ### Attach Existing Email Thread Feature (기존 메일 연결)
 - **4-Step Wizard Modal**: Account selection → Search method → Thread selection → Confirm
 - **IMAP Search**: Search by recipient email, subject/keyword, or message ID
