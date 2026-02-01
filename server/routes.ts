@@ -88,6 +88,180 @@ export async function registerRoutes(
     }
   });
 
+  // === INFLUENCER IMPORT (PASTE/TSV) ===
+  const ALLOWED_COLUMNS = [
+    '닉네임', '플랫폼', '플랫폼 계정', '채널 URL', '팔로워', '컨택포인트',
+    '메모', '클라이언트', '세부유형', '컨택여부', '회신 여부', '협업 여부', '콘텐츠 완성본 링크'
+  ];
+
+  const PLATFORM_MAP: Record<string, string> = {
+    'instagram': 'IG', 'IG': 'IG', '인스타그램': 'IG', '인스타': 'IG',
+    'youtube': 'YT', 'YT': 'YT', '유튜브': 'YT',
+    'tiktok': 'TikTok', 'TikTok': 'TikTok', '틱톡': 'TikTok',
+    'x': 'X', 'X': 'X', 'twitter': 'X', '트위터': 'X',
+    'blog': 'Blog', 'Blog': 'Blog', '블로그': 'Blog', 'naver': 'Blog', '네이버': 'Blog',
+  };
+
+  function parsePlatform(val: string | undefined | null): string {
+    if (!val) return 'other';
+    const normalized = val.trim().toLowerCase();
+    for (const [key, mapped] of Object.entries(PLATFORM_MAP)) {
+      if (key.toLowerCase() === normalized) return mapped;
+    }
+    return 'other';
+  }
+
+  function parseFollowers(val: string | number | undefined | null): number | null {
+    if (val === null || val === undefined || val === '') return null;
+    if (typeof val === 'number') return val;
+    const cleaned = val.toString().replace(/,/g, '').trim();
+    const num = parseInt(cleaned, 10);
+    return isNaN(num) ? null : num;
+  }
+
+  function extractHandleFromUrl(url: string): string {
+    if (!url) return '';
+    const trimmed = url.trim();
+    // Instagram: https://www.instagram.com/username/
+    const igMatch = trimmed.match(/instagram\.com\/([^\/\?]+)/i);
+    if (igMatch) return igMatch[1];
+    // YouTube: https://www.youtube.com/@username
+    const ytMatch = trimmed.match(/youtube\.com\/@([^\/\?]+)/i);
+    if (ytMatch) return ytMatch[1];
+    // TikTok: https://www.tiktok.com/@username
+    const ttMatch = trimmed.match(/tiktok\.com\/@([^\/\?]+)/i);
+    if (ttMatch) return ttMatch[1];
+    // X/Twitter: https://x.com/username
+    const xMatch = trimmed.match(/(?:x|twitter)\.com\/([^\/\?]+)/i);
+    if (xMatch) return xMatch[1];
+    // Blog: https://blog.naver.com/username
+    const blogMatch = trimmed.match(/blog\.naver\.com\/([^\/\?]+)/i);
+    if (blogMatch) return blogMatch[1];
+    return '';
+  }
+
+  app.post('/api/workspaces/:workspaceId/influencers/import', async (req, res) => {
+    try {
+      const workspaceId = parseInt(req.params.workspaceId as string);
+      const { headers, rows } = req.body as { headers: string[]; rows: (string | number | null)[][] };
+
+      if (!headers || !rows) {
+        return res.status(400).json({ message: 'headers and rows are required' });
+      }
+
+      // Map column indices
+      const colIndex: Record<string, number> = {};
+      const excludedColumns: string[] = [];
+      headers.forEach((h, i) => {
+        const trimmed = (h || '').toString().trim();
+        if (ALLOWED_COLUMNS.includes(trimmed)) {
+          colIndex[trimmed] = i;
+        } else if (trimmed) {
+          excludedColumns.push(trimmed);
+        }
+      });
+
+      const results = {
+        created: 0,
+        updated: 0,
+        skipped: 0,
+        errors: [] as { row: number; reason: string }[]
+      };
+
+      for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
+        const row = rows[rowIdx];
+        if (!row || row.length === 0 || row.every(c => c === null || c === '')) {
+          results.skipped++;
+          continue;
+        }
+
+        const getValue = (col: string): string | number | null => {
+          const idx = colIndex[col];
+          return idx !== undefined ? row[idx] : null;
+        };
+
+        const nickname = (getValue('닉네임') || '').toString().trim();
+        const platformRaw = (getValue('플랫폼') || '').toString().trim();
+        const platformAccount = (getValue('플랫폼 계정') || '').toString().trim();
+        const channelUrl = (getValue('채널 URL') || '').toString().trim();
+        const followersRaw = getValue('팔로워');
+        const contactPoint = (getValue('컨택포인트') || '').toString().trim();
+        const memo = (getValue('메모') || '').toString().trim();
+        const client = (getValue('클라이언트') || '').toString().trim();
+        const subType = (getValue('세부유형') || '').toString().trim();
+        const contactStatus = (getValue('컨택여부') || '').toString().trim();
+        const replyStatus = (getValue('회신 여부') || '').toString().trim();
+        const collabStatus = (getValue('협업 여부') || '').toString().trim();
+        const finalContentUrl = (getValue('콘텐츠 완성본 링크') || '').toString().trim();
+
+        const platform = parsePlatform(platformRaw);
+        const followers = parseFollowers(followersRaw);
+        let handle = platformAccount || extractHandleFromUrl(channelUrl);
+        const url = channelUrl;
+
+        // Validate: need at least nickname OR (platform + handle) OR (platform + url)
+        if (!nickname && !handle && !url) {
+          results.errors.push({ row: rowIdx + 1, reason: '필수 키(닉네임, 플랫폼 계정, 채널 URL) 없음' });
+          continue;
+        }
+
+        try {
+          // Find existing influencer
+          const existing = await storage.findInfluencerByKey(
+            workspaceId,
+            platform !== 'other' ? platform : null,
+            handle || null,
+            url || null,
+            nickname || null
+          );
+
+          const influencerData = {
+            name: nickname || handle || 'Unknown',
+            contactPoint: contactPoint || null,
+            memo: memo || null,
+            client: client || null,
+            subType: subType || null,
+            contactStatus: contactStatus || null,
+            replyStatus: replyStatus || null,
+            collabStatus: collabStatus || null,
+            finalContentUrl: finalContentUrl || null
+          };
+
+          const accountData = (platform !== 'other' || handle || url) ? {
+            platform: platform !== 'other' ? platform : 'IG',
+            handle: handle || nickname || 'unknown',
+            url: url || '',
+            followers: followers || 0
+          } : null;
+
+          const result = await storage.upsertInfluencerWithAccount(
+            workspaceId,
+            influencerData,
+            accountData,
+            existing
+          );
+
+          if (result.isNew) {
+            results.created++;
+          } else {
+            results.updated++;
+          }
+        } catch (err) {
+          results.errors.push({ row: rowIdx + 1, reason: 'DB 저장 실패' });
+        }
+      }
+
+      res.json({
+        success: true,
+        excludedColumns,
+        ...results
+      });
+    } catch (err) {
+      console.error('Import error:', err);
+      res.status(500).json({ message: 'Import failed' });
+    }
+  });
+
   // === INFLUENCER CONTENTS ===
   app.get('/api/influencers/:id/contents', async (req, res) => {
     const contents = await storage.getInfluencerContents(parseInt(req.params.id));

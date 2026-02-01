@@ -689,6 +689,147 @@ export class DatabaseStorage implements IStorage {
   async deleteCampaignContent(id: number): Promise<void> {
     await db.delete(campaignContents).where(eq(campaignContents.id, id));
   }
+
+  async findInfluencerByKey(workspaceId: number, platform: string | null, handle: string | null, url: string | null, name: string | null): Promise<(Influencer & { accounts: InfluencerAccount[] }) | null> {
+    if (platform && handle) {
+      const account = await db.select().from(influencerAccounts)
+        .innerJoin(influencers, eq(influencerAccounts.influencerId, influencers.id))
+        .where(and(
+          eq(influencers.workspaceId, workspaceId),
+          eq(influencerAccounts.platform, platform),
+          eq(influencerAccounts.handle, handle)
+        ))
+        .limit(1);
+      if (account.length > 0) {
+        const inf = account[0].influencers;
+        const accounts = await db.select().from(influencerAccounts).where(eq(influencerAccounts.influencerId, inf.id));
+        return { ...inf, accounts };
+      }
+    }
+    if (platform && url) {
+      const account = await db.select().from(influencerAccounts)
+        .innerJoin(influencers, eq(influencerAccounts.influencerId, influencers.id))
+        .where(and(
+          eq(influencers.workspaceId, workspaceId),
+          eq(influencerAccounts.platform, platform),
+          eq(influencerAccounts.url, url)
+        ))
+        .limit(1);
+      if (account.length > 0) {
+        const inf = account[0].influencers;
+        const accounts = await db.select().from(influencerAccounts).where(eq(influencerAccounts.influencerId, inf.id));
+        return { ...inf, accounts };
+      }
+    }
+    if (name && platform) {
+      const account = await db.select().from(influencerAccounts)
+        .innerJoin(influencers, eq(influencerAccounts.influencerId, influencers.id))
+        .where(and(
+          eq(influencers.workspaceId, workspaceId),
+          eq(influencers.name, name),
+          eq(influencerAccounts.platform, platform)
+        ))
+        .limit(1);
+      if (account.length > 0) {
+        const inf = account[0].influencers;
+        const accounts = await db.select().from(influencerAccounts).where(eq(influencerAccounts.influencerId, inf.id));
+        return { ...inf, accounts };
+      }
+    }
+    return null;
+  }
+
+  async upsertInfluencerWithAccount(
+    workspaceId: number,
+    influencerData: {
+      name: string;
+      contactPoint?: string | null;
+      memo?: string | null;
+      client?: string | null;
+      subType?: string | null;
+      contactStatus?: string | null;
+      replyStatus?: string | null;
+      collabStatus?: string | null;
+      finalContentUrl?: string | null;
+    },
+    accountData: {
+      platform: string;
+      handle: string;
+      url: string;
+      followers?: number;
+    } | null,
+    existingInfluencer?: Influencer | null
+  ): Promise<{ influencer: Influencer; account: InfluencerAccount | null; isNew: boolean }> {
+    if (existingInfluencer) {
+      const updateData: Partial<Influencer> = {};
+      if (influencerData.name && !existingInfluencer.name) updateData.name = influencerData.name;
+      if (influencerData.name) updateData.name = influencerData.name;
+      if (influencerData.contactPoint) updateData.contactPoint = influencerData.contactPoint;
+      if (influencerData.memo) updateData.memo = influencerData.memo;
+      if (influencerData.client) updateData.client = influencerData.client;
+      if (influencerData.subType) updateData.subType = influencerData.subType;
+      if (influencerData.contactStatus) updateData.contactStatus = influencerData.contactStatus;
+      if (influencerData.replyStatus) updateData.replyStatus = influencerData.replyStatus;
+      if (influencerData.collabStatus) updateData.collabStatus = influencerData.collabStatus;
+      if (influencerData.finalContentUrl) updateData.finalContentUrl = influencerData.finalContentUrl;
+
+      const [updatedInf] = await db.update(influencers).set(updateData).where(eq(influencers.id, existingInfluencer.id)).returning();
+
+      let updatedAccount: InfluencerAccount | null = null;
+      if (accountData) {
+        const existingAccounts = await db.select().from(influencerAccounts).where(
+          and(
+            eq(influencerAccounts.influencerId, existingInfluencer.id),
+            eq(influencerAccounts.platform, accountData.platform)
+          )
+        );
+        if (existingAccounts.length > 0) {
+          const [acc] = await db.update(influencerAccounts).set({
+            handle: accountData.handle,
+            url: accountData.url,
+            followers: accountData.followers || existingAccounts[0].followers
+          }).where(eq(influencerAccounts.id, existingAccounts[0].id)).returning();
+          updatedAccount = acc;
+        } else {
+          const [acc] = await db.insert(influencerAccounts).values({
+            influencerId: existingInfluencer.id,
+            platform: accountData.platform,
+            handle: accountData.handle,
+            url: accountData.url,
+            followers: accountData.followers || 0
+          }).returning();
+          updatedAccount = acc;
+        }
+      }
+      return { influencer: updatedInf, account: updatedAccount, isNew: false };
+    } else {
+      const [newInf] = await db.insert(influencers).values({
+        workspaceId,
+        name: influencerData.name || 'Unknown',
+        contactPoint: influencerData.contactPoint,
+        memo: influencerData.memo,
+        client: influencerData.client,
+        subType: influencerData.subType,
+        contactStatus: influencerData.contactStatus,
+        replyStatus: influencerData.replyStatus,
+        collabStatus: influencerData.collabStatus,
+        finalContentUrl: influencerData.finalContentUrl
+      }).returning();
+
+      let newAccount: InfluencerAccount | null = null;
+      if (accountData) {
+        const [acc] = await db.insert(influencerAccounts).values({
+          influencerId: newInf.id,
+          platform: accountData.platform,
+          handle: accountData.handle,
+          url: accountData.url,
+          followers: accountData.followers || 0
+        }).returning();
+        newAccount = acc;
+      }
+      return { influencer: newInf, account: newAccount, isNew: true };
+    }
+  }
 }
 
 export const storage = new DatabaseStorage();

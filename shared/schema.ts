@@ -39,8 +39,15 @@ export const influencers = pgTable("influencers", {
   name: text("name").notNull(),
   email: text("email"),
   phone: text("phone"),
+  contactPoint: text("contact_point"), // Email, phone, KakaoID, etc
   tags: text("tags").array(),
   memo: text("memo"),
+  client: text("client"), // Client/advertiser name
+  subType: text("sub_type"), // Category/type of influencer
+  contactStatus: text("contact_status"), // Y, N, 진행중, 보류
+  replyStatus: text("reply_status"), // Y, N, 진행중, 보류
+  collabStatus: text("collab_status"), // Y, N, 진행중, 보류
+  finalContentUrl: text("final_content_url"), // URL to final content
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -53,6 +60,7 @@ export const influencerAccounts = pgTable("influencer_accounts", {
   category: text("category"),
   language: text("language"),
   verified: boolean("verified").default(false),
+  followers: integer("followers").default(0),
 });
 
 export const metricsSnapshots = pgTable("metrics_snapshots", {
