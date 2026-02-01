@@ -33,6 +33,7 @@ export default function Discover() {
   
   const [search, setSearch] = useState("");
   const [platformFilter, setPlatformFilter] = useState<string>("");
+  const [clientFilter, setClientFilter] = useState<string>("");
   const { data: influencers, isLoading } = useInfluencers(workspaceId || 0, { search, platform: platformFilter || undefined });
   const { data: campaigns } = useCampaigns(workspaceId || 0);
   const createInfluencer = useCreateInfluencer(workspaceId || 0);
@@ -91,6 +92,25 @@ export default function Discover() {
       setSelectedInfluencerId(parseInt(selected));
     }
   }, [searchParams]);
+
+  // Extract unique clients from influencers
+  const uniqueClients = useMemo(() => {
+    if (!influencers) return [];
+    const clients = new Set<string>();
+    influencers.forEach(inf => {
+      if (inf.client && inf.client.trim()) {
+        clients.add(inf.client.trim());
+      }
+    });
+    return Array.from(clients).sort();
+  }, [influencers]);
+
+  // Filter influencers by client
+  const filteredInfluencers = useMemo(() => {
+    if (!influencers) return [];
+    if (!clientFilter) return influencers;
+    return influencers.filter(inf => inf.client === clientFilter);
+  }, [influencers, clientFilter]);
 
   const influencerCampaignData = useMemo(() => {
     if (!allCampaignItems || !campaigns) return new Map();
@@ -153,11 +173,11 @@ export default function Discover() {
   };
 
   const selectAll = () => {
-    if (influencers) {
-      if (selectedIds.size === influencers.length) {
+    if (filteredInfluencers) {
+      if (selectedIds.size === filteredInfluencers.length) {
         setSelectedIds(new Set());
       } else {
-        setSelectedIds(new Set(influencers.map(i => i.id)));
+        setSelectedIds(new Set(filteredInfluencers.map(i => i.id)));
       }
     }
   };
@@ -407,6 +427,34 @@ export default function Discover() {
           </Select>
         </div>
 
+        {/* Client filter buttons */}
+        {uniqueClients.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 items-center">
+            <span className="text-xs text-muted-foreground mr-1">클라이언트:</span>
+            <Button 
+              variant={clientFilter === "" ? "default" : "outline"} 
+              size="sm" 
+              className="h-7 text-xs px-3"
+              onClick={() => setClientFilter("")}
+              data-testid="button-client-filter-all"
+            >
+              전체
+            </Button>
+            {uniqueClients.map(client => (
+              <Button 
+                key={client}
+                variant={clientFilter === client ? "default" : "outline"} 
+                size="sm" 
+                className="h-7 text-xs px-3"
+                onClick={() => setClientFilter(client)}
+                data-testid={`button-client-filter-${client}`}
+              >
+                {client}
+              </Button>
+            ))}
+          </div>
+        )}
+
         {isLoading ? (
           <div className="text-center py-20 text-muted-foreground">{KO.common.loading}</div>
         ) : (
@@ -417,7 +465,7 @@ export default function Discover() {
                   <TableRow className="h-8">
                     <TableHead className="w-8 px-2">
                       <Checkbox 
-                        checked={influencers && selectedIds.size === influencers.length && influencers.length > 0}
+                        checked={filteredInfluencers && selectedIds.size === filteredInfluencers.length && filteredInfluencers.length > 0}
                         onCheckedChange={selectAll}
                         data-testid="checkbox-select-all"
                       />
@@ -434,11 +482,11 @@ export default function Discover() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {influencers?.map((inf) => {
+                  {filteredInfluencers?.map((inf) => {
                     const campaignData = influencerCampaignData.get(inf.id);
                     const mainAccount = inf.accounts?.[0];
                     const clients = campaignData?.campaigns.map((c: { client: string }) => c.client).filter(Boolean) || [];
-                    const uniqueClients = Array.from(new Set(clients));
+                    const campaignClients = Array.from(new Set(clients));
                     
                     return (
                       <TableRow 
@@ -479,8 +527,7 @@ export default function Discover() {
                         </TableCell>
                         <TableCell className="px-2 py-1">
                           <span className="text-xs truncate select-text">
-                            {uniqueClients.length > 0 ? uniqueClients.slice(0, 2).join(', ') : KO.pages.discover.noClient}
-                            {uniqueClients.length > 2 && ` +${uniqueClients.length - 2}`}
+                            {inf.client || KO.pages.discover.noClient}
                           </span>
                         </TableCell>
                         <TableCell className="px-2 py-1 text-center">
