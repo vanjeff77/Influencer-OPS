@@ -577,6 +577,136 @@ export async function registerRoutes(
     res.json(summary);
   });
 
+  // === TODAY'S TASKS ===
+  app.get('/api/overview/tasks', async (req, res) => {
+    const { workspaceId } = req.query;
+    const wsId = parseInt(workspaceId as string) || 1;
+    
+    // Get all active campaigns with line items
+    const campaignsList = await storage.getCampaigns(wsId);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const tasks: any[] = [];
+    
+    for (const campaignBasic of campaignsList) {
+      if (campaignBasic.status !== 'active') continue;
+      const campaign = await storage.getCampaign(campaignBasic.id);
+      if (!campaign) continue;
+      
+      for (const item of campaign.items || []) {
+        const influencer = item.influencer;
+        
+        // Calculate draft deadline tasks
+        if (item.draftDueAt && !item.draftUrl && !item.draftFileId) {
+          const draftDue = new Date(item.draftDueAt);
+          draftDue.setHours(0, 0, 0, 0);
+          const diffDays = Math.floor((draftDue.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+          
+          if (diffDays <= 3) {
+            tasks.push({
+              id: `draft-${item.id}`,
+              type: 'draft',
+              title: '초안 수신 확인',
+              campaignId: campaign.id,
+              campaignName: campaign.name,
+              lineItemId: item.id,
+              influencerId: item.influencerId,
+              influencerName: influencer?.name || `인플루언서 #${item.influencerId}`,
+              stage: item.stage,
+              dueIn: diffDays,
+              priority: diffDays < 0 ? 0 : diffDays === 0 ? 1 : 2,
+              link: `/campaigns/${campaign.id}?tab=operations`,
+            });
+          }
+        }
+        
+        // Calculate upload deadline tasks
+        if (item.uploadDueAt && (!item.finalUrl || !item.isPublishedConfirmed)) {
+          const uploadDue = new Date(item.uploadDueAt);
+          uploadDue.setHours(0, 0, 0, 0);
+          const diffDays = Math.floor((uploadDue.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+          
+          if (diffDays <= 3) {
+            tasks.push({
+              id: `upload-${item.id}`,
+              type: 'upload',
+              title: item.finalUrl && !item.isPublishedConfirmed ? '업로드 확인' : '업로드 예정',
+              campaignId: campaign.id,
+              campaignName: campaign.name,
+              lineItemId: item.id,
+              influencerId: item.influencerId,
+              influencerName: influencer?.name || `인플루언서 #${item.influencerId}`,
+              stage: item.stage,
+              dueIn: diffDays,
+              priority: diffDays < 0 ? 0 : diffDays === 0 ? 1 : 2,
+              link: `/campaigns/${campaign.id}?tab=operations`,
+            });
+          }
+        }
+        
+        // Feedback pending tasks
+        if (item.reviewStatus === '검토중' || item.reviewStatus === '피드백전달') {
+          tasks.push({
+            id: `feedback-${item.id}`,
+            type: 'feedback',
+            title: item.reviewStatus === '검토중' ? '초안 검토 필요' : '피드백 전달 대기',
+            campaignId: campaign.id,
+            campaignName: campaign.name,
+            lineItemId: item.id,
+            influencerId: item.influencerId,
+            influencerName: influencer?.name || `인플루언서 #${item.influencerId}`,
+            stage: item.stage,
+            dueIn: 0,
+            priority: 1,
+            link: `/campaigns/${campaign.id}?tab=operations`,
+          });
+        }
+        
+        // No response follow-up tasks
+        if (item.commStatus === '미응답') {
+          tasks.push({
+            id: `followup-${item.id}`,
+            type: 'followup',
+            title: '미응답 인플루언서 팔로업',
+            campaignId: campaign.id,
+            campaignName: campaign.name,
+            lineItemId: item.id,
+            influencerId: item.influencerId,
+            influencerName: influencer?.name || `인플루언서 #${item.influencerId}`,
+            stage: item.stage,
+            dueIn: 0,
+            priority: 2,
+            link: `/campaigns/${campaign.id}?tab=communication`,
+          });
+        }
+        
+        // Payment pending tasks
+        if (item.paymentStatus === 'pending' && item.payAmount && item.payAmount > 0 && item.stage === '완료') {
+          tasks.push({
+            id: `payment-${item.id}`,
+            type: 'payment',
+            title: '정산 정보 수집',
+            campaignId: campaign.id,
+            campaignName: campaign.name,
+            lineItemId: item.id,
+            influencerId: item.influencerId,
+            influencerName: influencer?.name || `인플루언서 #${item.influencerId}`,
+            stage: item.stage,
+            dueIn: 3,
+            priority: 3,
+            link: `/finance`,
+          });
+        }
+      }
+    }
+    
+    // Sort by priority (lower is higher priority)
+    tasks.sort((a, b) => a.priority - b.priority);
+    
+    res.json(tasks);
+  });
+
   // === EMAIL ===
   app.get('/api/email/gmail/callback', async (req, res) => {
     const code = req.query.code;

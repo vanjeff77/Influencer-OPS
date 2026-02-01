@@ -1,9 +1,12 @@
 import { useUser } from "@/hooks/use-auth";
+import { useWorkspaces } from "@/hooks/use-workspaces";
+import { useQuery } from "@tanstack/react-query";
 import Layout from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Skeleton } from "@/components/ui/skeleton";
 import { 
   ArrowRight, 
   Megaphone, 
@@ -21,7 +24,22 @@ import {
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { KO } from "@/i18n/ko";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+
+interface ApiTask {
+  id: string;
+  type: string;
+  title: string;
+  campaignId: number;
+  campaignName: string;
+  lineItemId: number;
+  influencerId: number;
+  influencerName: string;
+  stage: string;
+  dueIn: number;
+  priority: number;
+  link: string;
+}
 
 interface Task {
   id: string;
@@ -51,14 +69,6 @@ interface RiskItem {
   link: string;
 }
 
-const SAMPLE_TASKS: Task[] = [
-  { id: "1", title: "초안 검토 및 피드백 전달", campaignName: "서머 런칭 2025", influencerName: "인플루언서 1", status: "피드백 대기", dueIn: 0, priority: 1, link: "/campaigns/1?tab=content", completed: false },
-  { id: "2", title: "계약서 서명 요청", campaignName: "서머 런칭 2025", influencerName: "인플루언서 2", status: "계약 대기", dueIn: 1, priority: 2, link: "/campaigns/1?tab=contract", completed: false },
-  { id: "3", title: "콘텐츠 업로드 확인", campaignName: "서머 런칭 2025", influencerName: "인플루언서 3", status: "업로드 예정", dueIn: 2, priority: 3, link: "/campaigns/1?tab=content", completed: false },
-  { id: "4", title: "미응답 인플루언서 팔로업", campaignName: "가을 캠페인", influencerName: "인플루언서 4", status: "미응답", dueIn: -1, priority: 1, link: "/campaigns/2?tab=communication", completed: false },
-  { id: "5", title: "정산 정보 수집", campaignName: "서머 런칭 2025", influencerName: "인플루언서 5", status: "정보 미수집", dueIn: 3, priority: 4, link: "/finance?settlementStatus=정보미수집", completed: false },
-  { id: "6", title: "트래킹 지표 확인", campaignName: "가을 캠페인", influencerName: "인플루언서 6", status: "지표 수집 중", dueIn: 0, priority: 2, link: "/tracking", completed: false },
-];
 
 const SAMPLE_THREADS: CommunicationThread[] = [
   { id: "1", influencerName: "인플루언서 1", campaignName: "서머 런칭 2025", lastMessage: "안녕하세요, 초안 검토 부탁드립니다.", time: "2시간 전", status: "replied" },
@@ -79,25 +89,44 @@ const STORAGE_KEY = "overview_completed_tasks";
 
 export default function Home() {
   const { data: user } = useUser();
+  const { data: workspaces } = useWorkspaces();
+  const workspaceId = workspaces?.[0]?.id;
   const [, navigate] = useLocation();
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [completedTaskIds, setCompletedTaskIds] = useState<string[]>([]);
+
+  const { data: apiTasks = [], isLoading: tasksLoading } = useQuery<ApiTask[]>({
+    queryKey: [`/api/overview/tasks?workspaceId=${workspaceId}`],
+    enabled: !!workspaceId,
+  });
 
   useEffect(() => {
     const savedCompleted = localStorage.getItem(STORAGE_KEY);
-    const completedIds = savedCompleted ? JSON.parse(savedCompleted) : [];
-    const tasksWithCompleted = SAMPLE_TASKS.map(task => ({
-      ...task,
-      completed: completedIds.includes(task.id)
-    }));
-    setTasks(tasksWithCompleted);
+    if (savedCompleted) {
+      setCompletedTaskIds(JSON.parse(savedCompleted));
+    }
   }, []);
 
+  const tasks = useMemo(() => {
+    return apiTasks.map(task => ({
+      id: task.id,
+      title: task.title,
+      campaignName: task.campaignName,
+      influencerName: task.influencerName,
+      status: task.stage || task.type,
+      dueIn: task.dueIn,
+      priority: task.priority,
+      link: task.link,
+      completed: completedTaskIds.includes(task.id)
+    }));
+  }, [apiTasks, completedTaskIds]);
+
   const handleTaskToggle = (taskId: string) => {
-    setTasks(prev => {
-      const updated = prev.map(t => t.id === taskId ? { ...t, completed: !t.completed } : t);
-      const completedIds = updated.filter(t => t.completed).map(t => t.id);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(completedIds));
-      return updated;
+    setCompletedTaskIds(prev => {
+      const newIds = prev.includes(taskId) 
+        ? prev.filter(id => id !== taskId)
+        : [...prev, taskId];
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(newIds));
+      return newIds;
     });
   };
 
