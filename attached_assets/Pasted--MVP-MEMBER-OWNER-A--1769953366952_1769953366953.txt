@@ -1,0 +1,188 @@
+# (MVP 최종) 정산 연계: 실무자(MEMBER)도 정산 “입력/상태변경” 가능 + 입금완료 처리만 OWNER로 제한 (권장안 A)
+중요:
+- 소규모 조직 운영을 위해 실무자(MEMBER)가 정산 메뉴에서 금액/상태/증빙을 직접 입력하고 관리할 수 있어야 한다.
+- 단, 사고 방지를 위해 “입금완료 처리(지급완료 확정)”만 OWNER 권한으로 제한한다.
+
+- 언어: 사용자 화면 텍스트는 한국어.
+- 범위: 탐색(인플루언서 DB) + 캠페인 라인아이템(업로드 완료 트리거) + 정산 메뉴(작업큐) + 엑셀 복사(클립보드)
+
+────────────────────────────────────────
+[1) 역할/접근 정책(권장안 A)]
+역할(Role): OWNER / MEMBER / CLIENT 유지
+
+정산 메뉴 접근:
+- OWNER: 접근 가능
+- MEMBER: 접근 가능
+- CLIENT: 접근 불가(기본)
+
+정산 업무 “편집 가능 범위”:
+- MEMBER: 금액 입력, payoutStatus 변경, 증빙 업로드/수정, 지급예정일 입력 가능
+- OWNER: 위 전부 + “입금완료 처리(지급완료 확정)” 가능
+
+※ 구현 단순화를 위해 별도 권한 시스템을 만들지 말고 role 기반으로 처리:
+- if role in (OWNER, MEMBER) => financeEditEnabled = true
+- if role == OWNER => canMarkPaid = true
+
+────────────────────────────────────────
+[2) 인플루언서 DB(탐색) 변경: ‘정산정보’ 섹션 추가(고정 정보)]
+## 2-1. 인플루언서 엔티티에 고정 정산정보 필드 추가
+- settlementType: '사업자' | '프리랜서'
+- businessName (사업자등록명) : string|null
+- businessRegNo (사업자등록번호) : string|null
+- freelancerId (프리랜서 주민번호) : string|null 
+- bankName (은행명) : string|null
+- accountHolder (예금주명) : string|null
+- accountNumber (계좌번호) : string|null
+- settlementInfoUpdatedAt
+- settlementInfoUpdatedByUserId
+
+## 2-2. 탐색 탭 UI: 인플루언서 상세에 “정산정보” 탭/섹션 추가
+- OWNER/MEMBER: 열람 + 편집 가능 (권장안 A에서는 실무자도 편집 허용)
+- 저장 시: updatedAt/updatedBy 기록
+
+폼 구성:
+A) 구분(라디오): 사업자 / 프리랜서
+B) 사업자:
+- 사업자등록명
+- 사업자등록번호
+C) 프리랜서: 
+- 주민번호  
+D) 공통: 
+- 은행명 / 예금주명 / 계좌번호
+버튼: [저장]
+
+## 2-3. 정산정보 완비 배지(자동 계산)
+- 사업자: businessName + businessRegNo + bankName + accountHolder + accountNumber 모두 있으면 “완비”
+- 프리랜서: freelancerIdDocFileId + bankName + accountHolder + accountNumber 있으면 “완비”
+=> 탐색 리스트 / 캠페인 운영 / 정산 메뉴에서 “완비/미비” 배지로 표시
+
+────────────────────────────────────────
+[3) 캠페인 라인아이템(캠페인별 정산업무) 필드 추가]
+정산 메뉴 작업큐는 “업로드 완료로 표시된 라인아이템”이 기본 대상이다.
+
+라인아이템 필드(캠페인-인플루언서):
+- isUploadCompleted (boolean default false)
+- uploadCompletedAt (date|null)
+- uploadCompletedByUserId (string|null)
+
+- payoutStatus enum:
+  - '정산정보미비'
+  - '증빙요청'
+  - '증빙수령'
+  - '지급대기'
+  - '지급완료'
+  - '보류'
+
+- payoutAmountSupply (number|null)   # 공급가
+- payoutVat (number|null)            # VAT
+- payoutTotal (number|null)          # 총액
+- payoutMemo (string|null)
+
+- invoiceFileId (string|null)        # 세금계산서/청구서/증빙
+- invoiceIssuedAt (date|null)
+- payoutDueAt (date|null)
+- paidAt (date|null)
+- transferProofFileId (string|null)  # 이체확인증
+
+업로드 완료 트리거:
+- 캠페인 운영(또는 콘텐츠 탭)에서 체크박스 “업로드 완료”
+- 체크 시:
+  - isUploadCompleted=true, uploadCompletedAt/By 기록
+  - payoutStatus 자동 설정(정산정보 완비 여부에 따라):
+    - 미비 => '정산정보미비'
+    - 완비 => '지급대기'
+- 체크 해제(undo) 가능(오류 방지):
+  - 해제 시 isUploadCompleted=false, uploadCompletedAt/By 초기화
+  - payoutStatus는 '보류'로 자동 전환(권장) 또는 이전 값 유지(택1)
+
+────────────────────────────────────────
+[4) 정산 메뉴 재구성: “작업 큐 + 상세 패널”(OWNER/MEMBER 사용)]
+경로: 기존 ‘정산’ 메뉴 유지
+접근: OWNER/MEMBER 가능
+
+## 4-1. 상단 KPI(간단)
+- 지급대기 건수
+- 지급대기 총액(합계)
+- 정산정보미비 건수
+- 보류 건수
+
+## 4-2. 작업 큐 테이블(행=라인아이템)
+기본 토글:
+- “업로드 완료 건만 보기” ON (isUploadCompleted=true)
+필터:
+- 클라이언트 / 캠페인 / payoutStatus / 정산정보 완비(완비/미비)
+컬럼(최소):
+- 클라이언트명
+- 캠페인명
+- 인플루언서(닉네임/플랫폼)
+- 업로드 완료일
+- 정산정보(완비/미비)
+- 지급 상태(payoutStatus)
+- 지급 총액(payoutTotal)
+- 지급 예정일(payoutDueAt)
+- (OWNER만) 빠른 액션: [입금완료]
+
+정렬(권장):
+- 정산정보미비, 지급대기 우선
+- 오래된 업로드 완료일부터 처리
+
+## 4-3. 상세 패널(행 클릭)
+섹션 A: 기본
+- 클라이언트/캠페인/인플루언서
+- 업로드 완료(누가/언제)
+
+섹션 B: 정산정보(인플루언서 고정 정보 불러오기)
+- 사업자/프리랜서 구분 + 필드 표시
+- 프리랜서: 서류 파일(다운로드/미리보기)
+- 은행/예금주/계좌번호 표시
+- 버튼: [정산정보 수정] (누르면 인플루언서 상세의 정산정보 탭으로 이동 또는 인라인 편집)
+
+섹션 C: 지급 금액(캠페인별)
+- 공급가 / VAT / 총액 입력
+- “총액 자동 계산” 토글(총액=공급가+VAT)
+- 메모 입력
+
+섹션 D: 증빙
+- 세금계산서/청구서 업로드(invoiceFileId)
+- 발행일(invoiceIssuedAt)
+- 이체확인증 업로드(transferProofFileId)
+
+섹션 E: 상태/처리
+- payoutStatus 드롭다운(OWNER/MEMBER 모두 변경 가능)
+- 지급 예정일(payoutDueAt)
+- 버튼:
+  - [저장] (변경사항 저장)
+  - [입금완료 처리]  (OWNER만 노출)
+    - 클릭 시: payoutStatus='지급완료', paidAt=now 기록
+    - (MVP) 이체확인증이 없으면 경고만 띄우고 진행 허용
+
+────────────────────────────────────────
+[5) 엑셀 복붙: 클립보드 TSV 복사(OWNER/MEMBER 모두 사용)]
+정산 메뉴 테이블에서:
+- 다중 선택 체크박스
+- 버튼: [입금용 복사]
+기본 동작:
+- 선택된 행 중 payoutStatus가 '지급대기'인 것만 복사 대상으로 포함
+- 나머지는 “지급대기만 복사됩니다” 안내 토스트
+
+복사 포맷(TSV, 헤더 포함):
+은행명    계좌번호    예금주명    금액(총액)    메모
+메모 포맷:
+{클라이언트명}/{캠페인명}-{인플루언서닉네임}
+
+옵션 토글(선택):
+- “사업자정보 포함” ON 시 컬럼 추가:
+  사업자등록명    사업자등록번호
+
+
+토스트:
+- “입금용 데이터가 클립보드에 복사되었습니다(TSV). 엑셀에 붙여넣으세요.”
+
+────────────────────────────────────────
+[6) 완료 기준(테스트)]
+1) MEMBER로 로그인해도 정산 메뉴에 접근 가능하고 금액/상태/증빙/지급예정일을 입력할 수 있다.
+2) OWNER는 [입금완료 처리] 버튼으로 지급완료 확정(paidAt 기록)을 할 수 있다.
+
+4) 캠페인 운영에서 업로드 완료로 체크한 라인아이템만 정산 메뉴 기본 큐에 나타난다.
+5) 지급대기 건을 다중 선택 후 [입금용 복사]하면 TSV가 클립보드로 복사되어 엑셀에 그대로 붙는다.
+6) 지급완료 처리 후에는 테이블에서 상태가 즉시 ‘지급완료’로 반영된다.

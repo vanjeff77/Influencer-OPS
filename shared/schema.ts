@@ -4,7 +4,8 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 // === ENUMS ===
-export const userRoleEnum = z.enum(["MASTER", "EDITOR", "VIEWER"]);
+export const userRoleEnum = z.enum(["MASTER", "EDITOR", "VIEWER"]); // Legacy, kept for compatibility
+export const workspaceRoleEnum = z.enum(["WORKSPACE_OWNER", "WORKSPACE_MEMBER", "CLIENT"]);
 export const platformEnum = z.enum(["IG", "YT", "TikTok", "X", "Blog"]);
 export const jobStatusEnum = z.enum(["pending", "processing", "completed", "failed"]);
 
@@ -19,6 +20,7 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   password: text("password").notNull(), // bcrypt hash
   name: text("name").notNull(),
+  isActive: boolean("is_active").default(true), // For account activation status
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -33,8 +35,28 @@ export const workspaceMembers = pgTable("workspace_members", {
   id: serial("id").primaryKey(),
   workspaceId: integer("workspace_id").notNull(),
   userId: integer("user_id").notNull(),
-  role: text("role").notNull().default("VIEWER"), // MASTER, EDITOR, VIEWER
+  role: text("role").notNull().default("WORKSPACE_MEMBER"), // WORKSPACE_OWNER, WORKSPACE_MEMBER, CLIENT
   joinedAt: timestamp("joined_at").defaultNow(),
+});
+
+// === CLIENTS (for access control scoping) ===
+export const clients = pgTable("clients", {
+  id: serial("id").primaryKey(),
+  workspaceId: integer("workspace_id").notNull(),
+  name: text("name").notNull(),
+  logoUrl: text("logo_url"),
+  memo: text("memo"),
+  status: text("status").default("active"), // active, inactive
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Client-User assignment (many-to-many for CLIENT role access control)
+export const clientUserAssignments = pgTable("client_user_assignments", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id").notNull(),
+  userId: integer("user_id").notNull(),
+  workspaceId: integer("workspace_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // === INFLUENCERS ===
@@ -107,8 +129,9 @@ export const groupInfluencers = pgTable("group_influencers", {
 export const campaigns = pgTable("campaigns", {
   id: serial("id").primaryKey(),
   workspaceId: integer("workspace_id").notNull(),
+  clientId: integer("client_id"), // Foreign key to clients table for access control
   name: text("name").notNull(),
-  client: text("client"),
+  client: text("client"), // Legacy: client name as text (kept for backwards compatibility)
   goal: text("goal"),
   budget: integer("budget").default(0),
   startDate: timestamp("start_date"),
@@ -385,6 +408,27 @@ export const workspaceRelations = relations(workspaces, ({ many }) => ({
   influencers: many(influencers),
   groups: many(groups),
   campaigns: many(campaigns),
+  clients: many(clients),
+}));
+
+export const clientRelations = relations(clients, ({ one, many }) => ({
+  workspace: one(workspaces, { fields: [clients.workspaceId], references: [workspaces.id] }),
+  assignments: many(clientUserAssignments),
+}));
+
+export const clientUserAssignmentRelations = relations(clientUserAssignments, ({ one }) => ({
+  client: one(clients, { fields: [clientUserAssignments.clientId], references: [clients.id] }),
+  user: one(users, { fields: [clientUserAssignments.userId], references: [users.id] }),
+}));
+
+export const workspaceMemberRelations = relations(workspaceMembers, ({ one }) => ({
+  workspace: one(workspaces, { fields: [workspaceMembers.workspaceId], references: [workspaces.id] }),
+  user: one(users, { fields: [workspaceMembers.userId], references: [users.id] }),
+}));
+
+export const userRelations = relations(users, ({ many }) => ({
+  workspaces: many(workspaceMembers),
+  clientAssignments: many(clientUserAssignments),
 }));
 
 export const influencerRelations = relations(influencers, ({ one, many }) => ({
@@ -397,6 +441,7 @@ export const influencerRelations = relations(influencers, ({ one, many }) => ({
 
 export const campaignRelations = relations(campaigns, ({ one, many }) => ({
   workspace: one(workspaces, { fields: [campaigns.workspaceId], references: [workspaces.id] }),
+  client: one(clients, { fields: [campaigns.clientId], references: [clients.id] }),
   items: many(campaignInfluencers),
 }));
 
@@ -444,6 +489,8 @@ export const feedbackNoteRelations = relations(feedbackNotes, ({ one }) => ({
 // === SCHEMAS ===
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export const insertWorkspaceSchema = createInsertSchema(workspaces).omit({ id: true, createdAt: true });
+export const insertClientSchema = createInsertSchema(clients).omit({ id: true, createdAt: true });
+export const insertClientUserAssignmentSchema = createInsertSchema(clientUserAssignments).omit({ id: true, createdAt: true });
 export const insertInfluencerSchema = createInsertSchema(influencers).omit({ id: true, createdAt: true });
 export const insertInfluencerAccountSchema = createInsertSchema(influencerAccounts).omit({ id: true });
 export const insertGroupSchema = createInsertSchema(groups).omit({ id: true, createdAt: true });
@@ -465,6 +512,9 @@ export const insertCampaignInfluencerSchema = createInsertSchema(campaignInfluen
 // === TYPES ===
 export type User = typeof users.$inferSelect;
 export type Workspace = typeof workspaces.$inferSelect;
+export type WorkspaceMember = typeof workspaceMembers.$inferSelect;
+export type Client = typeof clients.$inferSelect;
+export type ClientUserAssignment = typeof clientUserAssignments.$inferSelect;
 export type Influencer = typeof influencers.$inferSelect;
 export type InfluencerAccount = typeof influencerAccounts.$inferSelect;
 export type Group = typeof groups.$inferSelect;
@@ -495,6 +545,8 @@ export type InsertConversationMessage = z.infer<typeof insertConversationMessage
 export type InsertEmailTemplate = z.infer<typeof insertEmailTemplateSchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertWorkspace = z.infer<typeof insertWorkspaceSchema>;
+export type InsertClient = z.infer<typeof insertClientSchema>;
+export type InsertClientUserAssignment = z.infer<typeof insertClientUserAssignmentSchema>;
 export type InsertInfluencer = z.infer<typeof insertInfluencerSchema>;
 export type InsertContent = z.infer<typeof insertContentSchema>;
 export type InsertTimelineEvent = z.infer<typeof insertTimelineEventSchema>;
