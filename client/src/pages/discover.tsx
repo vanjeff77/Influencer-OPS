@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useState, useEffect, useMemo } from "react";
-import { Search, Plus, Instagram, Youtube, Twitter, X, Users, Megaphone, Save, Clock, ExternalLink } from "lucide-react";
+import { Search, Plus, Instagram, Youtube, Twitter, X, Users, Megaphone, Save, Clock, ExternalLink, ClipboardPaste, Copy } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -22,8 +22,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { KO } from "@/i18n/ko";
 import { format } from "date-fns";
 import { useLocation, useSearch } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CampaignInfluencer } from "@shared/schema";
+import { PasteImportDialog } from "@/components/paste-import-dialog";
 
 export default function Discover() {
   const { data: workspaces } = useWorkspaces();
@@ -49,11 +50,33 @@ export default function Discover() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
   const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
+  const [isPasteImportOpen, setIsPasteImportOpen] = useState(false);
+  const queryClient = useQueryClient();
   const [newInfluencer, setNewInfluencer] = useState({ 
     name: "", 
     email: "", 
     accounts: [{ platform: "IG", handle: "" }] 
   });
+
+  const TEMPLATE_HEADERS = '닉네임\t플랫폼\t플랫폼 계정\t채널 URL\t팔로워\t컨택포인트\t메모\t클라이언트\t세부유형\t컨택여부\t회신 여부\t협업 여부\t콘텐츠 완성본 링크';
+
+  const handleCopyTemplate = async () => {
+    try {
+      await navigator.clipboard.writeText(TEMPLATE_HEADERS);
+      toast({
+        title: KO.pages.discover.templateCopied
+      });
+    } catch (err) {
+      toast({
+        title: "복사 실패",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleImportComplete = () => {
+    queryClient.invalidateQueries({ queryKey: ['/api/workspaces', workspaceId, 'influencers'] });
+  };
   
   useEffect(() => {
     const params = new URLSearchParams(searchParams);
@@ -211,13 +234,22 @@ export default function Discover() {
             <p className="text-xs md:text-sm text-muted-foreground">{KO.pages.discover.subtitle}</p>
           </div>
           
-          <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm" className="text-xs md:text-sm h-7 md:h-8" data-testid="button-add-influencer">
-                <Plus className="w-3 h-3 md:w-4 md:h-4 mr-1" />
-                {KO.pages.discover.addInfluencer}
-              </Button>
-            </DialogTrigger>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={handleCopyTemplate} data-testid="button-copy-template">
+              <Copy className="w-3 h-3 mr-1" />
+              {KO.pages.discover.copyTemplate}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setIsPasteImportOpen(true)} data-testid="button-paste-import">
+              <ClipboardPaste className="w-3 h-3 mr-1" />
+              {KO.pages.discover.pasteData}
+            </Button>
+            <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" data-testid="button-add-influencer">
+                  <Plus className="w-3 h-3 mr-1" />
+                  {KO.pages.discover.addInfluencer}
+                </Button>
+              </DialogTrigger>
             <DialogContent className="max-w-[90vw] md:max-w-md">
               <DialogHeader>
                 <DialogTitle className="text-base md:text-lg">{KO.pages.discover.addNewInfluencer}</DialogTitle>
@@ -314,7 +346,15 @@ export default function Discover() {
               </Button>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
+
+        <PasteImportDialog
+          open={isPasteImportOpen}
+          onOpenChange={setIsPasteImportOpen}
+          workspaceId={workspaceId || 0}
+          onImportComplete={handleImportComplete}
+        />
 
         {selectedIds.size > 0 && (
           <div className="bg-primary/5 border border-primary/20 rounded-md px-2 md:px-3 py-1.5 md:py-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
