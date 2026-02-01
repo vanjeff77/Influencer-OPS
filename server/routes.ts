@@ -597,31 +597,41 @@ export async function registerRoutes(
       const existingMessages = await storage.getConversationMessages(conversationId);
       const existingGmailIds = new Set(existingMessages.map(m => m.gmailMessageId).filter(Boolean));
       
+      // Also track by snippet to avoid duplicates when gmailMessageId is missing
+      const existingSnippets = new Set(existingMessages.map(m => m.snippet?.slice(0, 50)).filter(Boolean));
+      
       let syncedCount = 0;
       const influencer = conv.lineItem.influencer;
       
       for (const msg of thread.messages) {
-        if (existingGmailIds.has(msg.id)) continue;
+        // Skip if we already have this Gmail message ID
+        if (msg.id && existingGmailIds.has(msg.id)) continue;
         
         const headers = parseMessageHeaders(msg);
         const body = getMessageBody(msg);
-        const isInbound = influencer?.email ? headers.from.includes(influencer.email) : false;
+        const snippet = generateSnippet(body.text || body.html);
+        
+        // Skip if we already have a message with similar content (prevents duplicates)
+        if (snippet && existingSnippets.has(snippet.slice(0, 50))) continue;
+        
+        const isInbound = influencer?.email ? headers.from.toLowerCase().includes(influencer.email.toLowerCase()) : false;
         
         if (!isInbound) continue; // Only sync inbound messages
         
         await storage.createConversationMessage({
           conversationId,
           direction: 'inbound',
-          snippet: generateSnippet(body.text || body.html),
+          snippet,
           bodyHtml: body.html,
           bodyText: body.text,
-          gmailMessageId: msg.id,
-          gmailThreadId: msg.threadId,
+          gmailMessageId: msg.id || null,
+          gmailThreadId: msg.threadId || null,
           sendStatus: 'sent',
           receivedAt: new Date(parseInt(msg.internalDate || '0'))
         });
         
         syncedCount++;
+        existingSnippets.add(snippet?.slice(0, 50));
         
         // Create timeline event
         if (influencer) {

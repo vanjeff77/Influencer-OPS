@@ -41,7 +41,7 @@ export default function EmailCenter() {
       return res.json();
     },
     onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/workspaces', workspaceId, 'email-accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/workspaces/:workspaceId/email-accounts', workspaceId] });
       setIsConnectOpen(false);
       toast({ title: "Gmail 연결 완료", description: `${data.account?.email || ''} 계정이 추가되었습니다.` });
     },
@@ -56,7 +56,7 @@ export default function EmailCenter() {
       return res.json();
     },
     onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/workspaces', workspaceId, 'email-accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/workspaces/:workspaceId/email-accounts', workspaceId] });
       setIsConnectOpen(false);
       setConnectType(null);
       setImapData({ email: "", password: "", imapServer: "", imapPort: "993", smtpServer: "", smtpPort: "587" });
