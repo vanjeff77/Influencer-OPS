@@ -46,6 +46,16 @@ export default function Discover() {
     enabled: !!workspaceId
   });
 
+  const { data: clientsForImport } = useQuery<{ id: number; name: string }[]>({
+    queryKey: ['/api/clients', workspaceId],
+    queryFn: async () => {
+      const res = await fetch(`/api/clients?workspaceId=${workspaceId}`);
+      if (!res.ok) throw new Error("Failed to fetch clients");
+      return res.json();
+    },
+    enabled: !!workspaceId,
+  });
+
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [selectedInfluencerId, setSelectedInfluencerId] = useState<number | null>(null);
   
@@ -383,6 +393,7 @@ export default function Discover() {
           onOpenChange={setIsPasteImportOpen}
           workspaceId={workspaceId || 0}
           onImportComplete={handleImportComplete}
+          clients={clientsForImport}
         />
 
         {selectedIds.size > 0 && (
@@ -707,6 +718,12 @@ export default function Discover() {
   );
 }
 
+interface ClientForDrawer {
+  id: number;
+  workspaceId: number;
+  name: string;
+}
+
 function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influencerId: number | null; onClose: () => void; workspaceId: number }) {
   const { data: influencer, isLoading } = useInfluencer(influencerId || 0);
   const updateInfluencer = useUpdateInfluencer();
@@ -714,6 +731,16 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
   const addContent = useAddContent(influencerId || 0);
   const { toast } = useToast();
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+
+  const { data: clientsList } = useQuery<ClientForDrawer[]>({
+    queryKey: ['/api/clients', workspaceId],
+    queryFn: async () => {
+      const res = await fetch(`/api/clients?workspaceId=${workspaceId}`);
+      if (!res.ok) throw new Error("Failed to fetch clients");
+      return res.json();
+    },
+    enabled: !!workspaceId,
+  });
   
   const [memo, setMemo] = useState("");
   const [priceMemo, setPriceMemo] = useState("");
@@ -904,7 +931,19 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-sm font-medium">{KO.pages.discover.client}</label>
-                      <Input value={client} onChange={e => setClient(e.target.value)} placeholder="클라이언트" data-testid="input-influencer-client" />
+                      <Select value={client} onValueChange={setClient}>
+                        <SelectTrigger data-testid="select-influencer-client">
+                          <SelectValue placeholder="클라이언트 선택" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">없음</SelectItem>
+                          {clientsList?.map((c) => (
+                            <SelectItem key={c.id} value={c.name}>
+                              {c.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div>
                       <label className="text-sm font-medium">{KO.pages.discover.subType}</label>

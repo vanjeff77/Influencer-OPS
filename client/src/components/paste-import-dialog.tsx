@@ -14,11 +14,17 @@ const ALLOWED_COLUMNS = [
   '메모', '클라이언트', '세부유형', '컨택여부', '회신 여부', '협업 여부', '콘텐츠 완성본 링크', '단가 메모'
 ];
 
+interface ClientInfo {
+  id: number;
+  name: string;
+}
+
 interface PasteImportDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   workspaceId: number;
   onImportComplete: () => void;
+  clients?: ClientInfo[];
 }
 
 type ImportState = 'paste' | 'validated' | 'importing' | 'completed';
@@ -29,6 +35,7 @@ interface ValidationResult {
   skippedRows: number;
   errorRows: number;
   excludedColumns: string[];
+  invalidClientRows: { row: number; client: string }[];
 }
 
 interface ImportResult {
@@ -38,7 +45,7 @@ interface ImportResult {
   errors: { row: number; reason: string }[];
 }
 
-export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportComplete }: PasteImportDialogProps) {
+export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportComplete, clients = [] }: PasteImportDialogProps) {
   const { toast } = useToast();
   const [state, setState] = useState<ImportState>('paste');
   const [pastedData, setPastedData] = useState<string>('');
@@ -142,12 +149,16 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
 
   const handleValidate = useCallback(() => {
     const excludedColumns = headers.filter(h => h.trim() && !ALLOWED_COLUMNS.includes(h.trim()));
+    const clientNames = clients.map(c => c.name.toLowerCase().trim());
     
     let validRows = 0;
     let skippedRows = 0;
     let errorRows = 0;
+    const invalidClientRows: { row: number; client: string }[] = [];
 
-    gridData.forEach(row => {
+    const clientIdx = headers.findIndex(h => h.trim() === '클라이언트');
+
+    gridData.forEach((row, index) => {
       if (!row || row.every(cell => !cell || !cell.trim())) {
         skippedRows++;
         return;
@@ -164,6 +175,13 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
       if (!nickname && !platformAccount && !channelUrl) {
         errorRows++;
       } else {
+        // Check client validity
+        if (clientIdx >= 0) {
+          const clientValue = (row[clientIdx] || '').trim();
+          if (clientValue && !clientNames.includes(clientValue.toLowerCase())) {
+            invalidClientRows.push({ row: index + 2, client: clientValue }); // +2 for 1-indexed + header row
+          }
+        }
         validRows++;
       }
     });
@@ -173,10 +191,11 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
       validRows,
       skippedRows,
       errorRows,
-      excludedColumns
+      excludedColumns,
+      invalidClientRows
     });
     setState('validated');
-  }, [headers, gridData]);
+  }, [headers, gridData, clients]);
 
   const handleImport = useCallback(async () => {
     if (!workspaceId) return;
@@ -334,6 +353,32 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
                   </AlertDescription>
                 </Alert>
               )}
+
+              {validation.invalidClientRows.length > 0 && (
+                <Alert className="border-red-300 bg-red-50 dark:bg-red-900/20">
+                  <XCircle className="w-4 h-4 text-red-500" />
+                  <AlertDescription className="text-sm">
+                    <span className="font-medium text-red-700 dark:text-red-400">
+                      존재하지 않는 클라이언트가 {validation.invalidClientRows.length}개 행에서 발견되었습니다.
+                    </span>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      설정 → 클라이언트에 등록된 클라이언트만 사용할 수 있습니다. 아래 클라이언트를 수정하거나 설정에서 먼저 등록하세요.
+                    </p>
+                    <div className="mt-2 max-h-[100px] overflow-y-auto">
+                      {validation.invalidClientRows.slice(0, 10).map((item, i) => (
+                        <div key={i} className="text-xs text-red-600 dark:text-red-400">
+                          행 {item.row}: "<span className="font-medium">{item.client}</span>"
+                        </div>
+                      ))}
+                      {validation.invalidClientRows.length > 10 && (
+                        <div className="text-xs text-muted-foreground mt-1">
+                          ... 그 외 {validation.invalidClientRows.length - 10}개 더
+                        </div>
+                      )}
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
             </div>
           )}
 
@@ -403,7 +448,7 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
               </Button>
               <Button 
                 onClick={handleImport} 
-                disabled={validation?.validRows === 0}
+                disabled={validation?.validRows === 0 || (validation?.invalidClientRows?.length ?? 0) > 0}
                 data-testid="button-execute-import"
               >
                 {KO.pages.discover.executeImport}

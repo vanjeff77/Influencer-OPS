@@ -170,7 +170,7 @@ export function useAssignToCampaign() {
     mutationFn: async ({ influencerIds, campaignId, createCampaign }: { 
       influencerIds: number[]; 
       campaignId?: number; 
-      createCampaign?: { workspaceId: number; name: string; client?: string } 
+      createCampaign?: { workspaceId: number; name: string; client?: string; clientId?: number } 
     }) => {
       const res = await fetch('/api/bulk/assign-to-campaign', {
         method: "POST",
