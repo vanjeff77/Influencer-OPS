@@ -60,6 +60,12 @@ Preferred communication style: Simple, everyday language.
     - **Integrated Messenger**: 3-pane layout for real-time campaign communication, syncing with Gmail, influencer detail editing, and DOMPurify for content sanitization.
 - **Mobile Optimization**: Fully responsive UI across all pages, components, and tables using Tailwind CSS for a consistent mobile-first experience.
 - **Finance & Tracking**: Real-time finance summary, CSV export for tracking data.
+- **Settlement Management (정산)**:
+    - **Settlement Work Queue**: Finance page with KPI cards (pending count/total, incomplete info, hold count) and filterable work queue table showing upload-completed line items.
+    - **Settlement Info on Influencers**: Accordion section in InfluencerDetailPanel for editing settlement type (사업자/프리랜서), bank info (은행명, 예금주, 계좌번호), business info (상호명, 사업자번호), or freelancer ID (주민등록번호).
+    - **Payout Status Workflow**: Status enum (정산정보미비, 증빙요청, 증빙수령, 지급대기, 지급완료, 보류) with automatic status determination based on settlement info completeness when upload is marked completed.
+    - **Role-Based Access Control**: CLIENT role blocked from settlement features; OWNER-only for "입금완료" confirmation; MEMBER+OWNER for payout updates.
+    - **TSV Clipboard Copy**: Copy bank transfer data (bankName, accountNumber, accountHolder, amount) to clipboard for easy Excel paste.
 - **Security**: IMAP password encryption (AES-256-CBC), Zod validation, authentication and workspace authorization checks for sensitive operations.
 
 ## External Dependencies
