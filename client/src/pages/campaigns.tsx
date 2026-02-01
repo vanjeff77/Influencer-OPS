@@ -226,32 +226,32 @@ export default function Campaigns() {
         {isLoading ? (
           <div className="text-sm">{KO.common.loading}</div>
         ) : (
-          <div className="grid gap-3 md:gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
             {filteredCampaigns?.map((campaign) => (
               <Link key={campaign.id} href={`/campaigns/${campaign.id}`} className="block">
-                <Card className="hover:border-primary/50 transition-all hover:shadow-md cursor-pointer group" data-testid={`card-campaign-${campaign.id}`}>
-                  <CardHeader className="flex flex-row items-start justify-between space-y-0 p-3 md:p-6 pb-1 md:pb-2 gap-2">
-                    <div className="space-y-0.5 md:space-y-1 min-w-0">
-                      <CardTitle className="text-sm md:text-xl group-hover:text-primary transition-colors truncate">{campaign.name}</CardTitle>
-                      <CardDescription className="text-[10px] md:text-sm">{campaign.client} • {KO.pages.campaigns.created} {format(new Date(campaign.createdAt || new Date()), 'yyyy.MM.dd')}</CardDescription>
+                <Card className="hover:border-primary/50 transition-all hover:shadow-md cursor-pointer group h-full" data-testid={`card-campaign-${campaign.id}`}>
+                  <CardHeader className="flex flex-row items-start justify-between space-y-0 p-3 md:p-4 pb-1 md:pb-2 gap-2">
+                    <div className="space-y-0.5 min-w-0">
+                      <CardTitle className="text-sm md:text-base group-hover:text-primary transition-colors truncate">{campaign.name}</CardTitle>
+                      <CardDescription className="text-[10px] md:text-xs">{campaign.client} • {format(new Date(campaign.createdAt || new Date()), 'yyyy.MM.dd')}</CardDescription>
                     </div>
-                    <Badge variant="outline" className={`capitalize border-0 text-[10px] md:text-xs shrink-0 ${getStatusColor(campaign.status || 'draft')}`}>
+                    <Badge variant="outline" className={`capitalize border-0 text-[10px] shrink-0 ${getStatusColor(campaign.status || 'draft')}`}>
                       {getStatusLabel(campaign.status || 'draft')}
                     </Badge>
                   </CardHeader>
-                  <CardContent className="p-3 md:p-6 pt-0 md:pt-0">
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-4 mt-2 md:mt-4">
-                      <div className="flex items-center gap-1 md:gap-2 text-[10px] md:text-sm text-muted-foreground">
-                        <DollarSign className="w-3 h-3 md:w-4 md:h-4 shrink-0" />
+                  <CardContent className="p-3 md:p-4 pt-0">
+                    <div className="flex flex-col gap-1.5 mt-2">
+                      <div className="flex items-center gap-1.5 text-[10px] md:text-xs text-muted-foreground">
+                        <DollarSign className="w-3 h-3 shrink-0" />
                         <span className="truncate">{KO.pages.campaigns.budget}: <span className="text-foreground font-medium">{campaign.budget?.toLocaleString()}원</span></span>
                       </div>
-                      <div className="flex items-center gap-1 md:gap-2 text-[10px] md:text-sm text-muted-foreground">
-                        <Calendar className="w-3 h-3 md:w-4 md:h-4 shrink-0" />
+                      <div className="flex items-center gap-1.5 text-[10px] md:text-xs text-muted-foreground">
+                        <Calendar className="w-3 h-3 shrink-0" />
                         <span className="truncate">{KO.pages.campaigns.goal}: <span className="text-foreground font-medium">{campaign.goal || KO.pages.campaigns.notSet}</span></span>
                       </div>
-                      <div className="hidden md:flex items-center justify-end text-primary text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-                        {KO.common.viewDetails} <ArrowRight className="w-4 h-4 ml-1" />
-                      </div>
+                    </div>
+                    <div className="hidden md:flex items-center justify-end text-primary text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity mt-2">
+                      {KO.common.viewDetails} <ArrowRight className="w-3 h-3 ml-1" />
                     </div>
                   </CardContent>
                 </Card>
