@@ -41,6 +41,9 @@ export default function Discover() {
   const [contactFilter, setContactFilter] = useState<string[]>([]);
   const [replyFilter, setReplyFilter] = useState<string[]>([]);
   const [collabFilter, setCollabFilter] = useState<string[]>([]);
+  const [tag1Filter, setTag1Filter] = useState<string[]>([]);
+  const [tag2Filter, setTag2Filter] = useState<string[]>([]);
+  const [tag3Filter, setTag3Filter] = useState<string[]>([]);
   const { data: influencers, isLoading } = useInfluencers(workspaceId || 0, { search, platform: undefined });
   const { data: campaigns } = useCampaigns(workspaceId || 0);
   const createInfluencer = useCreateInfluencer(workspaceId || 0);
@@ -125,6 +128,24 @@ export default function Discover() {
     return Array.from(clients).sort();
   }, [influencers]);
 
+  // Extract unique tag values from influencers
+  const uniqueTags = useMemo(() => {
+    if (!influencers) return { tag1: [], tag2: [], tag3: [] };
+    const tag1Set = new Set<string>();
+    const tag2Set = new Set<string>();
+    const tag3Set = new Set<string>();
+    influencers.forEach(inf => {
+      if (inf.tag1 && inf.tag1.trim()) tag1Set.add(inf.tag1.trim());
+      if (inf.tag2 && inf.tag2.trim()) tag2Set.add(inf.tag2.trim());
+      if (inf.tag3 && inf.tag3.trim()) tag3Set.add(inf.tag3.trim());
+    });
+    return {
+      tag1: Array.from(tag1Set).sort(),
+      tag2: Array.from(tag2Set).sort(),
+      tag3: Array.from(tag3Set).sort(),
+    };
+  }, [influencers]);
+
   // Filter influencers by all criteria
   const filteredInfluencers = useMemo(() => {
     if (!influencers) return [];
@@ -185,9 +206,24 @@ export default function Discover() {
         if (!matchesCollab) return false;
       }
       
+      // Tag1 filter (multi-select)
+      if (tag1Filter.length > 0) {
+        if (!inf.tag1 || !tag1Filter.includes(inf.tag1.trim())) return false;
+      }
+      
+      // Tag2 filter (multi-select)
+      if (tag2Filter.length > 0) {
+        if (!inf.tag2 || !tag2Filter.includes(inf.tag2.trim())) return false;
+      }
+      
+      // Tag3 filter (multi-select)
+      if (tag3Filter.length > 0) {
+        if (!inf.tag3 || !tag3Filter.includes(inf.tag3.trim())) return false;
+      }
+      
       return true;
     });
-  }, [influencers, clientFilter, platformFilter, followerFilter, contactFilter, replyFilter, collabFilter]);
+  }, [influencers, clientFilter, platformFilter, followerFilter, contactFilter, replyFilter, collabFilter, tag1Filter, tag2Filter, tag3Filter]);
 
   const influencerCampaignData = useMemo(() => {
     if (!allCampaignItems || !campaigns) return new Map();
@@ -740,6 +776,102 @@ export default function Discover() {
               </div>
             </PopoverContent>
           </Popover>
+
+          {/* Tag1 filter - multi-select */}
+          {uniqueTags.tag1.length > 0 && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-7 md:h-8 text-xs md:text-sm gap-1 min-w-[70px]" data-testid="button-tag1-filter">
+                  태그1 {tag1Filter.length > 0 && <Badge variant="secondary" className="h-4 px-1 text-[10px]">{tag1Filter.length}</Badge>}
+                  <ChevronDown className="w-3 h-3 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-40 p-2 max-h-60 overflow-y-auto" align="start">
+                <div className="space-y-1">
+                  {uniqueTags.tag1.map(tag => (
+                    <label key={tag} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer text-sm">
+                      <Checkbox 
+                        checked={tag1Filter.includes(tag)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setTag1Filter([...tag1Filter, tag]);
+                          } else {
+                            setTag1Filter(tag1Filter.filter(v => v !== tag));
+                          }
+                        }}
+                        data-testid={`checkbox-tag1-${tag}`}
+                      />
+                      <span className="truncate">{tag}</span>
+                    </label>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
+
+          {/* Tag2 filter - multi-select */}
+          {uniqueTags.tag2.length > 0 && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-7 md:h-8 text-xs md:text-sm gap-1 min-w-[70px]" data-testid="button-tag2-filter">
+                  태그2 {tag2Filter.length > 0 && <Badge variant="secondary" className="h-4 px-1 text-[10px]">{tag2Filter.length}</Badge>}
+                  <ChevronDown className="w-3 h-3 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-40 p-2 max-h-60 overflow-y-auto" align="start">
+                <div className="space-y-1">
+                  {uniqueTags.tag2.map(tag => (
+                    <label key={tag} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer text-sm">
+                      <Checkbox 
+                        checked={tag2Filter.includes(tag)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setTag2Filter([...tag2Filter, tag]);
+                          } else {
+                            setTag2Filter(tag2Filter.filter(v => v !== tag));
+                          }
+                        }}
+                        data-testid={`checkbox-tag2-${tag}`}
+                      />
+                      <span className="truncate">{tag}</span>
+                    </label>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
+
+          {/* Tag3 filter - multi-select */}
+          {uniqueTags.tag3.length > 0 && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-7 md:h-8 text-xs md:text-sm gap-1 min-w-[70px]" data-testid="button-tag3-filter">
+                  태그3 {tag3Filter.length > 0 && <Badge variant="secondary" className="h-4 px-1 text-[10px]">{tag3Filter.length}</Badge>}
+                  <ChevronDown className="w-3 h-3 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-40 p-2 max-h-60 overflow-y-auto" align="start">
+                <div className="space-y-1">
+                  {uniqueTags.tag3.map(tag => (
+                    <label key={tag} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer text-sm">
+                      <Checkbox 
+                        checked={tag3Filter.includes(tag)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setTag3Filter([...tag3Filter, tag]);
+                          } else {
+                            setTag3Filter(tag3Filter.filter(v => v !== tag));
+                          }
+                        }}
+                        data-testid={`checkbox-tag3-${tag}`}
+                      />
+                      <span className="truncate">{tag}</span>
+                    </label>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
         </div>
 
         {/* Client filter buttons */}
