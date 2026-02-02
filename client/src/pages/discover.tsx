@@ -337,13 +337,9 @@ export default function Discover() {
           </div>
           
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={handleCopyTemplate} disabled={isCopying} data-testid="button-copy-template">
-              <Copy className="w-3 h-3 mr-1" />
-              {KO.pages.discover.copyTemplate}
-            </Button>
             <Button variant="outline" size="sm" onClick={() => setIsPasteImportOpen(true)} data-testid="button-paste-import">
               <ClipboardPaste className="w-3 h-3 mr-1" />
-              {KO.pages.discover.pasteData}
+              대량 추가
             </Button>
             <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
               <DialogTrigger asChild>

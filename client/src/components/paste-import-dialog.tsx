@@ -7,13 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { AlertTriangle, CheckCircle, XCircle, Loader2, Plus, Trash2, ClipboardPaste, Upload } from "lucide-react";
+import { AlertTriangle, CheckCircle, XCircle, Loader2, Plus, Trash2, ClipboardPaste, Upload, Copy } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const FIXED_COLUMNS = [
   { key: 'nickname', label: '닉네임', required: true },
-  { key: 'handle', label: '플랫폼 계정', required: true },
-  { key: 'platform', label: '플랫폼', required: true },
+  { key: 'handle', label: '플랫폼 계정', required: false },
+  { key: 'platform', label: '플랫폼', required: false },
   { key: 'followers', label: '팔로워', required: false },
   { key: 'contactPoint', label: '이메일', required: false },
   { key: 'tag1', label: '태그1', required: false },
@@ -29,6 +29,8 @@ const FIXED_COLUMNS = [
 ];
 
 const ALLOWED_PLATFORMS = ['Instagram', 'YouTube', 'TikTok', 'X', 'Blog'];
+
+const TEMPLATE_HEADERS = FIXED_COLUMNS.map(col => col.label).join('\t');
 
 interface RowData {
   nickname: string;
@@ -92,8 +94,22 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
   const [isValidated, setIsValidated] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [results, setResults] = useState<BatchResult[] | null>(null);
+  const [isCopying, setIsCopying] = useState(false);
   const gridRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleCopyTemplate = async () => {
+    if (isCopying) return;
+    setIsCopying(true);
+    try {
+      await navigator.clipboard.writeText(TEMPLATE_HEADERS);
+      toast({ title: '템플릿 헤더가 복사되었습니다' });
+    } catch {
+      toast({ title: '복사 실패', variant: 'destructive' });
+    } finally {
+      setIsCopying(false);
+    }
+  };
 
   useEffect(() => {
     if (open) {
@@ -396,12 +412,7 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
       if (!row.nickname.trim()) {
         rowError.nickname = '닉네임은 필수입니다';
       }
-      if (!row.handle.trim()) {
-        rowError.handle = '플랫폼 계정은 필수입니다';
-      }
-      if (!row.platform.trim()) {
-        rowError.platform = '플랫폼은 필수입니다';
-      } else {
+      if (row.platform.trim()) {
         const normalized = normalizePlatform(row.platform);
         if (!normalized) {
           rowError.platform = `허용된 플랫폼: ${ALLOWED_PLATFORMS.join(', ')}`;
@@ -522,7 +533,18 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
             <ClipboardPaste className="w-4 h-4 mt-0.5 shrink-0" />
             <span>테이블에서 Ctrl+V (Cmd+V)로 붙여넣기하거나 CSV 파일을 업로드하세요.</span>
           </div>
-          <div className="flex items-center gap-2 ml-6">
+          <div className="flex flex-wrap items-center gap-2 ml-6">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="gap-1.5 bg-white dark:bg-gray-800" 
+              onClick={handleCopyTemplate}
+              disabled={isCopying}
+              data-testid="button-copy-template"
+            >
+              <Copy className="w-3.5 h-3.5" />
+              템플릿 복사
+            </Button>
             <Button 
               variant="outline" 
               size="sm" 
@@ -531,7 +553,7 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
               data-testid="button-csv-upload"
             >
               <Upload className="w-3.5 h-3.5" />
-              CSV 파일 업로드
+              CSV 업로드
             </Button>
             <input
               ref={fileInputRef}
@@ -540,9 +562,9 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
               className="hidden"
               onChange={handleCsvUpload}
             />
-            <span className="text-xs text-blue-600 dark:text-blue-400">
-              열 순서: 닉네임, 플랫폼 계정, 플랫폼, 팔로워, 이메일, 태그1~3, 메모, 단가 메모, 클라이언트...
-            </span>
+          </div>
+          <div className="ml-6 text-xs text-blue-600 dark:text-blue-400">
+            열 순서: 닉네임, 플랫폼 계정, 플랫폼, 팔로워, 이메일, 태그1~3, 메모, 단가 메모, 클라이언트...
           </div>
         </div>
 
