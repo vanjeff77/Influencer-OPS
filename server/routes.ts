@@ -131,17 +131,27 @@ export async function registerRoutes(
       return res.status(400).json({ message: 'items array is required' });
     }
 
-    // Normalize platform names
+    // Normalize platform names to short codes (IG, YT, etc.)
     const normalizePlatform = (platform: string): string => {
       const mapping: Record<string, string> = {
-        'instagram': 'Instagram',
-        'youtube': 'YouTube',
+        'instagram': 'IG',
+        'insta': 'IG',
+        'ig': 'IG',
+        '인스타': 'IG',
+        '인스타그램': 'IG',
+        'youtube': 'YT',
+        'yt': 'YT',
+        '유튜브': 'YT',
         'tiktok': 'TikTok',
+        '틱톡': 'TikTok',
         'x': 'X',
         'twitter': 'X',
+        '트위터': 'X',
         'blog': 'Blog',
+        '블로그': 'Blog',
+        '네이버블로그': 'Blog',
       };
-      return mapping[platform.toLowerCase()] || platform;
+      return mapping[platform.toLowerCase().trim()] || platform;
     };
 
     const results: Array<{ index: number; status: 'created' | 'failed'; reason?: string; influencerId?: number }> = [];
@@ -174,22 +184,28 @@ export async function registerRoutes(
 
         // Generate URL based on platform and handle
         const generateUrl = (platform: string, handle: string): string => {
+          if (!handle) return '';
           const cleanHandle = handle.replace(/^@/, '');
-          switch (platform.toLowerCase()) {
+          const platformLower = platform.toLowerCase();
+          switch (platformLower) {
+            case 'ig': 
             case 'instagram': return `https://instagram.com/${cleanHandle}`;
+            case 'yt':
             case 'youtube': return `https://youtube.com/@${cleanHandle}`;
             case 'tiktok': return `https://tiktok.com/@${cleanHandle}`;
             case 'x': return `https://x.com/${cleanHandle}`;
             case 'blog': return `https://blog.naver.com/${cleanHandle}`;
-            default: return `https://${platform.toLowerCase()}.com/${cleanHandle}`;
+            default: return `https://${platformLower}.com/${cleanHandle}`;
           }
         };
 
-        // Check for duplicates only if both handle and platform are provided
-        const hasAccount = item.handle?.trim() && item.platform?.trim();
-        const normalizedPlatform = hasAccount ? normalizePlatform(item.platform) : '';
+        // Check if platform is provided (handle is optional now)
+        const hasPlatform = item.platform?.trim();
+        const hasHandle = item.handle?.trim();
+        const normalizedPlatform = hasPlatform ? normalizePlatform(item.platform) : '';
         
-        if (hasAccount) {
+        // Check for duplicates only if both handle and platform are provided
+        if (hasPlatform && hasHandle) {
           const handleKey = `${normalizedPlatform.toLowerCase()}:${item.handle.toLowerCase().replace(/^@/, '')}`;
           if (existingHandles.has(handleKey)) {
             results.push({ index: i, status: 'failed', reason: `이미 존재하는 계정입니다 (${normalizedPlatform}: ${item.handle})` });
@@ -198,11 +214,11 @@ export async function registerRoutes(
           }
         }
 
-        // Build accounts array only if both handle and platform are provided
-        const accounts = hasAccount ? [{
+        // Build accounts array if platform is provided (handle is optional)
+        const accounts = hasPlatform ? [{
           platform: normalizedPlatform,
-          handle: item.handle.replace(/^@/, ''),
-          url: generateUrl(normalizedPlatform, item.handle),
+          handle: hasHandle ? item.handle.replace(/^@/, '') : '',
+          url: hasHandle ? generateUrl(normalizedPlatform, item.handle) : '',
           followers: item.followers || undefined,
         }] : [];
 
@@ -225,7 +241,7 @@ export async function registerRoutes(
           accounts
         });
 
-        if (hasAccount) {
+        if (hasPlatform && hasHandle) {
           const handleKey = `${normalizedPlatform.toLowerCase()}:${item.handle.toLowerCase().replace(/^@/, '')}`;
           existingHandles.add(handleKey);
         }
