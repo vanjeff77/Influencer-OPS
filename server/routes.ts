@@ -160,19 +160,14 @@ export async function registerRoutes(
       const item = items[i];
       
       try {
-        // Validate required fields
-        if (!item.nickname?.trim() || !item.handle?.trim() || !item.platform?.trim()) {
-          results.push({ index: i, status: 'failed', reason: '필수 필드가 누락되었습니다' });
-          failedCount++;
-          continue;
+        // Validate required fields with detailed error messages
+        const missingFields: string[] = [];
+        if (!item.nickname?.trim()) {
+          missingFields.push('닉네임');
         }
-
-        const normalizedPlatform = normalizePlatform(item.platform);
         
-        // Check for duplicates in DB
-        const handleKey = `${normalizedPlatform.toLowerCase()}:${item.handle.toLowerCase().replace(/^@/, '')}`;
-        if (existingHandles.has(handleKey)) {
-          results.push({ index: i, status: 'failed', reason: '이미 존재하는 계정입니다' });
+        if (missingFields.length > 0) {
+          results.push({ index: i, status: 'failed', reason: `필수 필드 누락: ${missingFields.join(', ')}` });
           failedCount++;
           continue;
         }
@@ -190,6 +185,27 @@ export async function registerRoutes(
           }
         };
 
+        // Check for duplicates only if both handle and platform are provided
+        const hasAccount = item.handle?.trim() && item.platform?.trim();
+        const normalizedPlatform = hasAccount ? normalizePlatform(item.platform) : '';
+        
+        if (hasAccount) {
+          const handleKey = `${normalizedPlatform.toLowerCase()}:${item.handle.toLowerCase().replace(/^@/, '')}`;
+          if (existingHandles.has(handleKey)) {
+            results.push({ index: i, status: 'failed', reason: `이미 존재하는 계정입니다 (${normalizedPlatform}: ${item.handle})` });
+            failedCount++;
+            continue;
+          }
+        }
+
+        // Build accounts array only if both handle and platform are provided
+        const accounts = hasAccount ? [{
+          platform: normalizedPlatform,
+          handle: item.handle.replace(/^@/, ''),
+          url: generateUrl(normalizedPlatform, item.handle),
+          followers: item.followers || undefined,
+        }] : [];
+
         // Create influencer
         const inf = await storage.createInfluencer(wId, {
           name: item.nickname.trim(),
@@ -206,15 +222,13 @@ export async function registerRoutes(
           replyStatus: item.replyStatus || undefined,
           collabStatus: item.collabStatus || undefined,
           finalContentUrl: item.finalContentUrl || undefined,
-          accounts: [{
-            platform: normalizedPlatform,
-            handle: item.handle.replace(/^@/, ''),
-            url: generateUrl(normalizedPlatform, item.handle),
-            followers: item.followers || undefined,
-          }]
+          accounts
         });
 
-        existingHandles.add(handleKey);
+        if (hasAccount) {
+          const handleKey = `${normalizedPlatform.toLowerCase()}:${item.handle.toLowerCase().replace(/^@/, '')}`;
+          existingHandles.add(handleKey);
+        }
         results.push({ index: i, status: 'created', influencerId: inf.id });
         createdCount++;
       } catch (err: any) {
