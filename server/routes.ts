@@ -120,6 +120,11 @@ export async function registerRoutes(
       tag3?: string | null;
       memo?: string | null;
       priceMemo?: string | null;
+      client?: string | null;
+      contactStatus?: string | null;
+      replyStatus?: string | null;
+      collabStatus?: string | null;
+      finalContentUrl?: string | null;
     }> };
 
     if (!Array.isArray(items) || items.length === 0) {
@@ -190,11 +195,17 @@ export async function registerRoutes(
           name: item.nickname.trim(),
           email: item.contactPoint?.includes('@') ? item.contactPoint : undefined,
           phone: item.contactPoint && !item.contactPoint.includes('@') ? item.contactPoint : undefined,
+          contactPoint: item.contactPoint || undefined,
           memo: item.memo || undefined,
           priceMemo: item.priceMemo || undefined,
           tag1: item.tag1 || undefined,
           tag2: item.tag2 || undefined,
           tag3: item.tag3 || undefined,
+          client: item.client || undefined,
+          contactStatus: item.contactStatus || undefined,
+          replyStatus: item.replyStatus || undefined,
+          collabStatus: item.collabStatus || undefined,
+          finalContentUrl: item.finalContentUrl || undefined,
           accounts: [{
             platform: normalizedPlatform,
             handle: item.handle.replace(/^@/, ''),

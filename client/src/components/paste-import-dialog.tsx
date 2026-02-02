@@ -15,12 +15,17 @@ const FIXED_COLUMNS = [
   { key: 'handle', label: '플랫폼 계정', required: true },
   { key: 'platform', label: '플랫폼', required: true },
   { key: 'followers', label: '팔로워', required: false },
-  { key: 'contactPoint', label: '컨택포인트', required: false },
+  { key: 'contactPoint', label: '이메일', required: false },
   { key: 'tag1', label: '태그1', required: false },
   { key: 'tag2', label: '태그2', required: false },
   { key: 'tag3', label: '태그3', required: false },
   { key: 'memo', label: '메모', required: false },
   { key: 'priceMemo', label: '단가 메모', required: false },
+  { key: 'client', label: '클라이언트', required: false },
+  { key: 'contactStatus', label: '컨택여부', required: false },
+  { key: 'replyStatus', label: '회신 여부', required: false },
+  { key: 'collabStatus', label: '협업 여부', required: false },
+  { key: 'finalContentUrl', label: '콘텐츠 완성본 링크', required: false },
 ];
 
 const ALLOWED_PLATFORMS = ['Instagram', 'YouTube', 'TikTok', 'X', 'Blog'];
@@ -36,6 +41,11 @@ interface RowData {
   tag3: string;
   memo: string;
   priceMemo: string;
+  client: string;
+  contactStatus: string;
+  replyStatus: string;
+  collabStatus: string;
+  finalContentUrl: string;
 }
 
 interface RowError {
@@ -68,6 +78,11 @@ const createEmptyRow = (): RowData => ({
   tag3: '',
   memo: '',
   priceMemo: '',
+  client: '',
+  contactStatus: '',
+  replyStatus: '',
+  collabStatus: '',
+  finalContentUrl: '',
 });
 
 export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportComplete }: PasteImportDialogProps) {
@@ -177,6 +192,11 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
         tag3: (cells[7] || '').trim(),
         memo: (cells[8] || '').trim(),
         priceMemo: (cells[9] || '').trim(),
+        client: (cells[10] || '').trim(),
+        contactStatus: (cells[11] || '').trim(),
+        replyStatus: (cells[12] || '').trim(),
+        collabStatus: (cells[13] || '').trim(),
+        finalContentUrl: (cells[14] || '').trim(),
       };
       if (row.nickname || row.handle || row.platform) {
         parsedRows.push(row);
@@ -264,6 +284,11 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
         tag3: row.tag3.trim() || null,
         memo: row.memo.trim() || null,
         priceMemo: row.priceMemo.trim() || null,
+        client: row.client.trim() || null,
+        contactStatus: row.contactStatus.trim() || null,
+        replyStatus: row.replyStatus.trim() || null,
+        collabStatus: row.collabStatus.trim() || null,
+        finalContentUrl: row.finalContentUrl.trim() || null,
       }));
 
       const response = await apiRequest('POST', `/api/workspaces/${workspaceId}/influencers/batch`, { items });
