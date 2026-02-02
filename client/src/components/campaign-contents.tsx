@@ -179,23 +179,16 @@ export function CampaignContents({ campaignId, lineItems }: CampaignContentsProp
                     onClick={() => handleItemSelect(item)}
                     data-testid={`row-content-item-${item.id}`}
                   >
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Avatar className="h-8 w-8">
-                          <AvatarFallback className="text-xs bg-gradient-to-br from-purple-100 to-purple-200 text-purple-700">
-                            {item.influencer?.name?.substring(0, 2) || "?"}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium truncate">{item.influencer?.name || "Unknown"}</p>
-                          <div className="flex items-center gap-1">
-                            {item.influencer?.accounts?.slice(0, 2).map((acc, i) => (
-                              <PlatformIcon key={i} p={acc.platform} />
-                            ))}
-                            <span className="text-xs text-muted-foreground truncate">
-                              {item.influencer?.accounts?.[0]?.handle}
-                            </span>
-                          </div>
+                    <TableCell className="py-1.5">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{item.influencer?.name || "Unknown"}</p>
+                        <div className="flex items-center gap-1">
+                          {item.influencer?.accounts?.slice(0, 2).map((acc, i) => (
+                            <PlatformIcon key={i} p={acc.platform} />
+                          ))}
+                          <span className="text-xs text-muted-foreground truncate">
+                            {item.influencer?.accounts?.[0]?.handle}
+                          </span>
                         </div>
                       </div>
                     </TableCell>

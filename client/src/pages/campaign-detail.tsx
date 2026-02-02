@@ -128,8 +128,17 @@ export default function CampaignDetail() {
   const contractedCount = campaign.items?.filter(i => i.contractStatus === 'signed').length || 0;
   const paidCount = campaign.items?.filter(i => i.paymentStatus === 'paid').length || 0;
 
-  const handleStatusUpdate = (itemId: number, field: string, value: string) => {
-    updateItem.mutate({ id: itemId, updates: { [field]: value } }, {
+  const handleStatusUpdate = (itemId: number, field: string, value: string | number | Date | null) => {
+    const item = campaign.items?.find(i => i.id === itemId);
+    const updates: Record<string, any> = { [field]: value };
+    
+    if (field === 'payoutAmountSupply' || field === 'payoutVat') {
+      const supply = field === 'payoutAmountSupply' ? (value as number) : (item?.payoutAmountSupply || 0);
+      const vat = field === 'payoutVat' ? (value as number) : (item?.payoutVat || 0);
+      updates.payoutTotal = supply + vat;
+    }
+    
+    updateItem.mutate({ id: itemId, updates }, {
       onSuccess: () => toast({ title: "상태가 업데이트되었습니다." })
     });
   };
@@ -291,7 +300,7 @@ export default function CampaignDetail() {
 
         <Tabs defaultValue="influencers" className="w-full">
           <TabsList className="mb-4 flex-wrap">
-            <TabsTrigger value="influencers">인플루언서</TabsTrigger>
+            <TabsTrigger value="influencers">선정</TabsTrigger>
             <TabsTrigger value="communication" className="flex items-center gap-1">
               <MessageCircle className="w-4 h-4" />
               {KO.pages.communication.title}
@@ -335,17 +344,10 @@ export default function CampaignDetail() {
                         onClick={() => setSelectedLineItem(item)}
                         data-testid={`row-campaign-item-${item.id}`}
                       >
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-8 w-8">
-                              <AvatarFallback className="text-xs">
-                                {item.influencer?.name?.substring(0, 2) || 'IN'}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <div className="font-medium">{item.influencer?.name || `인플루언서 #${item.influencerId}`}</div>
-                              <div className="text-xs text-muted-foreground">{item.influencer?.email}</div>
-                            </div>
+                        <TableCell className="py-1.5">
+                          <div>
+                            <div className="font-medium">{item.influencer?.name || `인플루언서 #${item.influencerId}`}</div>
+                            <div className="text-xs text-muted-foreground">{item.influencer?.email}</div>
                           </div>
                         </TableCell>
                         <TableCell>
@@ -489,17 +491,137 @@ export default function CampaignDetail() {
                   </div>
                   <div className="p-4 bg-muted/30 rounded-lg">
                     <div className="text-sm text-muted-foreground">지급 완료</div>
-                    <div className="text-2xl font-bold">
-                      {(campaign.items?.filter(i => i.paymentStatus === 'paid').reduce((a, b) => a + (b.payAmount || 0), 0) || 0).toLocaleString()}원
+                    <div className="text-2xl font-bold text-green-600">
+                      {(campaign.items?.filter(i => i.payoutStatus === '지급완료').reduce((a, b) => a + ((b.payoutAmountSupply || 0) + (b.payoutVat || 0)), 0) || 0).toLocaleString()}원
                     </div>
                   </div>
                   <div className="p-4 bg-muted/30 rounded-lg">
                     <div className="text-sm text-muted-foreground">지급 대기</div>
                     <div className="text-2xl font-bold text-orange-600">
-                      {(campaign.items?.filter(i => i.paymentStatus !== 'paid').reduce((a, b) => a + (b.payAmount || 0), 0) || 0).toLocaleString()}원
+                      {(campaign.items?.filter(i => i.payoutStatus !== '지급완료').reduce((a, b) => a + ((b.payoutAmountSupply || 0) + (b.payoutVat || 0)), 0) || 0).toLocaleString()}원
                     </div>
                   </div>
                 </div>
+                
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>인플루언서</TableHead>
+                      <TableHead>정산상태</TableHead>
+                      <TableHead className="text-right">공급가</TableHead>
+                      <TableHead className="text-right">VAT</TableHead>
+                      <TableHead className="text-right">총액</TableHead>
+                      <TableHead>지급예정일</TableHead>
+                      <TableHead>메모</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {campaign.items?.map((item) => (
+                        <TableRow key={item.id} data-testid={`row-settlement-${item.id}`}>
+                          <TableCell className="py-1.5">
+                            <div className="font-medium text-sm">{item.influencer?.name || '-'}</div>
+                          </TableCell>
+                          <TableCell>
+                            <Select 
+                              value={item.payoutStatus || "정산정보미비"} 
+                              onValueChange={(val) => handleStatusUpdate(item.id, 'payoutStatus', val)}
+                            >
+                              <SelectTrigger 
+                                className={`w-[110px] h-7 text-xs border-0 ${
+                                  item.payoutStatus === '지급완료' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
+                                  item.payoutStatus === '지급대기' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
+                                  item.payoutStatus === '보류' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
+                                  'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400'
+                                }`}
+                                data-testid={`select-payout-status-${item.id}`}
+                              >
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="정산정보미비" data-testid={`option-정산정보미비-${item.id}`}>정산정보미비</SelectItem>
+                                <SelectItem value="증빙요청" data-testid={`option-증빙요청-${item.id}`}>증빙요청</SelectItem>
+                                <SelectItem value="증빙수령" data-testid={`option-증빙수령-${item.id}`}>증빙수령</SelectItem>
+                                <SelectItem value="지급대기" data-testid={`option-지급대기-${item.id}`}>지급대기</SelectItem>
+                                <SelectItem value="지급완료" data-testid={`option-지급완료-${item.id}`}>지급완료</SelectItem>
+                                <SelectItem value="보류" data-testid={`option-보류-${item.id}`}>보류</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Input 
+                              type="number"
+                              className="w-24 h-7 text-xs text-right"
+                              key={`supply-${item.id}-${item.payoutAmountSupply}`}
+                              defaultValue={item.payoutAmountSupply || ""}
+                              placeholder="0"
+                              onBlur={(e) => {
+                                const val = parseInt(e.target.value) || 0;
+                                if (val !== (item.payoutAmountSupply || 0)) {
+                                  handleStatusUpdate(item.id, 'payoutAmountSupply', val);
+                                }
+                              }}
+                              data-testid={`input-supply-${item.id}`}
+                            />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Input 
+                              type="number"
+                              className="w-20 h-7 text-xs text-right"
+                              key={`vat-${item.id}-${item.payoutVat}`}
+                              defaultValue={item.payoutVat || ""}
+                              placeholder="0"
+                              onBlur={(e) => {
+                                const val = parseInt(e.target.value) || 0;
+                                if (val !== (item.payoutVat || 0)) {
+                                  handleStatusUpdate(item.id, 'payoutVat', val);
+                                }
+                              }}
+                              data-testid={`input-vat-${item.id}`}
+                            />
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
+                            {((item.payoutAmountSupply || 0) + (item.payoutVat || 0)).toLocaleString()}원
+                          </TableCell>
+                          <TableCell>
+                            <Input 
+                              type="date"
+                              className="w-28 h-7 text-xs"
+                              key={`due-${item.id}-${item.payoutDueAt}`}
+                              defaultValue={item.payoutDueAt ? new Date(item.payoutDueAt).toISOString().split('T')[0] : ""}
+                              onBlur={(e) => {
+                                const oldDate = item.payoutDueAt ? new Date(item.payoutDueAt).toISOString().split('T')[0] : "";
+                                if (e.target.value !== oldDate) {
+                                  handleStatusUpdate(item.id, 'payoutDueAt', e.target.value ? new Date(e.target.value).toISOString() : null);
+                                }
+                              }}
+                              data-testid={`input-due-${item.id}`}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Input 
+                              className="w-32 h-7 text-xs"
+                              key={`memo-${item.id}-${item.payoutMemo}`}
+                              defaultValue={item.payoutMemo || ""}
+                              placeholder="메모"
+                              onBlur={(e) => {
+                                if (e.target.value !== (item.payoutMemo || '')) {
+                                  handleStatusUpdate(item.id, 'payoutMemo', e.target.value);
+                                }
+                              }}
+                              data-testid={`input-memo-${item.id}`}
+                            />
+                          </TableCell>
+                        </TableRow>
+                    ))}
+                    {(!campaign.items || campaign.items.length === 0) && (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                          등록된 인플루언서가 없습니다.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
           </TabsContent>

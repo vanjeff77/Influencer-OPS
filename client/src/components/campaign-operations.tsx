@@ -246,23 +246,16 @@ export function CampaignOperations({ campaignId, lineItems }: CampaignOperations
                         onClick={() => setSelectedItemId(item.id)}
                         data-testid={`row-operations-item-${item.id}`}
                       >
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Avatar className="h-7 w-7">
-                              <AvatarFallback className="text-xs">
-                                {item.influencer?.name?.substring(0, 2) || 'IN'}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <div className="font-medium text-sm">{item.influencer?.name || '-'}</div>
-                              <div className="flex items-center gap-1">
-                                {item.influencer?.accounts?.[0] && (
-                                  <PlatformIcon p={item.influencer.accounts[0].platform} />
-                                )}
-                                <span className="text-xs text-muted-foreground">
-                                  {item.influencer?.accounts?.[0]?.followers?.toLocaleString() || 0}
-                                </span>
-                              </div>
+                        <TableCell className="py-1.5">
+                          <div>
+                            <div className="font-medium text-sm">{item.influencer?.name || '-'}</div>
+                            <div className="flex items-center gap-1">
+                              {item.influencer?.accounts?.[0] && (
+                                <PlatformIcon p={item.influencer.accounts[0].platform} />
+                              )}
+                              <span className="text-xs text-muted-foreground">
+                                {item.influencer?.accounts?.[0]?.followers?.toLocaleString() || 0}
+                              </span>
                             </div>
                           </div>
                         </TableCell>
