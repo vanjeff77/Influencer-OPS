@@ -8,11 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
@@ -429,8 +427,8 @@ export function CampaignOperations({ campaignId, lineItems }: CampaignOperations
         </CardContent>
       </Card>
 
-      <Sheet open={!!selectedItemId} onOpenChange={(open) => !open && setSelectedItemId(null)}>
-        <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
+      <Dialog open={!!selectedItemId} onOpenChange={(open) => !open && setSelectedItemId(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           {isLoadingDetails ? (
             <div className="space-y-4 p-4">
               <Skeleton className="h-8 w-48" />
@@ -444,8 +442,8 @@ export function CampaignOperations({ campaignId, lineItems }: CampaignOperations
               isSaving={updateOperations.isPending}
             />
           ) : null}
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
 
       <ContractGenerateDialog 
         item={contractDialogItem}
@@ -486,21 +484,26 @@ function OperationsPanel({ item, onUpdate, isSaving }: OperationsPanelProps) {
   };
 
   return (
-    <div className="space-y-4">
-      <SheetHeader>
-        <SheetTitle className="flex items-center gap-2">
-          <Avatar className="h-8 w-8">
-            <AvatarFallback>{item.influencer?.name?.substring(0, 2) || 'IN'}</AvatarFallback>
+    <div className="space-y-6">
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-3">
+          <Avatar className="h-10 w-10">
+            <AvatarFallback className="bg-gradient-to-br from-blue-100 to-blue-200 text-blue-700">
+              {item.influencer?.name?.substring(0, 2) || 'IN'}
+            </AvatarFallback>
           </Avatar>
-          {item.influencer?.name || KO.pages.operations.influencer}
-        </SheetTitle>
-        <SheetDescription>
-          {item.influencer?.email || KO.pages.discover.noEmail}
-        </SheetDescription>
-      </SheetHeader>
+          <div>
+            <span className="text-lg">{item.influencer?.name || KO.pages.operations.influencer}</span>
+            <p className="text-sm font-normal text-muted-foreground">{item.influencer?.email || KO.pages.discover.noEmail}</p>
+          </div>
+        </DialogTitle>
+        <DialogDescription className="sr-only">
+          인플루언서 운영 상세 정보 편집
+        </DialogDescription>
+      </DialogHeader>
 
       {hasDanger && (
-        <div className="bg-red-50 border border-red-200 rounded-md p-3 flex items-center gap-2">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-center gap-2">
           <AlertTriangle className="w-5 h-5 text-red-600" />
           <div className="flex flex-wrap gap-1">
             {dueBadges.filter(b => b.type === 'danger').map((b, i) => (
@@ -510,11 +513,11 @@ function OperationsPanel({ item, onUpdate, isSaving }: OperationsPanelProps) {
         </div>
       )}
 
-      <Accordion type="multiple" defaultValue={["status", "offer", "contract", "schedule"]} className="w-full">
-        <AccordionItem value="status">
-          <AccordionTrigger>{KO.pages.operations.panel.status}</AccordionTrigger>
-          <AccordionContent className="space-y-4">
-            <div className="grid grid-cols-1 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="space-y-6">
+          <div className="space-y-4">
+            <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">{KO.pages.operations.panel.status}</h3>
+            <div className="grid grid-cols-1 gap-3">
               <div className="space-y-2">
                 <Label>{KO.pages.operations.stage}</Label>
                 <Select value={localItem.stage || "선정완료"} onValueChange={(val) => setLocalItem({...localItem, stage: val})}>
@@ -549,99 +552,11 @@ function OperationsPanel({ item, onUpdate, isSaving }: OperationsPanelProps) {
                 </Select>
               </div>
             </div>
-          </AccordionContent>
-        </AccordionItem>
+          </div>
 
-        <AccordionItem value="offer">
-          <AccordionTrigger>{KO.pages.operations.panel.offer}</AccordionTrigger>
-          <AccordionContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>{KO.pages.operations.panel.fee}</Label>
-                <Input
-                  type="number"
-                  value={localItem.offerFee || ""}
-                  onChange={(e) => setLocalItem({...localItem, offerFee: parseInt(e.target.value) || null})}
-                  placeholder="0"
-                  data-testid="input-offer-fee"
-                />
-              </div>
-              <div className="space-y-2 flex items-end gap-2">
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="vatIncluded"
-                    checked={localItem.offerVatIncluded || false}
-                    onCheckedChange={(checked) => setLocalItem({...localItem, offerVatIncluded: !!checked})}
-                    data-testid="checkbox-vat"
-                  />
-                  <Label htmlFor="vatIncluded">{KO.pages.operations.panel.vatIncluded}</Label>
-                </div>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>{KO.pages.operations.panel.usageMonths}</Label>
-                <Input
-                  type="number"
-                  value={localItem.offerUsageMonths || ""}
-                  onChange={(e) => setLocalItem({...localItem, offerUsageMonths: parseInt(e.target.value) || null})}
-                  placeholder="예: 6"
-                  data-testid="input-usage-months"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>{KO.pages.operations.panel.usageNote}</Label>
-                <Input
-                  value={localItem.offerUsageNote || ""}
-                  onChange={(e) => setLocalItem({...localItem, offerUsageNote: e.target.value})}
-                  placeholder="SNS 재게시 등"
-                  data-testid="input-usage-note"
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>{KO.pages.operations.panel.deadlineNote}</Label>
-              <Input
-                value={localItem.offerDeadlineNote || ""}
-                onChange={(e) => setLocalItem({...localItem, offerDeadlineNote: e.target.value})}
-                placeholder="촬영 후 3일 이내 초안 전달"
-                data-testid="input-deadline-note"
-              />
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-
-        <AccordionItem value="contract">
-          <AccordionTrigger>{KO.pages.operations.panel.contractSection}</AccordionTrigger>
-          <AccordionContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>{KO.pages.operations.panel.contractUrl}</Label>
-              <Input
-                value={localItem.contractUrl || ""}
-                onChange={(e) => setLocalItem({...localItem, contractUrl: e.target.value})}
-                placeholder="https://..."
-                data-testid="input-contract-url"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>{KO.pages.operations.panel.contractFileId}</Label>
-              <Input
-                value={localItem.contractFileId || ""}
-                onChange={(e) => setLocalItem({...localItem, contractFileId: e.target.value})}
-                placeholder="파일 ID 또는 URL"
-                data-testid="input-contract-file"
-              />
-            </div>
-            <div className="text-sm text-muted-foreground">
-              {KO.pages.operations.panel.currentStatus}: {localItem.contractUrl && localItem.contractFileId ? KO.pages.operations.panel.linkAndFile : localItem.contractUrl ? KO.pages.operations.panel.linkOnly : localItem.contractFileId ? KO.pages.operations.panel.fileOnly : KO.pages.operations.panel.notAttached}
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-
-        <AccordionItem value="schedule">
-          <AccordionTrigger>{KO.pages.operations.panel.schedule}</AccordionTrigger>
-          <AccordionContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-4">
+            <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">{KO.pages.operations.panel.schedule}</h3>
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>{KO.pages.operations.panel.draftDueAt}</Label>
                 <Popover>
@@ -691,11 +606,99 @@ function OperationsPanel({ item, onUpdate, isSaving }: OperationsPanelProps) {
                 </Popover>
               </div>
             </div>
-          </AccordionContent>
-        </AccordionItem>
-      </Accordion>
+          </div>
+        </div>
 
-      <div className="sticky bottom-0 bg-background pt-4 border-t">
+        <div className="space-y-6">
+          <div className="space-y-4">
+            <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">{KO.pages.operations.panel.offer}</h3>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>{KO.pages.operations.panel.fee}</Label>
+                  <Input
+                    type="number"
+                    value={localItem.offerFee || ""}
+                    onChange={(e) => setLocalItem({...localItem, offerFee: parseInt(e.target.value) || null})}
+                    placeholder="0"
+                    data-testid="input-offer-fee"
+                  />
+                </div>
+                <div className="space-y-2 flex items-end">
+                  <div className="flex items-center gap-2 h-9">
+                    <Checkbox
+                      id="vatIncluded"
+                      checked={localItem.offerVatIncluded || false}
+                      onCheckedChange={(checked) => setLocalItem({...localItem, offerVatIncluded: !!checked})}
+                      data-testid="checkbox-vat"
+                    />
+                    <Label htmlFor="vatIncluded" className="text-sm">{KO.pages.operations.panel.vatIncluded}</Label>
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>{KO.pages.operations.panel.usageMonths}</Label>
+                  <Input
+                    type="number"
+                    value={localItem.offerUsageMonths || ""}
+                    onChange={(e) => setLocalItem({...localItem, offerUsageMonths: parseInt(e.target.value) || null})}
+                    placeholder="예: 6"
+                    data-testid="input-usage-months"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>{KO.pages.operations.panel.usageNote}</Label>
+                  <Input
+                    value={localItem.offerUsageNote || ""}
+                    onChange={(e) => setLocalItem({...localItem, offerUsageNote: e.target.value})}
+                    placeholder="SNS 재게시 등"
+                    data-testid="input-usage-note"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>{KO.pages.operations.panel.deadlineNote}</Label>
+                <Input
+                  value={localItem.offerDeadlineNote || ""}
+                  onChange={(e) => setLocalItem({...localItem, offerDeadlineNote: e.target.value})}
+                  placeholder="촬영 후 3일 이내 초안 전달"
+                  data-testid="input-deadline-note"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">{KO.pages.operations.panel.contractSection}</h3>
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label>{KO.pages.operations.panel.contractUrl}</Label>
+                <Input
+                  value={localItem.contractUrl || ""}
+                  onChange={(e) => setLocalItem({...localItem, contractUrl: e.target.value})}
+                  placeholder="https://..."
+                  data-testid="input-contract-url"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{KO.pages.operations.panel.contractFileId}</Label>
+                <Input
+                  value={localItem.contractFileId || ""}
+                  onChange={(e) => setLocalItem({...localItem, contractFileId: e.target.value})}
+                  placeholder="파일 ID 또는 URL"
+                  data-testid="input-contract-file"
+                />
+              </div>
+              <div className="text-sm text-muted-foreground p-2 bg-muted/50 rounded">
+                {KO.pages.operations.panel.currentStatus}: {localItem.contractUrl && localItem.contractFileId ? KO.pages.operations.panel.linkAndFile : localItem.contractUrl ? KO.pages.operations.panel.linkOnly : localItem.contractFileId ? KO.pages.operations.panel.fileOnly : KO.pages.operations.panel.notAttached}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="pt-4 border-t">
         <Button className="w-full" onClick={handleSave} disabled={isSaving} data-testid="button-save-operations">
           <Save className="w-4 h-4 mr-2" />
           {isSaving ? KO.pages.operations.panel.saving : KO.pages.operations.panel.save}

@@ -7,13 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { 
   Search, ExternalLink, Save, FileText, CheckCircle2, Image,
-  Instagram, Youtube, Twitter
+  Instagram, Youtube, Twitter, Copy
 } from "lucide-react";
 import type { CampaignInfluencer, Influencer, InfluencerAccount, FeedbackNote, User } from "@shared/schema";
 import { KO } from "@/i18n/ko";
@@ -276,44 +276,90 @@ export function CampaignContents({ campaignId, lineItems }: CampaignContentsProp
         </CardContent>
       </Card>
 
-      <Sheet open={!!selectedItemId} onOpenChange={(open) => !open && setSelectedItemId(null)}>
-        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle className="flex items-center gap-2">
-              <Image className="w-5 h-5" />
-              콘텐츠 정보
-            </SheetTitle>
-            <SheetDescription>
-              {selectedItem?.influencer?.name || "인플루언서"} - 초안/완성본 관리
-            </SheetDescription>
-          </SheetHeader>
+      <Dialog open={!!selectedItemId} onOpenChange={(open) => !open && setSelectedItemId(null)}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="flex flex-row items-center justify-between">
+            <div>
+              <DialogTitle className="flex items-center gap-2">
+                <Image className="w-5 h-5" />
+                콘텐츠 정보
+              </DialogTitle>
+              <DialogDescription>
+                {selectedItem?.influencer?.name || "인플루언서"} - 초안/완성본 관리
+              </DialogDescription>
+            </div>
+          </DialogHeader>
 
           {selectedItem && (
-            <div className="mt-6 space-y-6">
-              <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                <Avatar className="h-10 w-10">
-                  <AvatarFallback className="bg-gradient-to-br from-purple-100 to-purple-200 text-purple-700">
-                    {selectedItem.influencer?.name?.substring(0, 2) || "?"}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="font-medium">{selectedItem.influencer?.name}</p>
-                  <div className="flex items-center gap-1">
-                    {selectedItem.influencer?.accounts?.map((acc, i) => (
-                      <PlatformIcon key={i} p={acc.platform} />
-                    ))}
-                    <span className="text-xs text-muted-foreground">
-                      {selectedItem.influencer?.accounts?.[0]?.handle}
-                    </span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 p-4 bg-muted/50 rounded-lg">
+                  <Avatar className="h-12 w-12">
+                    <AvatarFallback className="bg-gradient-to-br from-purple-100 to-purple-200 text-purple-700 text-lg">
+                      {selectedItem.influencer?.name?.substring(0, 2) || "?"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="font-medium text-base">{selectedItem.influencer?.name}</p>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      {selectedItem.influencer?.accounts?.map((acc, i) => (
+                        <PlatformIcon key={i} p={acc.platform} />
+                      ))}
+                      <span className="text-sm text-muted-foreground">
+                        {selectedItem.influencer?.accounts?.[0]?.handle}
+                      </span>
+                    </div>
                   </div>
+                </div>
+
+                {selectedItem.finalUrl && (
+                  <Card className="overflow-hidden">
+                    <div className="aspect-video bg-muted flex items-center justify-center">
+                      <Image className="w-12 h-12 text-muted-foreground/50" />
+                    </div>
+                    <CardContent className="p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium truncate flex-1 mr-2">게시 콘텐츠</span>
+                        <div className="flex gap-1">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-7 w-7"
+                            onClick={() => navigator.clipboard.writeText(finalUrl).then(() => toast({ title: "URL이 복사되었습니다" }))}
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-7 w-7"
+                            onClick={() => window.open(finalUrl, '_blank')}
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                <div>
+                  <label className="text-sm font-medium">내부 피드백</label>
+                  <Textarea
+                    value={internalFeedback}
+                    onChange={e => setInternalFeedback(e.target.value)}
+                    placeholder="초안에 대한 내부 피드백을 작성하세요..."
+                    className="mt-2 min-h-[140px]"
+                    data-testid="textarea-internal-feedback"
+                  />
                 </div>
               </div>
 
               <div className="space-y-4">
-                <div>
+                <div className="space-y-3">
                   <label className="text-sm font-medium">검토 상태</label>
                   <Select value={reviewStatus} onValueChange={setReviewStatus}>
-                    <SelectTrigger className="mt-1" data-testid="select-review-status">
+                    <SelectTrigger data-testid="select-review-status">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -324,9 +370,9 @@ export function CampaignContents({ campaignId, lineItems }: CampaignContentsProp
                   </Select>
                 </div>
 
-                <div>
+                <div className="space-y-3">
                   <label className="text-sm font-medium">초안 링크</label>
-                  <div className="flex gap-2 mt-1">
+                  <div className="flex gap-2">
                     <Input
                       value={draftUrl}
                       onChange={e => setDraftUrl(e.target.value)}
@@ -345,9 +391,9 @@ export function CampaignContents({ campaignId, lineItems }: CampaignContentsProp
                   </div>
                 </div>
 
-                <div>
+                <div className="space-y-3">
                   <label className="text-sm font-medium">완성본/게시 URL</label>
-                  <div className="flex gap-2 mt-1">
+                  <div className="flex gap-2">
                     <Input
                       value={finalUrl}
                       onChange={e => setFinalUrl(e.target.value)}
@@ -366,31 +412,22 @@ export function CampaignContents({ campaignId, lineItems }: CampaignContentsProp
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-sm font-medium">내부 피드백</label>
-                  <Textarea
-                    value={internalFeedback}
-                    onChange={e => setInternalFeedback(e.target.value)}
-                    placeholder="초안에 대한 내부 피드백을 작성하세요..."
-                    className="mt-1 min-h-[120px]"
-                    data-testid="textarea-internal-feedback"
-                  />
+                <div className="pt-4 border-t">
+                  <Button 
+                    onClick={handleSave} 
+                    disabled={updateContent.isPending}
+                    className="w-full"
+                    data-testid="button-save-content"
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    {updateContent.isPending ? "저장 중..." : "저장"}
+                  </Button>
                 </div>
-
-                <Button 
-                  onClick={handleSave} 
-                  disabled={updateContent.isPending}
-                  className="w-full"
-                  data-testid="button-save-content"
-                >
-                  <Save className="w-4 h-4 mr-2" />
-                  {updateContent.isPending ? "저장 중..." : "저장"}
-                </Button>
               </div>
             </div>
           )}
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
