@@ -409,8 +409,7 @@ export default function EmailCenter() {
           <div className="col-span-5 bg-card rounded-xl border border-border flex flex-col overflow-hidden">
             {selectedThread ? (
               <div className="flex flex-col h-full">
-                <div className="p-6 border-b border-border">
-                  <h2 className="text-xl font-bold leading-tight mb-2">{selectedThread.subject}</h2>
+                <div className="p-4 border-b border-border">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Clock className="w-4 h-4" />
                     {selectedThread.lastMessageDate ? format(new Date(selectedThread.lastMessageDate), 'PPP p') : ''}
