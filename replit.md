@@ -69,8 +69,12 @@ Preferred communication style: Simple, everyday language.
 - **Security**: IMAP password encryption (AES-256-CBC), Zod validation, authentication and workspace authorization checks for sensitive operations.
 - **Contract Template Management (계약서 템플릿)**:
     - **Template CRUD**: Full create, read, update, delete operations for contract templates in Settings page with default template marking.
+    - **Rich Text Editor**: React-Quill WYSIWYG editor for template content with bold, italic, underline, headers, lists, colors, and tables.
     - **Variable Substitution**: Supports {{인플루언서명}}, {{캠페인명}}, {{금액}}, {{날짜}}, {{초안예정일}}, {{업로드예정일}}, {{클라이언트명}}, {{이메일}}, {{연락처}} placeholders.
-    - **Dual Format Export**: Generate contracts as DOCX (docx library) or PDF (pdfkit library) from Operations tab.
+    - **Dual Format Export**: 
+        - DOCX: Uses html-to-docx library for full HTML support with rich formatting.
+        - PDF: Uses pdfkit with cheerio-based HTML parsing for basic formatting (headers, lists, bold text). For full rich text fidelity, DOCX is recommended.
+    - **Legacy Template Support**: Plain-text templates auto-detected via regex and converted to HTML with entity escaping.
     - **Inline Date Editing**: Direct editing of 초안 예정일 and 업로드 예정일 columns in Operations table.
 
 ## External Dependencies

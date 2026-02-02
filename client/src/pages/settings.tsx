@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useWorkspaces } from "@/hooks/use-workspaces";
 import Layout from "@/components/layout";
@@ -12,10 +12,25 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { KO } from "@/i18n/ko";
 import { Plus, Pencil, Trash2, Building2, Users, Shield, FileText, Star } from "lucide-react";
+
+const ReactQuill = lazy(() => import('react-quill-new'));
+import 'react-quill-new/dist/quill.snow.css';
+
+const quillModules = {
+  toolbar: [
+    [{ 'header': [1, 2, 3, false] }],
+    ['bold', 'italic', 'underline', 'strike'],
+    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+    [{ 'align': [] }],
+    [{ 'color': [] }, { 'background': [] }],
+    ['clean']
+  ],
+};
 
 interface Client {
   id: number;
@@ -781,25 +796,38 @@ function ContractTemplatesSection({ workspaceId }: { workspaceId: number }) {
               {KO.contractTemplates.add}
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{KO.contractTemplates.add}</DialogTitle>
               <DialogDescription>{KO.contractTemplates.variableHint}</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
-              <div>
-                <Label>{KO.contractTemplates.name}</Label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} data-testid="input-template-name" />
-              </div>
-              <div>
-                <Label>{KO.contractTemplates.descriptionLabel}</Label>
-                <Input value={description} onChange={(e) => setDescription(e.target.value)} data-testid="input-template-description" />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>{KO.contractTemplates.name}</Label>
+                  <Input value={name} onChange={(e) => setName(e.target.value)} data-testid="input-template-name" />
+                </div>
+                <div>
+                  <Label>{KO.contractTemplates.descriptionLabel}</Label>
+                  <Input value={description} onChange={(e) => setDescription(e.target.value)} data-testid="input-template-description" />
+                </div>
               </div>
               <div>
                 <Label>{KO.contractTemplates.content}</Label>
-                <Textarea value={content} onChange={(e) => setContent(e.target.value)} rows={10} className="font-mono text-sm" data-testid="textarea-template-content" />
+                <div className="border rounded-md">
+                  <Suspense fallback={<Skeleton className="h-80" />}>
+                    <ReactQuill
+                      theme="snow"
+                      value={content}
+                      onChange={setContent}
+                      modules={quillModules}
+                      className="h-80"
+                      data-testid="editor-template-content"
+                    />
+                  </Suspense>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 pt-10">
                 <Checkbox id="is-default" checked={isDefault} onCheckedChange={(v) => setIsDefault(!!v)} data-testid="checkbox-template-default" />
                 <label htmlFor="is-default" className="text-sm">{KO.contractTemplates.setAsDefault}</label>
               </div>
@@ -862,25 +890,38 @@ function ContractTemplatesSection({ workspaceId }: { workspaceId: number }) {
             resetForm();
           }
         }}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{KO.common.edit}</DialogTitle>
               <DialogDescription>{KO.contractTemplates.variableHint}</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
-              <div>
-                <Label>{KO.contractTemplates.name}</Label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} data-testid="input-edit-template-name" />
-              </div>
-              <div>
-                <Label>{KO.contractTemplates.descriptionLabel}</Label>
-                <Input value={description} onChange={(e) => setDescription(e.target.value)} data-testid="input-edit-template-description" />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>{KO.contractTemplates.name}</Label>
+                  <Input value={name} onChange={(e) => setName(e.target.value)} data-testid="input-edit-template-name" />
+                </div>
+                <div>
+                  <Label>{KO.contractTemplates.descriptionLabel}</Label>
+                  <Input value={description} onChange={(e) => setDescription(e.target.value)} data-testid="input-edit-template-description" />
+                </div>
               </div>
               <div>
                 <Label>{KO.contractTemplates.content}</Label>
-                <Textarea value={content} onChange={(e) => setContent(e.target.value)} rows={10} className="font-mono text-sm" data-testid="textarea-edit-template-content" />
+                <div className="border rounded-md">
+                  <Suspense fallback={<Skeleton className="h-80" />}>
+                    <ReactQuill
+                      theme="snow"
+                      value={content}
+                      onChange={setContent}
+                      modules={quillModules}
+                      className="h-80"
+                      data-testid="editor-edit-template-content"
+                    />
+                  </Suspense>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 pt-10">
                 <Checkbox id="edit-is-default" checked={isDefault} onCheckedChange={(v) => setIsDefault(!!v)} data-testid="checkbox-edit-template-default" />
                 <label htmlFor="edit-is-default" className="text-sm">{KO.contractTemplates.setAsDefault}</label>
               </div>
