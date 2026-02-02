@@ -423,18 +423,18 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
 
       {/* Full Message Drawer */}
       <Sheet open={!!showFullMessage} onOpenChange={(open) => !open && setShowFullMessage(null)}>
-        <SheetContent className="w-[500px] sm:max-w-[500px]">
-          <SheetHeader>
+        <SheetContent className="w-[500px] sm:max-w-[500px] flex flex-col h-full">
+          <SheetHeader className="shrink-0">
             <SheetTitle>{KO.pages.communication.viewFullMessage}</SheetTitle>
           </SheetHeader>
-          <div className="mt-4">
+          <ScrollArea className="flex-1 mt-4">
             {showFullMessage && (
               <div 
-                className="prose prose-sm max-w-none dark:prose-invert" 
+                className="prose prose-sm max-w-none dark:prose-invert pr-4" 
                 dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(showFullMessage.bodyHtml || showFullMessage.bodyText || '') }} 
               />
             )}
-          </div>
+          </ScrollArea>
         </SheetContent>
       </Sheet>
 
