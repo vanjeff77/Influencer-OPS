@@ -1,8 +1,8 @@
 import Layout from "@/components/layout";
-import { useCampaign, useUpdateCampaign, useUpdateCampaignItem, useAddInfluencersToCampaign, useCampaignContents, useCreateCampaignContent, useUpdateCampaignContent, useDeleteCampaignContent } from "@/hooks/use-campaigns";
+import { useCampaign, useUpdateCampaign, useUpdateCampaignItem, useDeleteCampaignItem, useAddInfluencersToCampaign, useCampaignContents, useCreateCampaignContent, useUpdateCampaignContent, useDeleteCampaignContent, useDeleteCampaign } from "@/hooks/use-campaigns";
 import { useInfluencers } from "@/hooks/use-influencers";
 import { useWorkspaces } from "@/hooks/use-workspaces";
-import { useRoute } from "wouter";
+import { useRoute, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -56,11 +56,17 @@ export default function CampaignDetail() {
     enabled: !!workspaceId,
   });
 
+  const [, navigate] = useLocation();
+  const deleteCampaign = useDeleteCampaign();
+  const deleteItem = useDeleteCampaignItem(id);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedLineItem, setSelectedLineItem] = useState<CampaignLineItem | null>(null);
   const [isEditingClient, setIsEditingClient] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [isEditingStatus, setIsEditingStatus] = useState(false);
+  const [isDeleteCampaignOpen, setIsDeleteCampaignOpen] = useState(false);
+  const [isDeleteInfluencerOpen, setIsDeleteInfluencerOpen] = useState(false);
+  const [selectedInfluencerIds, setSelectedInfluencerIds] = useState<Set<number>>(new Set());
 
   const handleClientChange = () => {
     if (!selectedClientId) return;
@@ -96,6 +102,57 @@ export default function CampaignDetail() {
         toast({ variant: "destructive", title: "변경 실패" });
       }
     });
+  };
+
+  const handleDeleteCampaign = () => {
+    deleteCampaign.mutate(id, {
+      onSuccess: () => {
+        toast({ title: "캠페인이 삭제되었습니다." });
+        navigate("/campaigns");
+      },
+      onError: () => {
+        toast({ variant: "destructive", title: "삭제 실패", description: "캠페인 삭제 중 오류가 발생했습니다." });
+      }
+    });
+  };
+
+  const handleDeleteSelectedInfluencers = async () => {
+    const itemsToDelete = campaign?.items?.filter(item => selectedInfluencerIds.has(item.id)) || [];
+    let successCount = 0;
+    for (const item of itemsToDelete) {
+      try {
+        await new Promise<void>((resolve, reject) => {
+          deleteItem.mutate(item.id, {
+            onSuccess: () => { successCount++; resolve(); },
+            onError: (err) => reject(err)
+          });
+        });
+      } catch (e) {
+        // continue with others
+      }
+    }
+    setSelectedInfluencerIds(new Set());
+    setIsDeleteInfluencerOpen(false);
+    toast({ title: `${successCount}명의 인플루언서가 캠페인에서 제외되었습니다.` });
+  };
+
+  const toggleInfluencerSelection = (itemId: number) => {
+    const newSelected = new Set(selectedInfluencerIds);
+    if (newSelected.has(itemId)) {
+      newSelected.delete(itemId);
+    } else {
+      newSelected.add(itemId);
+    }
+    setSelectedInfluencerIds(newSelected);
+  };
+
+  const selectAllInfluencers = () => {
+    if (!campaign?.items) return;
+    if (selectedInfluencerIds.size === campaign.items.length) {
+      setSelectedInfluencerIds(new Set());
+    } else {
+      setSelectedInfluencerIds(new Set(campaign.items.map(i => i.id)));
+    }
   };
   
   // Content tab state
@@ -252,10 +309,22 @@ export default function CampaignDetail() {
               )}
             </div>
           </div>
-          <div className="text-right">
-            <div className="text-sm text-muted-foreground mb-1">총 예산</div>
-            <div className="text-2xl font-bold font-mono">{campaign.budget?.toLocaleString()}원</div>
-            <div className="text-xs text-muted-foreground mt-1">예산 사용률: {budgetUtilization}%</div>
+          <div className="text-right flex flex-col items-end gap-2">
+            <div>
+              <div className="text-sm text-muted-foreground mb-1">총 예산</div>
+              <div className="text-2xl font-bold font-mono">{campaign.budget?.toLocaleString()}원</div>
+              <div className="text-xs text-muted-foreground mt-1">예산 사용률: {budgetUtilization}%</div>
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="text-destructive border-destructive/50"
+              onClick={() => setIsDeleteCampaignOpen(true)}
+              data-testid="button-delete-campaign"
+            >
+              <Trash2 className="w-3 h-3 mr-1" />
+              캠페인 삭제
+            </Button>
           </div>
         </div>
 
@@ -318,16 +387,37 @@ export default function CampaignDetail() {
               <CardHeader>
                 <div className="flex justify-between items-center">
                   <CardTitle>참여 인플루언서</CardTitle>
-                  <Button size="sm" onClick={() => setIsAddModalOpen(true)} data-testid="button-add-campaign-influencer">
-                    <Plus className="w-4 h-4 mr-2" />
-                    인플루언서 추가
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    {selectedInfluencerIds.size > 0 && (
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        className="text-destructive border-destructive/50"
+                        onClick={() => setIsDeleteInfluencerOpen(true)} 
+                        data-testid="button-remove-campaign-influencer"
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        {selectedInfluencerIds.size}명 제외
+                      </Button>
+                    )}
+                    <Button size="sm" onClick={() => setIsAddModalOpen(true)} data-testid="button-add-campaign-influencer">
+                      <Plus className="w-4 h-4 mr-2" />
+                      인플루언서 추가
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-10">
+                        <Checkbox 
+                          checked={campaign.items && campaign.items.length > 0 && selectedInfluencerIds.size === campaign.items.length}
+                          onCheckedChange={selectAllInfluencers}
+                          data-testid="checkbox-select-all-influencers"
+                        />
+                      </TableHead>
                       <TableHead>인플루언서</TableHead>
                       <TableHead>플랫폼</TableHead>
                       <TableHead>진행 상태</TableHead>
@@ -344,6 +434,13 @@ export default function CampaignDetail() {
                         onClick={() => setSelectedLineItem(item)}
                         data-testid={`row-campaign-item-${item.id}`}
                       >
+                        <TableCell className="py-1.5" onClick={(e) => e.stopPropagation()}>
+                          <Checkbox 
+                            checked={selectedInfluencerIds.has(item.id)}
+                            onCheckedChange={() => toggleInfluencerSelection(item.id)}
+                            data-testid={`checkbox-influencer-${item.id}`}
+                          />
+                        </TableCell>
                         <TableCell className="py-1.5">
                           <div>
                             <div className="font-medium">{item.influencer?.name || `인플루언서 #${item.influencerId}`}</div>
@@ -643,6 +740,46 @@ export default function CampaignDetail() {
         onClose={() => setSelectedLineItem(null)}
         onUpdate={handleStatusUpdate}
       />
+
+      {/* Delete Campaign Confirmation Dialog */}
+      <Dialog open={isDeleteCampaignOpen} onOpenChange={setIsDeleteCampaignOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>캠페인 삭제</DialogTitle>
+            <DialogDescription>
+              "{campaign.name}" 캠페인을 삭제하시겠습니까? 이 작업은 되돌릴 수 없으며 캠페인에 포함된 모든 인플루언서 정보도 함께 삭제됩니다.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => setIsDeleteCampaignOpen(false)} data-testid="button-cancel-delete-campaign">
+              취소
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteCampaign} disabled={deleteCampaign.isPending} data-testid="button-confirm-delete-campaign">
+              {deleteCampaign.isPending ? "삭제 중..." : "삭제"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Influencer from Campaign Confirmation Dialog */}
+      <Dialog open={isDeleteInfluencerOpen} onOpenChange={setIsDeleteInfluencerOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>인플루언서 제외</DialogTitle>
+            <DialogDescription>
+              선택한 {selectedInfluencerIds.size}명의 인플루언서를 캠페인에서 제외하시겠습니까?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => setIsDeleteInfluencerOpen(false)} data-testid="button-cancel-remove-influencer">
+              취소
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteSelectedInfluencers} disabled={deleteItem.isPending} data-testid="button-confirm-remove-influencer">
+              {deleteItem.isPending ? "처리 중..." : "제외"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }

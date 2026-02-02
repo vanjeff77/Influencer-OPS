@@ -1,11 +1,11 @@
 import Layout from "@/components/layout";
 import { useWorkspaces } from "@/hooks/use-workspaces";
-import { useCampaigns, useCreateCampaign, useDeleteCampaign } from "@/hooks/use-campaigns";
+import { useCampaigns, useCreateCampaign } from "@/hooks/use-campaigns";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Calendar, DollarSign, ArrowRight, X, Trash2 } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Plus, Calendar, DollarSign, ArrowRight, X } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState, useMemo, useEffect } from "react";
@@ -26,12 +26,9 @@ export default function Campaigns() {
   const workspaceId = workspaces?.[0]?.id;
   const { data: campaigns, isLoading } = useCampaigns(workspaceId || 0);
   const createCampaign = useCreateCampaign(workspaceId || 0);
-  const deleteCampaign = useDeleteCampaign();
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const searchString = useSearch();
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [campaignToDelete, setCampaignToDelete] = useState<{ id: number; name: string } | null>(null);
 
   const { data: clients } = useQuery<Client[]>({
     queryKey: ['/api/clients', workspaceId],
@@ -110,27 +107,6 @@ export default function Campaigns() {
         setIsCreateOpen(false);
         setNewCampaign({ name: "", clientId: "", goal: "", budget: 0 });
         toast({ title: KO.pages.campaigns.campaignCreated, description: KO.pages.campaigns.campaignCreatedDesc });
-      }
-    });
-  };
-
-  const handleDeleteClick = (e: React.MouseEvent, campaign: { id: number; name: string }) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setCampaignToDelete(campaign);
-    setDeleteDialogOpen(true);
-  };
-
-  const handleDeleteConfirm = () => {
-    if (!campaignToDelete) return;
-    deleteCampaign.mutate(campaignToDelete.id, {
-      onSuccess: () => {
-        toast({ title: "캠페인이 삭제되었습니다" });
-        setDeleteDialogOpen(false);
-        setCampaignToDelete(null);
-      },
-      onError: () => {
-        toast({ title: "삭제 실패", description: "캠페인 삭제 중 오류가 발생했습니다", variant: "destructive" });
       }
     });
   };
@@ -249,50 +225,39 @@ export default function Campaigns() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
             {filteredCampaigns?.map((campaign) => (
-              <div key={campaign.id} className="relative group/card">
-                <Link href={`/campaigns/${campaign.id}`} className="block">
-                  <Card className="hover:border-primary/50 transition-all hover:shadow-md cursor-pointer group h-full" data-testid={`card-campaign-${campaign.id}`}>
-                    <CardHeader className="flex flex-row items-start justify-between space-y-0 p-3 md:p-4 pb-1 md:pb-2 gap-2">
-                      <div className="space-y-0.5 min-w-0 flex-1">
-                        <CardTitle className="text-sm md:text-base group-hover:text-primary transition-colors truncate">{campaign.name}</CardTitle>
-                        <CardDescription className="text-[10px] md:text-xs">{campaign.client} • {format(new Date(campaign.createdAt || new Date()), 'yyyy.MM.dd')}</CardDescription>
+              <Link key={campaign.id} href={`/campaigns/${campaign.id}`} className="block">
+                <Card className="hover:border-primary/50 transition-all hover:shadow-md cursor-pointer group h-full" data-testid={`card-campaign-${campaign.id}`}>
+                  <CardHeader className="flex flex-row items-start justify-between space-y-0 p-3 md:p-4 pb-1 md:pb-2 gap-2">
+                    <div className="space-y-0.5 min-w-0 flex-1">
+                      <CardTitle className="text-sm md:text-base group-hover:text-primary transition-colors truncate">{campaign.name}</CardTitle>
+                      <CardDescription className="text-[10px] md:text-xs">{campaign.client} • {format(new Date(campaign.createdAt || new Date()), 'yyyy.MM.dd')}</CardDescription>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Badge variant="outline" className={`capitalize border-0 text-[10px] shrink-0 ${getStatusColor(campaign.status || 'draft')}`}>
+                        {getStatusLabel(campaign.status || 'draft')}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="p-3 md:p-4 pt-0">
+                    <div className="flex flex-col gap-1.5 mt-2">
+                      <div className="flex items-center gap-1.5 text-[10px] md:text-xs text-muted-foreground">
+                        <DollarSign className="w-3 h-3 shrink-0" />
+                        <span className="truncate">{KO.pages.campaigns.budget}: <span className="text-foreground font-medium">{campaign.budget?.toLocaleString()}원</span></span>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <Badge variant="outline" className={`capitalize border-0 text-[10px] shrink-0 ${getStatusColor(campaign.status || 'draft')}`}>
-                          {getStatusLabel(campaign.status || 'draft')}
-                        </Badge>
+                      <div className="flex items-center gap-1.5 text-[10px] md:text-xs text-muted-foreground">
+                        <Calendar className="w-3 h-3 shrink-0" />
+                        <span className="truncate">{KO.pages.campaigns.goal}: <span className="text-foreground font-medium">{campaign.goal || KO.pages.campaigns.notSet}</span></span>
                       </div>
-                    </CardHeader>
-                    <CardContent className="p-3 md:p-4 pt-0">
-                      <div className="flex flex-col gap-1.5 mt-2">
-                        <div className="flex items-center gap-1.5 text-[10px] md:text-xs text-muted-foreground">
-                          <DollarSign className="w-3 h-3 shrink-0" />
-                          <span className="truncate">{KO.pages.campaigns.budget}: <span className="text-foreground font-medium">{campaign.budget?.toLocaleString()}원</span></span>
-                        </div>
-                        <div className="flex items-center gap-1.5 text-[10px] md:text-xs text-muted-foreground">
-                          <Calendar className="w-3 h-3 shrink-0" />
-                          <span className="truncate">{KO.pages.campaigns.goal}: <span className="text-foreground font-medium">{campaign.goal || KO.pages.campaigns.notSet}</span></span>
-                        </div>
+                    </div>
+                    <div className="hidden md:flex items-center justify-between mt-2">
+                      <div className="flex-1" />
+                      <div className="flex items-center gap-2 text-primary text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                        {KO.common.viewDetails} <ArrowRight className="w-3 h-3" />
                       </div>
-                      <div className="hidden md:flex items-center justify-between mt-2">
-                        <div className="flex-1" />
-                        <div className="flex items-center gap-2 text-primary text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-                          {KO.common.viewDetails} <ArrowRight className="w-3 h-3" />
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="absolute top-2 right-2 opacity-0 group-hover/card:opacity-100 transition-opacity h-7 w-7 text-muted-foreground hover:text-destructive z-10"
-                  onClick={(e) => handleDeleteClick(e, { id: campaign.id, name: campaign.name })}
-                  data-testid={`button-delete-campaign-${campaign.id}`}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
             ))}
             
             {filteredCampaigns?.length === 0 && (
@@ -305,24 +270,6 @@ export default function Campaigns() {
           </div>
         )}
 
-        <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-          <DialogContent className="max-w-[90vw] md:max-w-sm">
-            <DialogHeader>
-              <DialogTitle>캠페인 삭제</DialogTitle>
-              <DialogDescription>
-                "{campaignToDelete?.name}" 캠페인을 삭제하시겠습니까? 이 작업은 되돌릴 수 없으며 캠페인에 포함된 모든 인플루언서 정보도 함께 삭제됩니다.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter className="flex gap-2">
-              <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} data-testid="button-cancel-delete">
-                취소
-              </Button>
-              <Button variant="destructive" onClick={handleDeleteConfirm} disabled={deleteCampaign.isPending} data-testid="button-confirm-delete">
-                {deleteCampaign.isPending ? "삭제 중..." : "삭제"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
     </Layout>
   );
