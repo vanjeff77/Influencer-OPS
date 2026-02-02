@@ -28,7 +28,7 @@ const FIXED_COLUMNS = [
   { key: 'finalContentUrl', label: '콘텐츠 완성본 링크', required: false },
 ];
 
-const ALLOWED_PLATFORMS = ['Instagram', 'YouTube', 'TikTok', 'X', 'Blog'];
+const ALLOWED_PLATFORMS = ['IG', 'YT', 'TikTok', 'X', 'Blog'];
 
 const TEMPLATE_HEADERS = FIXED_COLUMNS.map(col => col.label).join('\t');
 
@@ -169,13 +169,14 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
   const normalizePlatform = (value: string): string | null => {
     const lower = value.toLowerCase().trim();
     const mapping: Record<string, string> = {
-      'instagram': 'Instagram',
-      'insta': 'Instagram',
-      '인스타': 'Instagram',
-      '인스타그램': 'Instagram',
-      'youtube': 'YouTube',
-      'yt': 'YouTube',
-      '유튜브': 'YouTube',
+      'instagram': 'IG',
+      'insta': 'IG',
+      'ig': 'IG',
+      '인스타': 'IG',
+      '인스타그램': 'IG',
+      'youtube': 'YT',
+      'yt': 'YT',
+      '유튜브': 'YT',
       'tiktok': 'TikTok',
       '틱톡': 'TikTok',
       'x': 'X',

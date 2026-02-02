@@ -22,7 +22,7 @@ const EDIT_COLUMNS = [
   { key: 'priceMemo', label: '단가 메모', required: false, width: 'w-28' },
 ];
 
-const ALLOWED_PLATFORMS = ['Instagram', 'YouTube', 'TikTok', 'X', 'Blog'];
+const ALLOWED_PLATFORMS = ['IG', 'YT', 'TikTok', 'X', 'Blog'];
 
 interface InfluencerWithAccounts extends Influencer {
   accounts?: InfluencerAccount[];
@@ -110,8 +110,8 @@ export function BulkEditDialog({ open, onOpenChange, workspaceId, selectedIds, i
   const normalizePlatform = (input: string): string => {
     const normalized = input.trim().toLowerCase();
     const platformMap: Record<string, string> = {
-      'instagram': 'Instagram', 'ig': 'Instagram', '인스타': 'Instagram', '인스타그램': 'Instagram',
-      'youtube': 'YouTube', 'yt': 'YouTube', '유튜브': 'YouTube',
+      'instagram': 'IG', 'ig': 'IG', '인스타': 'IG', '인스타그램': 'IG',
+      'youtube': 'YT', 'yt': 'YT', '유튜브': 'YT',
       'tiktok': 'TikTok', '틱톡': 'TikTok',
       'x': 'X', 'twitter': 'X', '트위터': 'X', '엑스': 'X',
       'blog': 'Blog', '블로그': 'Blog', '네이버블로그': 'Blog', '네이버 블로그': 'Blog',
@@ -174,7 +174,7 @@ export function BulkEditDialog({ open, onOpenChange, workspaceId, selectedIds, i
         if (row.handle || row.platform || row.followers) {
           updates.accounts = [{
             id: originalAccount?.id,
-            platform: platform || originalAccount?.platform || 'Instagram',
+            platform: platform || originalAccount?.platform || 'IG',
             handle: row.handle || originalAccount?.handle || '',
             followers: followers ?? originalAccount?.followers ?? null,
             url: originalAccount?.url || null,
@@ -298,9 +298,11 @@ export function BulkEditDialog({ open, onOpenChange, workspaceId, selectedIds, i
                                 <SelectValue placeholder="선택" />
                               </SelectTrigger>
                               <SelectContent>
-                                {ALLOWED_PLATFORMS.map(p => (
-                                  <SelectItem key={p} value={p}>{p}</SelectItem>
-                                ))}
+                                <SelectItem value="IG">Instagram</SelectItem>
+                                <SelectItem value="YT">YouTube</SelectItem>
+                                <SelectItem value="TikTok">TikTok</SelectItem>
+                                <SelectItem value="X">X</SelectItem>
+                                <SelectItem value="Blog">Blog</SelectItem>
                               </SelectContent>
                             </Select>
                           ) : (
