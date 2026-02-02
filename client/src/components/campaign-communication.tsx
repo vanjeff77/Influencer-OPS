@@ -478,6 +478,24 @@ function MessageThread({ messages, onViewFull }: { messages: ConversationMessage
     );
   }
 
+  const getDisplaySnippet = (snippet: string | null): string => {
+    if (!snippet) return '(내용 없음)';
+    const subjectPattern = /^\[(?:Re:\s*)?(?:\[[^\]]*\])?\s*[^\]]*\]\s*/i;
+    return snippet.replace(subjectPattern, '').trim() || snippet;
+  };
+
+  const formatMessageTime = (date: Date): string => {
+    const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    const dayOfWeek = dayNames[date.getDay()];
+    const hours = date.getHours();
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const ampm = hours < 12 ? '오전' : '오후';
+    const displayHours = hours % 12 || 12;
+    return `${month}/${day}(${dayOfWeek}) ${ampm} ${displayHours}:${minutes}`;
+  };
+
   return (
     <div className="space-y-3">
       {messages.map(msg => (
@@ -491,10 +509,10 @@ function MessageThread({ messages, onViewFull }: { messages: ConversationMessage
             onClick={() => onViewFull(msg)}
             data-testid={`message-bubble-${msg.id}`}
           >
-            <p className="text-sm line-clamp-2">{msg.snippet || '(내용 없음)'}</p>
+            <p className="text-sm line-clamp-2">{getDisplaySnippet(msg.snippet)}</p>
             <div className={`flex items-center gap-2 mt-1 text-xs ${msg.direction === 'outbound' ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
               {msg.sentAt || msg.receivedAt ? (
-                <span>{format(new Date(msg.sentAt || msg.receivedAt!), 'M/d HH:mm', { locale: ko })}</span>
+                <span>{formatMessageTime(new Date(msg.sentAt || msg.receivedAt!))}</span>
               ) : null}
               {msg.sendStatus === 'failed' && (
                 <Badge variant="destructive" className="text-[10px]" data-testid={`badge-send-failed-${msg.id}`}>
