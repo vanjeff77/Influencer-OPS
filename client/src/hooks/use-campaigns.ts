@@ -69,6 +69,22 @@ export function useUpdateCampaign() {
   });
 }
 
+export function useDeleteCampaign() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/campaigns/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete campaign");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.campaigns.list.path] });
+    },
+  });
+}
+
 export function useAddInfluencersToCampaign(campaignId: number) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -109,6 +125,24 @@ export function useUpdateCampaignItem(campaignId?: number) {
         queryClient.invalidateQueries({ queryKey: [api.campaigns.get.path] });
       }
       queryClient.invalidateQueries({ queryKey: ['/api/finance/summary'] });
+    },
+  });
+}
+
+export function useDeleteCampaignItem(campaignId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/line-items/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete line item");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.campaigns.get.path, campaignId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/finance/summary'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/settlement/queue'] });
     },
   });
 }

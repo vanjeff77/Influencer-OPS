@@ -695,6 +695,36 @@ export async function registerRoutes(
     res.json(campaign);
   });
 
+  app.delete('/api/campaigns/:id', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      const userId = (req.user as any).id;
+      const campaignId = parseInt(req.params.id);
+      
+      const campaign = await storage.getCampaign(campaignId);
+      if (!campaign) {
+        return res.status(404).json({ message: "Campaign not found" });
+      }
+      
+      const memberships = await storage.getWorkspaceMemberships(userId);
+      const member = memberships.find(m => m.workspaceId === campaign.workspaceId);
+      if (!member) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      
+      if (member.role === 'CLIENT') {
+        return res.status(403).json({ message: "CLIENT role cannot delete campaigns" });
+      }
+      
+      await storage.deleteCampaign(campaignId);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   // Get all campaign influencer assignments for a workspace
   app.get('/api/campaign-influencers', async (req, res) => {
     const workspaceId = parseInt(req.query.workspaceId as string);
@@ -2134,6 +2164,41 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Line item not found" });
       }
       res.json(lineItem);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete('/api/line-items/:id', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      const userId = (req.user as any).id;
+      const lineItemId = parseInt(req.params.id);
+      
+      const lineItem = await storage.getLineItemWithDetails(lineItemId);
+      if (!lineItem) {
+        return res.status(404).json({ message: "Line item not found" });
+      }
+      
+      const campaign = await storage.getCampaign(lineItem.campaignId);
+      if (!campaign) {
+        return res.status(404).json({ message: "Campaign not found" });
+      }
+      
+      const memberships = await storage.getWorkspaceMemberships(userId);
+      const member = memberships.find(m => m.workspaceId === campaign.workspaceId);
+      if (!member) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      
+      if (member.role === 'CLIENT') {
+        return res.status(403).json({ message: "CLIENT role cannot delete line items" });
+      }
+      
+      await storage.deleteCampaignItem(lineItemId);
+      res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }

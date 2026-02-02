@@ -56,8 +56,10 @@ export interface IStorage {
   createCampaign(workspaceId: number, campaign: any): Promise<Campaign>;
   getCampaign(id: number): Promise<(Campaign & { items: (CampaignInfluencer & { influencer?: Influencer & { accounts: InfluencerAccount[] } })[] }) | undefined>;
   updateCampaign(id: number, data: Partial<Campaign>): Promise<Campaign>;
+  deleteCampaign(id: number): Promise<void>;
   addInfluencersToCampaign(campaignId: number, influencerIds: number[]): Promise<CampaignInfluencer[]>;
   updateCampaignItem(id: number, updates: Partial<CampaignInfluencer>): Promise<CampaignInfluencer>;
+  deleteCampaignItem(id: number): Promise<void>;
   getAllCampaignInfluencers(workspaceId: number): Promise<CampaignInfluencer[]>;
 
   // Workspace Memberships
@@ -435,6 +437,11 @@ export class DatabaseStorage implements IStorage {
     return c;
   }
 
+  async deleteCampaign(id: number): Promise<void> {
+    await db.delete(campaignInfluencers).where(eq(campaignInfluencers.campaignId, id));
+    await db.delete(campaigns).where(eq(campaigns.id, id));
+  }
+
   async addInfluencersToCampaign(campaignId: number, influencerIds: number[]): Promise<CampaignInfluencer[]> {
     // Check existing to avoid duplicates
     const existing = await db.select().from(campaignInfluencers).where(eq(campaignInfluencers.campaignId, campaignId));
@@ -460,6 +467,10 @@ export class DatabaseStorage implements IStorage {
   async updateCampaignItem(id: number, updates: Partial<CampaignInfluencer>): Promise<CampaignInfluencer> {
     const [item] = await db.update(campaignInfluencers).set(updates).where(eq(campaignInfluencers.id, id)).returning();
     return item;
+  }
+
+  async deleteCampaignItem(id: number): Promise<void> {
+    await db.delete(campaignInfluencers).where(eq(campaignInfluencers.id, id));
   }
 
   async getAllCampaignInfluencers(workspaceId: number): Promise<CampaignInfluencer[]> {
