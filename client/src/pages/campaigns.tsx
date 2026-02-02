@@ -61,24 +61,21 @@ export default function Campaigns() {
     navigate("/campaigns");
   };
 
-  // Advertiser filter options
-  const advertisers = [
-    { id: "all", name: "전체" },
-    { id: "codingvalley", name: "코딩밸리" },
-    { id: "grab", name: "Grab" },
-    { id: "voye", name: "Voye" },
-  ];
+  // Advertiser filter options - derive from actual clients
+  const advertisers = useMemo(() => {
+    const clientList = clients?.map(c => ({ id: c.id.toString(), name: c.name })) || [];
+    return [{ id: "all", name: "전체" }, ...clientList];
+  }, [clients]);
 
   // Filter campaigns by advertiser and query params
   const filteredCampaigns = useMemo(() => {
     if (!campaigns) return [];
     let filtered = campaigns;
     
-    // Advertiser filter
+    // Advertiser filter - filter by clientId
     if (advertiserFilter !== "all") {
-      filtered = filtered.filter(c => 
-        c.client?.toLowerCase().includes(advertisers.find(a => a.id === advertiserFilter)?.name.toLowerCase() || "")
-      );
+      const selectedClientId = parseInt(advertiserFilter);
+      filtered = filtered.filter(c => c.clientId === selectedClientId);
     }
     
     // Campaign status filter from query param
