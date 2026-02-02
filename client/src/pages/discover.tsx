@@ -77,7 +77,6 @@ export default function Discover() {
   const queryClient = useQueryClient();
   const [newInfluencer, setNewInfluencer] = useState({ 
     name: "", 
-    email: "", 
     accounts: [{ platform: "IG", handle: "" }] 
   });
 
@@ -280,12 +279,11 @@ export default function Discover() {
       }));
     createInfluencer.mutate({
       name: newInfluencer.name,
-      email: newInfluencer.email,
       accounts: validAccounts
     }, {
       onSuccess: () => {
         setIsAddOpen(false);
-        setNewInfluencer({ name: "", email: "", accounts: [{ platform: "IG", handle: "" }] });
+        setNewInfluencer({ name: "", accounts: [{ platform: "IG", handle: "" }] });
         toast({ title: KO.pages.discover.influencerAddedToast });
       }
     });
@@ -364,10 +362,6 @@ export default function Discover() {
                   <label className="text-xs md:text-sm">{KO.pages.discover.name}</label>
                   <Input className="h-8 md:h-10 text-sm" value={newInfluencer.name} onChange={e => setNewInfluencer({...newInfluencer, name: e.target.value})} placeholder="홍길동" data-testid="input-influencer-name" />
                 </div>
-                <div className="grid gap-1.5 md:gap-2">
-                  <label className="text-xs md:text-sm">{KO.pages.discover.email}</label>
-                  <Input className="h-8 md:h-10 text-sm" value={newInfluencer.email} onChange={e => setNewInfluencer({...newInfluencer, email: e.target.value})} placeholder="influencer@example.com" data-testid="input-influencer-email" />
-                </div>
                 
                 <div className="grid gap-2">
                   <div className="flex items-center justify-between">
@@ -420,7 +414,7 @@ export default function Discover() {
                             newAccounts[index] = { ...newAccounts[index], handle: e.target.value };
                             setNewInfluencer({ ...newInfluencer, accounts: newAccounts });
                           }}
-                          placeholder="@username 또는 블로그 ID" 
+                          placeholder="https://..." 
                           data-testid={`input-handle-${index}`}
                         />
                       </div>
@@ -1218,15 +1212,10 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
                     </div>
                   </div>
                   
-                  <div>
-                    <label className="text-sm font-medium">{KO.pages.discover.contactPoint}</label>
-                    <Input value={contactPoint} onChange={e => setContactPoint(e.target.value)} placeholder="이메일, DM 등" data-testid="input-influencer-contactpoint" />
-                  </div>
-                  
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-sm font-medium">{KO.pages.discover.email}</label>
-                      <Input value={email} onChange={e => setEmail(e.target.value)} data-testid="input-influencer-email" />
+                      <Input value={contactPoint} onChange={e => setContactPoint(e.target.value)} placeholder="influencer@example.com" data-testid="input-influencer-contactpoint" />
                     </div>
                     <div>
                       <label className="text-sm font-medium">{KO.pages.discover.phone}</label>
@@ -1276,7 +1265,7 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
                       <Input 
                         value={acc.handle} 
                         onChange={e => updateAccount(index, 'handle', e.target.value)} 
-                        placeholder={KO.pages.discover.handlePlaceholder} 
+                        placeholder="https://..."
                         className="flex-1 min-w-[100px]"
                         data-testid={`input-account-handle-${index}`}
                       />
