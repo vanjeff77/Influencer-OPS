@@ -496,37 +496,72 @@ function MessageThread({ messages, onViewFull }: { messages: ConversationMessage
     return `${month}/${day}(${dayOfWeek}) ${ampm} ${displayHours}:${minutes}`;
   };
 
+  const inboundSenderColors = [
+    'bg-slate-200 dark:bg-slate-700',
+    'bg-blue-100 dark:bg-blue-900',
+    'bg-green-100 dark:bg-green-900',
+    'bg-amber-100 dark:bg-amber-900',
+    'bg-purple-100 dark:bg-purple-900',
+    'bg-pink-100 dark:bg-pink-900',
+    'bg-cyan-100 dark:bg-cyan-900',
+  ];
+
+  const uniqueInboundSenders = [...new Set(
+    messages
+      .filter(m => m.direction === 'inbound' && m.senderEmail)
+      .map(m => m.senderEmail?.toLowerCase())
+  )];
+
+  const getSenderColor = (senderEmail: string | null | undefined): string => {
+    if (!senderEmail) return inboundSenderColors[0];
+    const index = uniqueInboundSenders.indexOf(senderEmail.toLowerCase());
+    return inboundSenderColors[index % inboundSenderColors.length];
+  };
+
+  const getSenderDisplayName = (msg: ConversationMessage): string | null => {
+    if (msg.direction === 'outbound') return null;
+    if (msg.senderName) return msg.senderName;
+    if (msg.senderEmail) return msg.senderEmail.split('@')[0];
+    return null;
+  };
+
   return (
     <div className="space-y-3">
-      {messages.map(msg => (
-        <div key={msg.id} className={`flex ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}>
-          <div 
-            className={`max-w-[80%] rounded-lg p-3 cursor-pointer transition-colors ${
-              msg.direction === 'outbound' 
-                ? 'bg-primary text-primary-foreground' 
-                : 'bg-muted'
-            } ${msg.sendStatus === 'failed' ? 'border-2 border-red-500' : ''}`}
-            onClick={() => onViewFull(msg)}
-            data-testid={`message-bubble-${msg.id}`}
-          >
-            <p className="text-sm line-clamp-2">{getDisplaySnippet(msg.snippet)}</p>
-            <div className={`flex items-center gap-2 mt-1 text-xs ${msg.direction === 'outbound' ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
-              {msg.sentAt || msg.receivedAt ? (
-                <span>{formatMessageTime(new Date(msg.sentAt || msg.receivedAt!))}</span>
-              ) : null}
-              {msg.sendStatus === 'failed' && (
-                <Badge variant="destructive" className="text-[10px]" data-testid={`badge-send-failed-${msg.id}`}>
-                  <AlertCircle className="w-3 h-3 mr-1" />
-                  {KO.pages.communication.failed}
-                </Badge>
+      {messages.map(msg => {
+        const senderName = getSenderDisplayName(msg);
+        return (
+          <div key={msg.id} className={`flex ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}>
+            <div 
+              className={`max-w-[80%] rounded-lg p-3 cursor-pointer transition-colors ${
+                msg.direction === 'outbound' 
+                  ? 'bg-primary text-primary-foreground' 
+                  : getSenderColor(msg.senderEmail)
+              } ${msg.sendStatus === 'failed' ? 'border-2 border-red-500' : ''}`}
+              onClick={() => onViewFull(msg)}
+              data-testid={`message-bubble-${msg.id}`}
+            >
+              {senderName && uniqueInboundSenders.length > 1 && (
+                <p className="text-xs font-medium text-muted-foreground mb-1">{senderName}</p>
               )}
-              {msg.sendStatus === 'sent' && msg.direction === 'outbound' && (
-                <CheckCircle2 className="w-3 h-3" />
-              )}
+              <p className="text-sm line-clamp-2">{getDisplaySnippet(msg.snippet)}</p>
+              <div className={`flex items-center gap-2 mt-1 text-xs ${msg.direction === 'outbound' ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                {msg.sentAt || msg.receivedAt ? (
+                  <span>{formatMessageTime(new Date(msg.sentAt || msg.receivedAt!))}</span>
+                ) : null}
+                {msg.sendStatus === 'failed' && (
+                  <Badge variant="destructive" className="text-[10px]" data-testid={`badge-send-failed-${msg.id}`}>
+                    <AlertCircle className="w-3 h-3 mr-1" />
+                    {KO.pages.communication.failed}
+                  </Badge>
+                )}
+                {msg.sendStatus === 'sent' && msg.direction === 'outbound' && (
+                  <CheckCircle2 className="w-3 h-3" />
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

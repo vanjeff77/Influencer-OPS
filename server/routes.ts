@@ -1614,6 +1614,8 @@ export async function registerRoutes(
             await storage.createConversationMessage({
               conversationId: conversation.id,
               direction,
+              senderEmail: msg.from || null,
+              senderName: null,
               snippet: `[${msg.subject}] ${msg.snippet}`,
               bodyHtml: msg.body,
               bodyText: msg.snippet,
@@ -1708,6 +1710,8 @@ export async function registerRoutes(
       const message = await storage.createConversationMessage({
         conversationId,
         direction: 'outbound',
+        senderEmail: account?.email || null,
+        senderName: null,
         snippet,
         bodyHtml: body,
         bodyText: body.replace(/<[^>]*>/g, ''),
@@ -1780,9 +1784,15 @@ export async function registerRoutes(
         
         if (!isInbound) continue; // Only sync inbound messages
         
+        const senderEmailMatch = headers.from.match(/<([^>]+)>/);
+        const senderEmail = senderEmailMatch ? senderEmailMatch[1] : headers.from.split(/\s/)[0];
+        const senderName = headers.from.replace(/<[^>]+>/, '').trim() || null;
+        
         await storage.createConversationMessage({
           conversationId,
           direction: 'inbound',
+          senderEmail,
+          senderName,
           snippet,
           bodyHtml: body.html,
           bodyText: body.text,

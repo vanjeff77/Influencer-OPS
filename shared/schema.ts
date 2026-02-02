@@ -278,6 +278,8 @@ export const conversationMessages = pgTable("conversation_messages", {
   id: serial("id").primaryKey(),
   conversationId: integer("conversation_id").notNull(),
   direction: text("direction").notNull(), // inbound, outbound
+  senderEmail: text("sender_email"),
+  senderName: text("sender_name"),
   snippet: text("snippet"),
   bodyHtml: text("body_html"),
   bodyText: text("body_text"),
