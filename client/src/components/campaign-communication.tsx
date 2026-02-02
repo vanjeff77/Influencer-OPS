@@ -42,7 +42,7 @@ interface CampaignLineItem {
   campaignId: number;
   influencerId: number;
   status: string | null;
-  firstContactCompleted?: boolean | null;
+  firstContactCompleted?: boolean | null | undefined;
   firstContactAt?: string | null;
   firstContactMethod?: string | null;
   influencer?: {
@@ -51,7 +51,17 @@ interface CampaignLineItem {
     email: string | null;
     phone: string | null;
     tags: string[] | null;
+    tag1: string | null;
+    tag2: string | null;
+    tag3: string | null;
     memo: string | null;
+    settlementType: string | null;
+    bankName: string | null;
+    accountHolder: string | null;
+    accountNumber: string | null;
+    businessName: string | null;
+    businessRegNo: string | null;
+    freelancerId: string | null;
     accounts?: { platform: string; handle: string }[];
   };
 }
@@ -585,7 +595,9 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
   const [memo, setMemo] = useState(influencer?.memo || "");
   const [email, setEmail] = useState(influencer?.email || "");
   const [phone, setPhone] = useState(influencer?.phone || "");
-  const [tags, setTags] = useState(influencer?.tags?.join(", ") || "");
+  const [tag1, setTag1] = useState(influencer?.tag1 || "");
+  const [tag2, setTag2] = useState(influencer?.tag2 || "");
+  const [tag3, setTag3] = useState(influencer?.tag3 || "");
   
   const [settlementType, setSettlementType] = useState(influencer?.settlementType || "");
   const [bankName, setBankName] = useState(influencer?.bankName || "");
@@ -599,6 +611,8 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
     mutationFn: (data: any) => apiRequest('PATCH', `/api/influencers/${influencer?.id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/influencers'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/campaigns'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/conversations'] });
       toast({ title: KO.pages.communication.saved });
     }
   });
@@ -609,7 +623,9 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
       memo,
       email,
       phone,
-      tags: tags.split(",").map(t => t.trim()).filter(Boolean)
+      tag1: tag1 || null,
+      tag2: tag2 || null,
+      tag3: tag3 || null
     });
   };
 
@@ -658,7 +674,7 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
 
         <div className="space-y-3">
           <div>
-            <label className="text-xs font-medium text-muted-foreground">{KO.pages.communication.contact}</label>
+            <label className="text-xs font-medium text-muted-foreground">이메일</label>
             <Input 
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -677,15 +693,37 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
               data-testid="input-influencer-phone"
             />
           </div>
-          <div>
-            <label className="text-xs font-medium text-muted-foreground">{KO.pages.communication.tags}</label>
-            <Input 
-              value={tags}
-              onChange={(e) => setTags(e.target.value)}
-              placeholder="뷰티, 패션, 라이프스타일..."
-              className="mt-1 h-8 text-sm"
-              data-testid="input-influencer-tags"
-            />
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">태그1</label>
+              <Input 
+                value={tag1}
+                onChange={(e) => setTag1(e.target.value)}
+                placeholder="태그1"
+                className="mt-1 h-8 text-sm"
+                data-testid="input-influencer-tag1"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">태그2</label>
+              <Input 
+                value={tag2}
+                onChange={(e) => setTag2(e.target.value)}
+                placeholder="태그2"
+                className="mt-1 h-8 text-sm"
+                data-testid="input-influencer-tag2"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">태그3</label>
+              <Input 
+                value={tag3}
+                onChange={(e) => setTag3(e.target.value)}
+                placeholder="태그3"
+                className="mt-1 h-8 text-sm"
+                data-testid="input-influencer-tag3"
+              />
+            </div>
           </div>
           <div>
             <label className="text-xs font-medium text-muted-foreground">{KO.pages.communication.memo}</label>

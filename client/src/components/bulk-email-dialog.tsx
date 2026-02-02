@@ -26,7 +26,7 @@ interface CampaignLineItem {
     name: string;
     email?: string | null;
   };
-  firstContactCompleted?: boolean;
+  firstContactCompleted?: boolean | null;
 }
 
 interface BulkEmailDialogProps {
