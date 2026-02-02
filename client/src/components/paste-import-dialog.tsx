@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { AlertTriangle, CheckCircle, XCircle, Loader2, Plus, Trash2, ClipboardPaste } from "lucide-react";
+import { AlertTriangle, CheckCircle, XCircle, Loader2, Plus, Trash2, ClipboardPaste, Upload } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const FIXED_COLUMNS = [
@@ -93,6 +93,7 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
   const [isImporting, setIsImporting] = useState(false);
   const [results, setResults] = useState<BatchResult[] | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (open) {
@@ -171,16 +172,189 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
     return mapping[lower] || (ALLOWED_PLATFORMS.includes(value) ? value : null);
   };
 
+  const parseTsvWithQuotes = (text: string): string[][] => {
+    const rows: string[][] = [];
+    let currentRow: string[] = [];
+    let currentCell = '';
+    let inQuotes = false;
+    let i = 0;
+
+    while (i < text.length) {
+      const char = text[i];
+      const nextChar = text[i + 1];
+
+      if (inQuotes) {
+        if (char === '"' && nextChar === '"') {
+          currentCell += '"';
+          i += 2;
+        } else if (char === '"') {
+          inQuotes = false;
+          i++;
+        } else {
+          currentCell += char;
+          i++;
+        }
+      } else {
+        if (char === '"') {
+          inQuotes = true;
+          i++;
+        } else if (char === '\t') {
+          currentRow.push(currentCell);
+          currentCell = '';
+          i++;
+        } else if (char === '\r' && nextChar === '\n') {
+          currentRow.push(currentCell);
+          rows.push(currentRow);
+          currentRow = [];
+          currentCell = '';
+          i += 2;
+        } else if (char === '\n') {
+          currentRow.push(currentCell);
+          rows.push(currentRow);
+          currentRow = [];
+          currentCell = '';
+          i++;
+        } else {
+          currentCell += char;
+          i++;
+        }
+      }
+    }
+
+    if (currentCell || currentRow.length > 0) {
+      currentRow.push(currentCell);
+      rows.push(currentRow);
+    }
+
+    return rows.filter(row => row.some(cell => cell.trim()));
+  };
+
+  const parseCsv = (text: string): string[][] => {
+    const rows: string[][] = [];
+    let currentRow: string[] = [];
+    let currentCell = '';
+    let inQuotes = false;
+    let i = 0;
+
+    while (i < text.length) {
+      const char = text[i];
+      const nextChar = text[i + 1];
+
+      if (inQuotes) {
+        if (char === '"' && nextChar === '"') {
+          currentCell += '"';
+          i += 2;
+        } else if (char === '"') {
+          inQuotes = false;
+          i++;
+        } else {
+          currentCell += char;
+          i++;
+        }
+      } else {
+        if (char === '"') {
+          inQuotes = true;
+          i++;
+        } else if (char === ',') {
+          currentRow.push(currentCell);
+          currentCell = '';
+          i++;
+        } else if (char === '\r' && nextChar === '\n') {
+          currentRow.push(currentCell);
+          rows.push(currentRow);
+          currentRow = [];
+          currentCell = '';
+          i += 2;
+        } else if (char === '\n') {
+          currentRow.push(currentCell);
+          rows.push(currentRow);
+          currentRow = [];
+          currentCell = '';
+          i++;
+        } else {
+          currentCell += char;
+          i++;
+        }
+      }
+    }
+
+    if (currentCell || currentRow.length > 0) {
+      currentRow.push(currentCell);
+      rows.push(currentRow);
+    }
+
+    return rows.filter(row => row.some(cell => cell.trim()));
+  };
+
+  const handleCsvUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      if (!text) return;
+
+      const parsedData = parseCsv(text);
+      const parsedRows: RowData[] = [];
+
+      let startIndex = 0;
+      if (parsedData.length > 0) {
+        const firstRow = parsedData[0];
+        const isHeader = firstRow.some(cell => 
+          ['닉네임', '플랫폼', '팔로워', '이메일', '컨택포인트', 'nickname', 'platform'].includes(cell.toLowerCase().trim())
+        );
+        if (isHeader) startIndex = 1;
+      }
+
+      for (let i = startIndex; i < parsedData.length; i++) {
+        const cells = parsedData[i];
+        const row: RowData = {
+          nickname: (cells[0] || '').trim(),
+          handle: (cells[1] || '').trim(),
+          platform: (cells[2] || '').trim(),
+          followers: (cells[3] || '').trim(),
+          contactPoint: (cells[4] || '').trim(),
+          tag1: (cells[5] || '').trim(),
+          tag2: (cells[6] || '').trim(),
+          tag3: (cells[7] || '').trim(),
+          memo: (cells[8] || '').trim(),
+          priceMemo: (cells[9] || '').trim(),
+          client: (cells[10] || '').trim(),
+          contactStatus: (cells[11] || '').trim(),
+          replyStatus: (cells[12] || '').trim(),
+          collabStatus: (cells[13] || '').trim(),
+          finalContentUrl: (cells[14] || '').trim(),
+        };
+        if (row.nickname || row.handle || row.platform) {
+          parsedRows.push(row);
+        }
+      }
+
+      if (parsedRows.length > 0) {
+        setRows(parsedRows);
+        setIsValidated(false);
+        setErrors(new Map());
+        setResults(null);
+        toast({ title: `CSV 파일에서 ${parsedRows.length}개 행이 로드되었습니다.` });
+      } else {
+        toast({ title: '유효한 데이터가 없습니다.', variant: 'destructive' });
+      }
+
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+    reader.readAsText(file);
+  }, [toast]);
+
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     e.preventDefault();
     const text = e.clipboardData.getData('text');
     if (!text.trim()) return;
 
-    const lines = text.split(/\r?\n/).filter(line => line.trim());
+    const parsedData = parseTsvWithQuotes(text);
     const parsedRows: RowData[] = [];
 
-    for (const line of lines) {
-      const cells = line.split('\t');
+    for (const cells of parsedData) {
       const row: RowData = {
         nickname: (cells[0] || '').trim(),
         handle: (cells[1] || '').trim(),
@@ -343,9 +517,33 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
           </DialogDescription>
         </DialogHeader>
 
-        <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md p-3 text-sm text-blue-700 dark:text-blue-300 flex items-start gap-2">
-          <ClipboardPaste className="w-4 h-4 mt-0.5 shrink-0" />
-          <span>테이블 아무 곳에서나 Ctrl+V (Cmd+V)로 붙여넣기하세요. 열 순서: 닉네임, 플랫폼 계정, 플랫폼, 팔로워, 컨택포인트, 태그1, 태그2, 태그3, 메모, 단가 메모</span>
+        <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md p-3 text-sm text-blue-700 dark:text-blue-300">
+          <div className="flex items-start gap-2 mb-2">
+            <ClipboardPaste className="w-4 h-4 mt-0.5 shrink-0" />
+            <span>테이블에서 Ctrl+V (Cmd+V)로 붙여넣기하거나 CSV 파일을 업로드하세요.</span>
+          </div>
+          <div className="flex items-center gap-2 ml-6">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="gap-1.5 bg-white dark:bg-gray-800" 
+              onClick={() => fileInputRef.current?.click()}
+              data-testid="button-csv-upload"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              CSV 파일 업로드
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv"
+              className="hidden"
+              onChange={handleCsvUpload}
+            />
+            <span className="text-xs text-blue-600 dark:text-blue-400">
+              열 순서: 닉네임, 플랫폼 계정, 플랫폼, 팔로워, 이메일, 태그1~3, 메모, 단가 메모, 클라이언트...
+            </span>
+          </div>
         </div>
 
         {results && (
