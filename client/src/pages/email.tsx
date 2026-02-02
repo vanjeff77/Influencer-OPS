@@ -410,6 +410,7 @@ export default function EmailCenter() {
             {selectedThread ? (
               <div className="flex flex-col h-full">
                 <div className="p-4 border-b border-border">
+                  <h2 className="text-lg font-bold leading-tight mb-1">{selectedThread.subject || KO.pages.email.noSubject}</h2>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Clock className="w-4 h-4" />
                     {selectedThread.lastMessageDate ? format(new Date(selectedThread.lastMessageDate), 'PPP p') : ''}
