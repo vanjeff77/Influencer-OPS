@@ -239,7 +239,7 @@ export default function CampaignDetail() {
 
   return (
     <Layout>
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-3">
         <Link href="/campaigns" className="flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors w-fit" data-testid="link-back">
           <ArrowLeft className="w-4 h-4 mr-1" /> 캠페인 목록으로
         </Link>
