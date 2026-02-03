@@ -10,6 +10,116 @@ import { db } from "./db";
 import { campaignInfluencers, campaigns, users, workspaceMembers } from "@shared/schema";
 import { eq, and, inArray } from "drizzle-orm";
 
+// Singleton browser instance for PDF generation
+let sharedBrowser: any = null;
+let browserLaunchPromise: Promise<any> | null = null;
+let puppeteerAvailable = true;
+let pdfServiceReady = false;
+let pdfServiceError: string | null = null;
+
+// Check font files at startup
+import * as fsSync from 'fs';
+import * as pathSync from 'path';
+
+const fontPathRegularCheck = pathSync.join(process.cwd(), 'server', 'fonts', 'NotoSansKR-Regular.ttf');
+const fontPathBoldCheck = pathSync.join(process.cwd(), 'server', 'fonts', 'NotoSansKR-Bold.ttf');
+const fontsAvailable = fsSync.existsSync(fontPathRegularCheck) && fsSync.existsSync(fontPathBoldCheck);
+const isProduction = process.env.NODE_ENV === 'production';
+
+if (!fontsAvailable) {
+  if (isProduction) {
+    console.error('[PDF] CRITICAL: Korean fonts not found in production. PDF generation disabled.');
+    pdfServiceError = 'PDF 생성에 필요한 폰트 파일이 없습니다. 관리자에게 문의해주세요.';
+  } else {
+    console.warn('[PDF] Warning: Korean fonts not found. PDF generation will use Google Fonts fallback (dev mode).');
+  }
+} else {
+  console.log('[PDF] Korean fonts (NotoSansKR) found. PDF generation ready.');
+}
+
+// Shared Puppeteer launch args for consistency between preflight and production
+const PUPPETEER_ARGS = [
+  '--no-sandbox',
+  '--disable-setuid-sandbox',
+  '--disable-dev-shm-usage',
+  '--disable-gpu',
+  '--font-render-hinting=none'
+];
+
+// Preflight check for Puppeteer at startup - uses actual getSharedBrowser for consistency
+(async function preflightPuppeteerCheck() {
+  // Skip preflight if font errors already detected
+  if (pdfServiceError) {
+    console.log('[PDF] Skipping preflight - service already disabled due to font issues.');
+    return;
+  }
+  
+  try {
+    const puppeteer = await import('puppeteer');
+    sharedBrowser = await puppeteer.default.launch({
+      headless: true,
+      args: PUPPETEER_ARGS
+    });
+    
+    // Handle browser disconnect
+    sharedBrowser.on('disconnected', () => {
+      sharedBrowser = null;
+      browserLaunchPromise = null;
+    });
+    
+    pdfServiceReady = true;
+    console.log('[PDF] Puppeteer preflight check passed. PDF service ready.');
+  } catch (err: any) {
+    console.error('[PDF] Puppeteer preflight check failed:', err.message);
+    puppeteerAvailable = false;
+    pdfServiceError = 'PDF 생성 서비스 초기화에 실패했습니다. Chromium 브라우저를 확인해주세요.';
+  }
+})();
+
+async function getSharedBrowser() {
+  // Check for service errors first
+  if (pdfServiceError) {
+    throw new Error(pdfServiceError);
+  }
+  if (!puppeteerAvailable) {
+    throw new Error('PDF 생성 서비스가 현재 사용 불가능합니다. 관리자에게 문의해주세요.');
+  }
+  // Check if service is ready (preflight passed)
+  if (!pdfServiceReady) {
+    throw new Error('PDF 생성 서비스가 아직 준비 중입니다. 잠시 후 다시 시도해주세요.');
+  }
+  
+  if (sharedBrowser) return sharedBrowser;
+  
+  if (browserLaunchPromise) return browserLaunchPromise;
+  
+  browserLaunchPromise = (async () => {
+    try {
+      const puppeteer = await import('puppeteer');
+      sharedBrowser = await puppeteer.default.launch({
+        headless: true,
+        args: PUPPETEER_ARGS
+      });
+      
+      // Handle browser disconnect
+      sharedBrowser.on('disconnected', () => {
+        sharedBrowser = null;
+        browserLaunchPromise = null;
+      });
+      
+      console.log('[PDF] Puppeteer browser launched successfully.');
+      return sharedBrowser;
+    } catch (err: any) {
+      console.error('[PDF] Failed to launch Puppeteer browser:', err.message);
+      puppeteerAvailable = false;
+      browserLaunchPromise = null;
+      throw new Error('PDF 생성 서비스 초기화에 실패했습니다. Chromium 브라우저를 확인해주세요.');
+    }
+  })();
+  
+  return browserLaunchPromise;
+}
+
 async function ensureWorkspaceMembers() {
   try {
     const allWorkspaces = await storage.getWorkspaces();
@@ -2497,20 +2607,26 @@ export async function registerRoutes(
       const HTMLtoDOCX = (await import('html-to-docx')).default;
       
       // Wrap content in proper HTML structure for better rendering
+      // Using 맑은 고딕 (Malgun Gothic) as primary font with Noto Sans KR as fallback
       const htmlContent = `
         <!DOCTYPE html>
         <html>
         <head>
           <meta charset="utf-8">
           <style>
-            body { font-family: '맑은 고딕', 'Malgun Gothic', sans-serif; font-size: 12pt; line-height: 1.6; }
-            h1 { font-size: 18pt; font-weight: bold; }
-            h2 { font-size: 16pt; font-weight: bold; }
-            h3 { font-size: 14pt; font-weight: bold; }
+            body { font-family: '맑은 고딕', 'Malgun Gothic', 'Noto Sans KR', sans-serif; font-size: 12pt; line-height: 1.6; }
+            h1 { font-size: 18pt; font-weight: bold; margin-bottom: 12pt; }
+            h2 { font-size: 16pt; font-weight: bold; margin-bottom: 10pt; }
+            h3 { font-size: 14pt; font-weight: bold; margin-bottom: 8pt; }
             p { margin: 6pt 0; }
             ul, ol { margin: 6pt 0; padding-left: 24pt; }
-            table { border-collapse: collapse; width: 100%; }
+            li { margin: 4pt 0; }
+            table { border-collapse: collapse; width: 100%; margin: 10pt 0; }
             td, th { border: 1px solid #000; padding: 6pt; }
+            th { background-color: #f5f5f5; font-weight: bold; }
+            strong, b { font-weight: bold; }
+            em, i { font-style: italic; }
+            u { text-decoration: underline; }
           </style>
         </head>
         <body>${content}</body>
@@ -2522,6 +2638,7 @@ export async function registerRoutes(
         footer: false,
         header: false,
         pageNumber: false,
+        font: '맑은 고딕'
       });
       
       const filename = `계약서_${lineItem.influencer?.name || 'contract'}_${new Date().toISOString().split('T')[0]}.docx`;
@@ -2530,7 +2647,17 @@ export async function registerRoutes(
       res.send(buffer);
     } catch (err: any) {
       console.error('DOCX generation error:', err);
-      res.status(500).json({ message: err.message });
+      const errorDetails = {
+        message: 'DOCX 생성 중 오류가 발생했습니다.',
+        details: err.message || '알 수 없는 오류',
+        suggestions: [
+          '템플릿 내용이 올바른지 확인해주세요.',
+          'HTML 형식이 올바른지 확인해주세요.',
+          '특수 문자나 복잡한 표가 포함되어 있다면 단순화해 보세요.',
+          '문제가 지속되면 관리자에게 문의해주세요.'
+        ]
+      };
+      res.status(500).json(errorDetails);
     }
   });
 
@@ -2582,271 +2709,154 @@ export async function registerRoutes(
         content = content.split('\n').map((line: string) => `<p>${escapeHtml(line)}</p>`).join('');
       }
 
-      // Generate PDF using pdfkit with HTML support
-      const PDFDocument = (await import('pdfkit')).default;
-      const pathMod = await import('path');
+      // Generate PDF using Puppeteer for full HTML/CSS support with rich text formatting
       const fs = await import('fs');
-      const { htmlToText } = await import('html-to-text');
+      const path = await import('path');
       
-      const doc = new PDFDocument({ size: 'A4', margin: 50 });
-      
-      const chunks: Buffer[] = [];
-      doc.on('data', (chunk: Buffer) => chunks.push(chunk));
-      
-      // Register and use Korean font for proper Korean text rendering
-      const fontPath = pathMod.join(process.cwd(), 'server', 'fonts', 'NanumGothic.ttf');
-      const fontPathBold = pathMod.join(process.cwd(), 'server', 'fonts', 'NanumGothic-Bold.ttf');
-      let hasKoreanFont = false;
-      let hasBoldFont = false;
-      if (fs.existsSync(fontPath)) {
-        doc.registerFont('Korean', fontPath);
-        hasKoreanFont = true;
+      // Read and embed local fonts (regular and bold) as base64 for offline rendering
+      const fontPathRegular = path.join(process.cwd(), 'server', 'fonts', 'NotoSansKR-Regular.ttf');
+      const fontPathBold = path.join(process.cwd(), 'server', 'fonts', 'NotoSansKR-Bold.ttf');
+      let fontBase64Regular = '';
+      let fontBase64Bold = '';
+      try {
+        if (fs.existsSync(fontPathRegular)) {
+          const fontBuffer = fs.readFileSync(fontPathRegular);
+          fontBase64Regular = fontBuffer.toString('base64');
+        }
         if (fs.existsSync(fontPathBold)) {
-          doc.registerFont('Korean-Bold', fontPathBold);
-          hasBoldFont = true;
+          const fontBuffer = fs.readFileSync(fontPathBold);
+          fontBase64Bold = fontBuffer.toString('base64');
         }
-        doc.font('Korean');
+      } catch (e) {
+        console.warn('Could not load local fonts');
+        // In production, font read errors are fatal for deterministic rendering
+        if (isProduction) {
+          throw new Error('PDF 생성에 필요한 폰트를 읽을 수 없습니다. 관리자에게 문의해주세요.');
+        }
+        console.warn('Falling back to Google Fonts (dev mode)');
       }
       
-      // Parse HTML and render with proper styling using inline style tracking
-      const cheerio = await import('cheerio');
-      const $ = cheerio.load(content);
-      
-      let renderedContent = false;
-      
-      // Style stack for inline formatting (bold supported, italic/underline noted for future)
-      // Note: pdfkit does not support underline per-text-run easily; we track bold only
-      // For full rich text support, DOCX export is recommended
-      interface TextRun { text: string; bold: boolean; }
-      
-      // Extract inline content with style tracking
-      const getInlineRuns = (node: any): TextRun[] => {
-        const runs: TextRun[] = [];
-        
-        const traverse = (n: any, isBold: boolean) => {
-          if (n.type === 'text') {
-            const text = n.data || '';
-            if (text) {
-              runs.push({ text, bold: isBold });
-            }
-          } else if (n.type === 'tag') {
-            const tag = n.tagName?.toLowerCase();
-            const isBlockTag = ['ul', 'ol', 'li', 'p', 'div', 'h1', 'h2', 'h3', 'table'].includes(tag);
-            if (isBlockTag) return; // Skip nested block elements
-            
-            const newBold = isBold || tag === 'strong' || tag === 'b';
-            $(n).contents().each((_, child) => traverse(child, newBold));
-          }
-        };
-        
-        $(node).contents().each((_, child) => traverse(child, false));
-        return runs;
-      };
-      
-      // Render text runs with inline styling
-      const renderInlineText = (runs: TextRun[], prefix: string = '', indent: number = 0) => {
-        if (runs.length === 0) return false;
-        
-        // Check if any run has actual text content
-        const hasContent = runs.some(r => r.text.trim());
-        if (!hasContent) return false;
-        
-        doc.fontSize(12);
-        
-        // Render prefix if provided (for list bullets)
-        if (prefix) {
-          doc.text(prefix, { continued: true, indent });
-        }
-        
-        // Render each run with appropriate styling
-        runs.forEach((run, idx) => {
-          const isLast = idx === runs.length - 1;
-          if (run.bold && hasBoldFont) doc.font('Korean-Bold');
-          else if (hasKoreanFont) doc.font('Korean');
-          
-          doc.text(run.text, { 
-            continued: !isLast,
-            indent: prefix ? 0 : indent
-          });
-        });
-        
-        if (hasKoreanFont) doc.font('Korean');
-        return true;
-      };
-      
-      // Render list item with proper depth handling and inline styles
-      const renderListItem = (li: any, depth: number, isOrdered: boolean, index: number) => {
-        const bullet = isOrdered ? `${index + 1}. ` : '• ';
-        const runs = getInlineRuns(li);
-        
-        if (renderInlineText(runs, bullet, 20 + depth * 15)) {
-          doc.moveDown(0.3);
-          renderedContent = true;
-        }
-        
-        // Handle nested lists within this li
-        $(li).children('ul, ol').each((_, nestedList) => {
-          renderList(nestedList, depth + 1);
-        });
-      };
-      
-      // Render a list (ul or ol)
-      const renderList = (listNode: any, depth: number) => {
-        const isOrdered = listNode.tagName?.toLowerCase() === 'ol';
-        $(listNode).children('li').each((idx, li) => {
-          renderListItem(li, depth, isOrdered, idx);
-        });
-        if (depth === 0) doc.moveDown(0.3);
-      };
-      
-      // Recursive rendering with block element handling
-      const renderBlock = (node: any, depth: number = 0) => {
-        const tagName = node.tagName?.toLowerCase() || '';
-        
-        switch (tagName) {
-          case 'h1': {
-            const runs = getInlineRuns(node);
-            const text = runs.map(r => r.text).join('') || $(node).text().trim();
-            if (text) {
-              doc.fontSize(18);
-              // Render header runs - headers are bold by nature, but honor inline runs for content
-              if (runs.length > 0) {
-                runs.forEach((run, idx) => {
-                  if (hasBoldFont) doc.font('Korean-Bold');
-                  doc.text(run.text, { continued: idx < runs.length - 1 });
-                });
-              } else {
-                if (hasBoldFont) doc.font('Korean-Bold');
-                doc.text(text);
-              }
-              if (hasKoreanFont) doc.font('Korean');
-              doc.fontSize(12);
-              doc.moveDown(0.8);
-              renderedContent = true;
-            }
-            break;
-          }
-          case 'h2': {
-            const runs = getInlineRuns(node);
-            const text = runs.map(r => r.text).join('') || $(node).text().trim();
-            if (text) {
-              doc.fontSize(16);
-              if (runs.length > 0) {
-                runs.forEach((run, idx) => {
-                  if (hasBoldFont) doc.font('Korean-Bold');
-                  doc.text(run.text, { continued: idx < runs.length - 1 });
-                });
-              } else {
-                if (hasBoldFont) doc.font('Korean-Bold');
-                doc.text(text);
-              }
-              if (hasKoreanFont) doc.font('Korean');
-              doc.fontSize(12);
-              doc.moveDown(0.6);
-              renderedContent = true;
-            }
-            break;
-          }
-          case 'h3': {
-            const runs = getInlineRuns(node);
-            const text = runs.map(r => r.text).join('') || $(node).text().trim();
-            if (text) {
-              doc.fontSize(14);
-              if (runs.length > 0) {
-                runs.forEach((run, idx) => {
-                  if (hasBoldFont) doc.font('Korean-Bold');
-                  doc.text(run.text, { continued: idx < runs.length - 1 });
-                });
-              } else {
-                if (hasBoldFont) doc.font('Korean-Bold');
-                doc.text(text);
-              }
-              if (hasKoreanFont) doc.font('Korean');
-              doc.fontSize(12);
-              doc.moveDown(0.5);
-              renderedContent = true;
-            }
-            break;
-          }
-          case 'ul':
-          case 'ol':
-            renderList(node, depth);
-            break;
-          case 'p': {
-            const runs = getInlineRuns(node);
-            if (renderInlineText(runs)) {
-              doc.moveDown(0.4);
-              renderedContent = true;
-            } else {
-              // Fallback to plain text
-              const pText = $(node).text().trim();
-              if (pText) {
-                doc.fontSize(12);
-                doc.text(pText);
-                doc.moveDown(0.4);
-                renderedContent = true;
-              }
-            }
-            break;
-          }
-          case 'div':
-          case 'section':
-          case 'article':
-          case 'body':
-          case 'html':
-            // Container elements - recurse into children
-            $(node).children().each((_, child) => {
-              if (child.type === 'tag') renderBlock(child, depth);
-            });
-            break;
-          case 'br':
-            doc.moveDown(0.3);
-            break;
-          default:
-            // For other block-level or unknown tags, try to render text content
-            const text = $(node).text().trim();
-            if (text) {
-              doc.fontSize(12);
-              doc.text(text);
-              doc.moveDown(0.4);
-              renderedContent = true;
-            }
-            break;
-        }
-      };
-      
-      // Start rendering from body or root
-      const bodyChildren = $('body').children();
-      if (bodyChildren.length > 0) {
-        bodyChildren.each((_, el) => {
-          if ((el as any).type === 'tag') renderBlock(el, 0);
-        });
-      } else {
-        // If no body wrapper, try root elements
-        $.root().children().each((_, el) => {
-          if ((el as any).type === 'tag') renderBlock(el, 0);
-        });
+      // In production, require local fonts for deterministic rendering
+      if (isProduction && (!fontBase64Regular || !fontBase64Bold)) {
+        throw new Error('PDF 생성에 필요한 폰트 파일이 없습니다. 관리자에게 문의해주세요.');
       }
       
-      // Final fallback: if no content was rendered, use plain text conversion
-      if (!renderedContent) {
-        const textContent = htmlToText(content, { wordwrap: 80 });
-        doc.fontSize(12);
-        doc.text(textContent);
-      }
+      // Create full HTML document with embedded fonts (local or Google Fonts fallback)
+      const hasLocalFonts = fontBase64Regular && fontBase64Bold;
+      const fontFaceRule = hasLocalFonts 
+        ? `@font-face {
+            font-family: 'Noto Sans KR';
+            src: url('data:font/truetype;base64,${fontBase64Regular}') format('truetype');
+            font-weight: 400;
+            font-style: normal;
+          }
+          @font-face {
+            font-family: 'Noto Sans KR';
+            src: url('data:font/truetype;base64,${fontBase64Bold}') format('truetype');
+            font-weight: 700;
+            font-style: normal;
+          }`
+        : '';
+      
+      // Google Fonts fallback only in dev mode (production requires local fonts)
+      const googleFontsLink = (hasLocalFonts || isProduction)
+        ? '' 
+        : '<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">';
+      
+      const htmlDocument = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  ${googleFontsLink}
+  <style>
+    ${fontFaceRule}
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Noto Sans KR', '맑은 고딕', 'Malgun Gothic', sans-serif;
+      font-size: 12pt;
+      line-height: 1.6;
+      padding: 40px;
+      color: #333;
+    }
+    h1 { font-size: 20pt; font-weight: 700; margin-bottom: 16px; }
+    h2 { font-size: 16pt; font-weight: 700; margin-bottom: 12px; }
+    h3 { font-size: 14pt; font-weight: 700; margin-bottom: 10px; }
+    p { margin-bottom: 10px; }
+    ul, ol { margin-left: 24px; margin-bottom: 10px; }
+    li { margin-bottom: 6px; }
+    strong, b { font-weight: 700; }
+    em, i { font-style: italic; }
+    u { text-decoration: underline; }
+    table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    th { background-color: #f5f5f5; font-weight: 700; }
+  </style>
+</head>
+<body>
+  ${content}
+</body>
+</html>`;
 
-      doc.end();
-
-      await new Promise<void>((resolve) => doc.on('end', resolve));
+      // Use shared browser instance for efficiency
+      const browser = await getSharedBrowser();
+      const page = await browser.newPage();
       
-      const buffer = Buffer.concat(chunks);
-      const filename = `계약서_${lineItem.influencer?.name || 'contract'}_${new Date().toISOString().split('T')[0]}.pdf`;
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
-      res.send(buffer);
+      try {
+        // Set a longer timeout for font loading
+        page.setDefaultTimeout(30000);
+        
+        await page.setContent(htmlDocument, { 
+          waitUntil: 'networkidle0',
+          timeout: 30000
+        });
+        
+        // Wait for fonts to load
+        await page.evaluateHandle('document.fonts.ready');
+        
+        const pdfBuffer = await page.pdf({
+          format: 'A4',
+          printBackground: true,
+          margin: { top: '20mm', right: '20mm', bottom: '20mm', left: '20mm' }
+        });
+        
+        const filename = `계약서_${lineItem.influencer?.name || 'contract'}_${new Date().toISOString().split('T')[0]}.pdf`;
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+        res.send(pdfBuffer);
+      } finally {
+        // Always close the page but keep the browser running
+        await page.close();
+      }
     } catch (err: any) {
       console.error('PDF generation error:', err);
-      res.status(500).json({ message: err.message });
+      
+      // Determine appropriate HTTP status code
+      const isServiceUnavailable = 
+        err.message?.includes('서비스가 아직 준비 중') ||
+        err.message?.includes('서비스가 현재 사용 불가능') ||
+        err.message?.includes('서비스 초기화에 실패') ||
+        err.message?.includes('폰트 파일이 없습니다') ||
+        err.message?.includes('폰트를 읽을 수 없습니다');
+      
+      const statusCode = isServiceUnavailable ? 503 : 500;
+      
+      const errorDetails = {
+        message: isServiceUnavailable ? 'PDF 생성 서비스를 사용할 수 없습니다.' : 'PDF 생성 중 오류가 발생했습니다.',
+        details: err.message || '알 수 없는 오류',
+        suggestions: isServiceUnavailable 
+          ? ['잠시 후 다시 시도해주세요.', '문제가 지속되면 관리자에게 문의해주세요.']
+          : [
+              '템플릿 내용이 올바른지 확인해주세요.',
+              '특수 문자나 이모지가 포함되어 있다면 제거해 보세요.',
+              '문제가 지속되면 DOCX 형식으로 다운로드를 시도해주세요.'
+            ]
+      };
+      res.status(statusCode).json(errorDetails);
     }
   });
 
