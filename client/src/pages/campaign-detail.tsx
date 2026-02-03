@@ -244,10 +244,10 @@ export default function CampaignDetail() {
           <ArrowLeft className="w-4 h-4 mr-1" /> 캠페인 목록으로
         </Link>
 
-        <div className="flex justify-between items-start">
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold tracking-tight">{campaign.name}</h1>
+        <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-2xl font-bold tracking-tight">{campaign.name}</h1>
               {isEditingStatus ? (
                 <Select value={campaign.status || "대기중"} onValueChange={(v) => handleStatusChange(v)}>
                   <SelectTrigger className="w-[120px] h-8" data-testid="select-campaign-status">
@@ -275,12 +275,12 @@ export default function CampaignDetail() {
                 </Badge>
               )}
             </div>
-            <div className="flex items-center gap-2 mt-2">
+            <div className="flex items-center gap-2 mt-1">
               {isEditingClient ? (
                 <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground text-lg">클라이언트:</span>
+                  <span className="text-muted-foreground text-sm">클라이언트:</span>
                   <Select value={selectedClientId} onValueChange={setSelectedClientId}>
-                    <SelectTrigger className="w-[200px] h-8" data-testid="select-edit-client">
+                    <SelectTrigger className="w-[160px] h-7 text-sm" data-testid="select-edit-client">
                       <SelectValue placeholder="클라이언트 선택" />
                     </SelectTrigger>
                     <SelectContent>
@@ -291,80 +291,65 @@ export default function CampaignDetail() {
                       ))}
                     </SelectContent>
                   </Select>
-                  <Button size="sm" onClick={handleClientChange} disabled={!selectedClientId || updateCampaign.isPending} data-testid="button-save-client">
+                  <Button size="sm" className="h-7" onClick={handleClientChange} disabled={!selectedClientId || updateCampaign.isPending} data-testid="button-save-client">
                     <Save className="w-3 h-3 mr-1" />
                     저장
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => { setIsEditingClient(false); setSelectedClientId(""); }} data-testid="button-cancel-client">
+                  <Button size="sm" variant="ghost" className="h-7" onClick={() => { setIsEditingClient(false); setSelectedClientId(""); }} data-testid="button-cancel-client">
                     취소
                   </Button>
                 </div>
               ) : (
                 <>
-                  <p className="text-muted-foreground text-lg">클라이언트: {campaign.client || "미설정"}</p>
-                  <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setIsEditingClient(true)} data-testid="button-edit-client">
-                    <Pencil className="w-3.5 h-3.5" />
+                  <p className="text-muted-foreground text-sm">클라이언트: {campaign.client || "미설정"}</p>
+                  <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setIsEditingClient(true)} data-testid="button-edit-client">
+                    <Pencil className="w-3 h-3" />
                   </Button>
                 </>
               )}
             </div>
           </div>
-          <div className="text-right flex flex-col items-end gap-2">
-            <div>
-              <div className="text-sm text-muted-foreground mb-1">총 예산</div>
-              <div className="text-2xl font-bold font-mono">{campaign.budget?.toLocaleString()}원</div>
-              <div className="text-xs text-muted-foreground mt-1">예산 사용률: {budgetUtilization}%</div>
+          
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-4 text-sm">
+              <div className="flex items-center gap-1.5">
+                <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-muted-foreground">인플루언서</span>
+                <span className="font-semibold">{campaign.items?.length || 0}명</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-muted-foreground">계약</span>
+                <span className="font-semibold">{contractedCount}건</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-muted-foreground">지급</span>
+                <span className="font-semibold">{paidCount}건</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <CircleDollarSign className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-muted-foreground">집행</span>
+                <span className="font-semibold">{totalSpend.toLocaleString()}원</span>
+              </div>
+            </div>
+            <div className="hidden md:block h-8 w-px bg-border" />
+            <div className="text-right">
+              <div className="text-xs text-muted-foreground">총 예산</div>
+              <div className="text-lg font-bold font-mono">{campaign.budget?.toLocaleString()}원</div>
+              <div className="text-xs text-muted-foreground">사용률: {budgetUtilization}%</div>
             </div>
             <Button 
               variant="outline" 
               size="sm" 
-              className="text-destructive border-destructive/50"
+              className="text-destructive border-destructive/50 h-8"
               onClick={() => setIsDeleteCampaignOpen(true)}
               data-testid="button-delete-campaign"
             >
               <Trash2 className="w-3 h-3 mr-1" />
-              캠페인 삭제
+              삭제
             </Button>
           </div>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Card className="py-2">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 px-3 py-1">
-              <CardTitle className="text-xs font-medium text-muted-foreground">인플루언서</CardTitle>
-              <Users className="h-3.5 w-3.5 text-muted-foreground" />
-            </CardHeader>
-            <CardContent className="px-3 py-1">
-              <div className="text-xl font-bold">{campaign.items?.length || 0}명</div>
-            </CardContent>
-          </Card>
-          <Card className="py-2">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 px-3 py-1">
-              <CardTitle className="text-xs font-medium text-muted-foreground">계약 완료</CardTitle>
-              <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-            </CardHeader>
-            <CardContent className="px-3 py-1">
-              <div className="text-xl font-bold">{contractedCount}건</div>
-            </CardContent>
-          </Card>
-          <Card className="py-2">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 px-3 py-1">
-              <CardTitle className="text-xs font-medium text-muted-foreground">지급 완료</CardTitle>
-              <CheckCircle2 className="h-3.5 w-3.5 text-muted-foreground" />
-            </CardHeader>
-            <CardContent className="px-3 py-1">
-              <div className="text-xl font-bold">{paidCount}건</div>
-            </CardContent>
-          </Card>
-          <Card className="py-2">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 px-3 py-1">
-              <CardTitle className="text-xs font-medium text-muted-foreground">집행 금액</CardTitle>
-              <CircleDollarSign className="h-3.5 w-3.5 text-muted-foreground" />
-            </CardHeader>
-            <CardContent className="px-3 py-1">
-              <div className="text-xl font-bold">{totalSpend.toLocaleString()}원</div>
-            </CardContent>
-          </Card>
         </div>
 
         <Tabs defaultValue="influencers" className="w-full">
