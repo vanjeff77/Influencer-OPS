@@ -2361,7 +2361,15 @@ export async function registerRoutes(
   app.patch('/api/line-items/:id/operations', async (req, res) => {
     try {
       const lineItemId = parseInt(req.params.id);
-      const updates = req.body;
+      const updates = { ...req.body };
+      
+      // Convert date string fields to Date objects
+      const dateFields = ['draftDueAt', 'uploadDueAt', 'publishedConfirmedAt', 'feedbackSummaryUpdatedAt', 'lastOutboundAt', 'firstContactAt'];
+      for (const field of dateFields) {
+        if (updates[field] !== undefined) {
+          updates[field] = updates[field] ? new Date(updates[field]) : null;
+        }
+      }
       
       // Handle published confirmation timestamp
       if (updates.isPublishedConfirmed === true && !updates.publishedConfirmedAt) {
