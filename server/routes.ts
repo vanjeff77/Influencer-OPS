@@ -46,6 +46,28 @@ const PUPPETEER_ARGS = [
   '--font-render-hinting=none'
 ];
 
+// Find system Chromium executable path
+import * as fsSync from 'fs';
+function findChromiumPath(): string | undefined {
+  const paths = [
+    process.env.PUPPETEER_EXECUTABLE_PATH,
+    '/nix/store/zi4f80l169xlmivz8vja8wlphq74qqk0-chromium-125.0.6422.141/bin/chromium',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/google-chrome'
+  ];
+  
+  for (const p of paths) {
+    if (p && fsSync.existsSync(p)) {
+      console.log('[PDF] Found Chromium at:', p);
+      return p;
+    }
+  }
+  return undefined;
+}
+
+const chromiumPath = findChromiumPath();
+
 // Preflight check for Puppeteer at startup - uses actual getSharedBrowser for consistency
 (async function preflightPuppeteerCheck() {
   // Skip preflight if font errors already detected
@@ -54,10 +76,19 @@ const PUPPETEER_ARGS = [
     return;
   }
   
+  // Check if Chromium is available
+  if (!chromiumPath) {
+    console.error('[PDF] Chromium not found. PDF generation will be disabled.');
+    puppeteerAvailable = false;
+    pdfServiceError = 'PDF 생성에 필요한 Chromium 브라우저가 설치되어 있지 않습니다.';
+    return;
+  }
+  
   try {
     const puppeteer = await import('puppeteer');
     sharedBrowser = await puppeteer.default.launch({
       headless: true,
+      executablePath: chromiumPath,
       args: PUPPETEER_ARGS
     });
     
@@ -98,6 +129,7 @@ async function getSharedBrowser() {
       const puppeteer = await import('puppeteer');
       sharedBrowser = await puppeteer.default.launch({
         headless: true,
+        executablePath: chromiumPath,
         args: PUPPETEER_ARGS
       });
       
@@ -2858,7 +2890,13 @@ export async function registerRoutes(
         await page.close();
       }
     } catch (err: any) {
-      console.error('PDF generation error:', err);
+      console.error('[PDF Generation Error] Details:', {
+        message: err.message,
+        name: err.name,
+        stack: err.stack,
+        templateId: parseInt(req.params.id),
+        lineItemId: req.body?.lineItemId
+      });
       
       // Determine appropriate HTTP status code
       const isServiceUnavailable = 
@@ -2873,6 +2911,7 @@ export async function registerRoutes(
       const errorDetails = {
         message: isServiceUnavailable ? 'PDF 생성 서비스를 사용할 수 없습니다.' : 'PDF 생성 중 오류가 발생했습니다.',
         details: err.message || '알 수 없는 오류',
+        errorType: err.name || 'Error',
         suggestions: isServiceUnavailable 
           ? ['잠시 후 다시 시도해주세요.', '문제가 지속되면 관리자에게 문의해주세요.']
           : [

@@ -865,7 +865,31 @@ function ContractGenerateDialog({ item, campaignId, onClose }: ContractGenerateD
         body: JSON.stringify({ lineItemId: item.id }),
       });
       
-      if (!response.ok) throw new Error('Failed to generate PDF');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.message || 'PDF 생성에 실패했습니다.';
+        const errorDetails = errorData.details || '';
+        const suggestions = errorData.suggestions || [];
+        
+        console.error('[PDF Generation Error]', {
+          status: response.status,
+          message: errorMessage,
+          details: errorDetails,
+          suggestions
+        });
+        
+        let toastDescription = errorDetails;
+        if (suggestions.length > 0) {
+          toastDescription += '\n' + suggestions.join('\n');
+        }
+        
+        toast({ 
+          title: errorMessage, 
+          description: toastDescription,
+          variant: 'destructive' 
+        });
+        return;
+      }
       
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
@@ -878,8 +902,13 @@ function ContractGenerateDialog({ item, campaignId, onClose }: ContractGenerateD
       document.body.removeChild(a);
       
       toast({ title: 'PDF 파일이 다운로드되었습니다.' });
-    } catch (err) {
-      toast({ title: '계약서 생성 실패', variant: 'destructive' });
+    } catch (err: any) {
+      console.error('[PDF Generation Error]', err);
+      toast({ 
+        title: 'PDF 생성 실패', 
+        description: err?.message || '알 수 없는 오류가 발생했습니다.',
+        variant: 'destructive' 
+      });
     } finally {
       setIsGenerating(false);
     }
