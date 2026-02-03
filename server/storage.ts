@@ -61,6 +61,15 @@ export interface IStorage {
   updateCampaignItem(id: number, updates: Partial<CampaignInfluencer>): Promise<CampaignInfluencer>;
   deleteCampaignItem(id: number): Promise<void>;
   getAllCampaignInfluencers(workspaceId: number): Promise<CampaignInfluencer[]>;
+  getInfluencerCampaignHistory(influencerId: number, workspaceId: number): Promise<{
+    id: number;
+    campaignId: number;
+    campaignName: string;
+    clientName: string | null;
+    status: string | null;
+    payAmount: number | null;
+    createdAt: Date | null;
+  }[]>;
 
   // Workspace Memberships
   getWorkspaceMemberships(userId: number): Promise<{ workspaceId: number; role: string }[]>;
@@ -480,6 +489,35 @@ export class DatabaseStorage implements IStorage {
     const campaignIds = workspaceCampaigns.map(c => c.id);
     if (campaignIds.length === 0) return [];
     return await db.select().from(campaignInfluencers).where(inArray(campaignInfluencers.campaignId, campaignIds));
+  }
+
+  async getInfluencerCampaignHistory(influencerId: number, workspaceId: number): Promise<{
+    id: number;
+    campaignId: number;
+    campaignName: string;
+    clientName: string | null;
+    status: string | null;
+    payAmount: number | null;
+    createdAt: Date | null;
+  }[]> {
+    const results = await db.select({
+      id: campaignInfluencers.id,
+      campaignId: campaignInfluencers.campaignId,
+      campaignName: campaigns.name,
+      clientName: clients.name,
+      status: campaignInfluencers.status,
+      payAmount: campaignInfluencers.payAmount,
+      createdAt: campaigns.createdAt
+    })
+      .from(campaignInfluencers)
+      .innerJoin(campaigns, eq(campaignInfluencers.campaignId, campaigns.id))
+      .leftJoin(clients, eq(campaigns.clientId, clients.id))
+      .where(and(
+        eq(campaignInfluencers.influencerId, influencerId),
+        eq(campaigns.workspaceId, workspaceId)
+      ))
+      .orderBy(desc(campaigns.createdAt));
+    return results;
   }
 
   async getWorkspaceMemberships(userId: number): Promise<{ workspaceId: number; role: string }[]> {

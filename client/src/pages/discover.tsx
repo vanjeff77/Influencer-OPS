@@ -1092,6 +1092,16 @@ interface ClientForDrawer {
   name: string;
 }
 
+interface CampaignParticipation {
+  id: number;
+  campaignId: number;
+  campaignName: string;
+  clientName: string | null;
+  status: string | null;
+  payAmount: number | null;
+  createdAt: string | null;
+}
+
 function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influencerId: number | null; onClose: () => void; workspaceId: number }) {
   const { data: influencer, isLoading } = useInfluencer(influencerId || 0);
   const updateInfluencer = useUpdateInfluencer();
@@ -1099,6 +1109,7 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
   const addContent = useAddContent(influencerId || 0);
   const { toast } = useToast();
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [, setLocation] = useLocation();
 
   const { data: clientsList } = useQuery<ClientForDrawer[]>({
     queryKey: ['/api/clients', workspaceId],
@@ -1108,6 +1119,16 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
       return res.json();
     },
     enabled: !!workspaceId,
+  });
+
+  const { data: campaignHistory, isLoading: campaignHistoryLoading } = useQuery<CampaignParticipation[]>({
+    queryKey: ['/api/influencers', influencerId, 'campaigns', workspaceId],
+    queryFn: async () => {
+      const res = await fetch(`/api/influencers/${influencerId}/campaigns?workspaceId=${workspaceId}`);
+      if (!res.ok) throw new Error("Failed to fetch campaign history");
+      return res.json();
+    },
+    enabled: !!influencerId && !!workspaceId,
   });
   
   const [memo, setMemo] = useState("");
@@ -1490,6 +1511,52 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
                   {updateInfluencer.isPending ? KO.pages.discover.saving : KO.pages.discover.saveChanges}
                 </Button>
                 
+                <div className="border-t pt-4 mt-4">
+                  <h3 className="text-sm font-medium mb-3 flex items-center gap-2">
+                    <Megaphone className="w-4 h-4" />
+                    {KO.pages.discover.campaignParticipation}
+                  </h3>
+                  <ScrollArea className="h-[180px]">
+                    <div className="space-y-2">
+                      {campaignHistoryLoading ? (
+                        <div className="text-center text-muted-foreground py-6 text-sm">
+                          로딩 중...
+                        </div>
+                      ) : campaignHistory && campaignHistory.length > 0 ? (
+                        campaignHistory.map(participation => (
+                          <Card 
+                            key={participation.id} 
+                            className="p-3 cursor-pointer hover-elevate"
+                            onClick={() => setLocation(`/campaigns/${participation.campaignId}`)}
+                            data-testid={`card-campaign-participation-${participation.id}`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0 flex-1">
+                                <div className="font-medium text-sm truncate">{participation.campaignName}</div>
+                                {participation.clientName && (
+                                  <div className="text-xs text-muted-foreground truncate">{participation.clientName}</div>
+                                )}
+                              </div>
+                              <div className="flex flex-col items-end shrink-0">
+                                <Badge variant="outline" className="text-xs">{participation.status || '등록됨'}</Badge>
+                                {participation.payAmount && participation.payAmount > 0 && (
+                                  <span className="text-xs text-muted-foreground mt-1">
+                                    {participation.payAmount.toLocaleString()}원
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </Card>
+                        ))
+                      ) : (
+                        <div className="text-center text-muted-foreground py-6 text-sm">
+                          {KO.pages.discover.noCampaignHistory}
+                        </div>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </div>
+
                 <div className="border-t pt-4 mt-4">
                   <h3 className="text-sm font-medium mb-3">{KO.pages.discover.timeline}</h3>
                   <ScrollArea className="h-[200px]">

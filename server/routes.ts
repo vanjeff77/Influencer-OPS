@@ -404,6 +404,29 @@ export async function registerRoutes(
     res.json(inf);
   });
 
+  // Get campaign participation history for an influencer
+  app.get('/api/influencers/:id/campaigns', async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    const influencerId = parseInt(req.params.id);
+    const workspaceId = parseInt(req.query.workspaceId as string);
+    if (!workspaceId) {
+      return res.json([]);
+    }
+    
+    // Verify user has access to this workspace
+    const userId = (req.user as any).id;
+    const memberships = await storage.getWorkspaceMemberships(userId);
+    const hasAccess = memberships.some(m => m.workspaceId === workspaceId);
+    if (!hasAccess) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+    
+    const participations = await storage.getInfluencerCampaignHistory(influencerId, workspaceId);
+    res.json(participations);
+  });
+
   // Update influencer (memo, tags, email, phone, priceMemo, etc.)
   app.patch('/api/influencers/:id', async (req, res) => {
     try {

@@ -59,6 +59,7 @@ Preferred communication style: Simple, everyday language.
     - **Bulk Email Sending**: Queue-based 1:1 email delivery with throttling, WYSIWYG editor, variable substitution, validation, and first contact tracking.
     - **Integrated Messenger**: 3-pane layout for real-time campaign communication, syncing with Gmail, influencer detail editing, and DOMPurify for content sanitization.
 - **Mobile Optimization**: Fully responsive UI across all pages, components, and tables using Tailwind CSS for a consistent mobile-first experience.
+- **Influencer Campaign History**: In the discovery tab, when viewing an influencer's detail panel under the "협업 내역" tab, displays the list of campaigns the influencer has been registered to, including campaign name, client, status, and payment amount. Clicking a campaign card navigates to the campaign detail page.
 - **Finance & Tracking**: Real-time finance summary, CSV export for tracking data.
 - **Settlement Management (정산)**:
     - **Settlement Work Queue**: Finance page with KPI cards (pending count/total, incomplete info, hold count) and filterable work queue table showing upload-completed line items.

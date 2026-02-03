@@ -134,6 +134,8 @@ export const KO = {
       collabHistory: "협업 내역",
       content: "콘텐츠",
       timeline: "타임라인",
+      campaignParticipation: "캠페인 참여 이력",
+      noCampaignHistory: "참여한 캠페인이 없습니다.",
       saveChanges: "변경사항 저장",
       phone: "전화번호",
       tags: "태그",
