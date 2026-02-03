@@ -905,7 +905,7 @@ export default function Discover() {
         {isLoading ? (
           <div className="text-center py-20 text-muted-foreground">{KO.common.loading}</div>
         ) : (
-          <div className="border rounded-md overflow-hidden flex-1">
+          <div className="border rounded-md overflow-hidden flex-1 bg-[#ffffff]">
             <div className="overflow-auto h-full">
               <Table>
                 <TableHeader className="bg-muted/50 sticky top-0">
@@ -1057,13 +1057,11 @@ export default function Discover() {
           </div>
         )}
       </div>
-
       <InfluencerDetailDrawer 
         influencerId={selectedInfluencerId} 
         onClose={handleCloseDetail}
         workspaceId={workspaceId || 0}
       />
-
       <GroupSelectionModal 
         open={isGroupModalOpen}
         onOpenChange={setIsGroupModalOpen}
@@ -1074,7 +1072,6 @@ export default function Discover() {
           setIsGroupModalOpen(false);
         }}
       />
-
       <CampaignSelectionModal 
         open={isCampaignModalOpen}
         onOpenChange={setIsCampaignModalOpen}

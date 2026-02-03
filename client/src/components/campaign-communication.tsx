@@ -12,6 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { KO } from "@/i18n/ko";
 import DOMPurify from "dompurify";
@@ -85,6 +86,8 @@ interface ConversationMessage {
   snippet: string | null;
   bodyHtml: string | null;
   bodyText: string | null;
+  recipientEmail: string | null;
+  ccEmails: string[] | null;
   sendStatus: string | null;
   sentAt: string | null;
   receivedAt: string | null;
@@ -391,6 +394,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
             <MessageComposer 
               conversationId={existingConv?.id} 
               influencerEmail={selectedLineItem.influencer?.email}
+              lastMessageCc={conversationDetail?.messages?.slice().reverse().find(m => m.direction === 'outbound')?.ccEmails}
               onSent={() => refetchConversation()}
             />
           </>
@@ -548,6 +552,21 @@ function MessageThread({ messages, onViewFull }: { messages: ConversationMessage
                 {msg.sentAt || msg.receivedAt ? (
                   <span>{formatMessageTime(new Date(msg.sentAt || msg.receivedAt!))}</span>
                 ) : null}
+                {msg.ccEmails && msg.ccEmails.length > 0 && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className={`text-[10px] px-1 rounded cursor-help ${msg.direction === 'outbound' ? 'bg-primary-foreground/20' : 'bg-muted'}`} data-testid={`cc-indicator-${msg.id}`}>
+                        참조 {msg.ccEmails.length}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-xs">
+                      <p className="text-xs font-medium mb-1">참조:</p>
+                      {msg.ccEmails.map((email, i) => (
+                        <p key={i} className="text-xs">{email}</p>
+                      ))}
+                    </TooltipContent>
+                  </Tooltip>
+                )}
                 {msg.sendStatus === 'failed' && (
                   <Badge variant="destructive" className="text-[10px]" data-testid={`badge-send-failed-${msg.id}`}>
                     <AlertCircle className="w-3 h-3 mr-1" />
@@ -566,18 +585,22 @@ function MessageThread({ messages, onViewFull }: { messages: ConversationMessage
   );
 }
 
-function MessageComposer({ conversationId, influencerEmail, onSent }: { conversationId?: number; influencerEmail?: string | null; onSent: () => void }) {
+function MessageComposer({ conversationId, influencerEmail, lastMessageCc, onSent }: { conversationId?: number; influencerEmail?: string | null; lastMessageCc?: string[] | null; onSent: () => void }) {
   const { toast } = useToast();
   const [message, setMessage] = useState("");
   const [subject, setSubject] = useState("");
+  const [cc, setCc] = useState(lastMessageCc?.join(', ') || "");
   const [isExpanded, setIsExpanded] = useState(false);
+  const [showCc, setShowCc] = useState(!!lastMessageCc?.length);
 
   const sendMessage = useMutation({
-    mutationFn: (data: { body: string; subject: string }) => 
+    mutationFn: (data: { body: string; subject: string; cc?: string }) => 
       apiRequest('POST', `/api/conversations/${conversationId}/messages`, data),
     onSuccess: () => {
       setMessage("");
       setSubject("");
+      setCc("");
+      setShowCc(false);
       setIsExpanded(false);
       onSent();
       queryClient.invalidateQueries({ queryKey: ['/api/conversations'] });
@@ -590,7 +613,7 @@ function MessageComposer({ conversationId, influencerEmail, onSent }: { conversa
 
   const handleSend = () => {
     if (!message.trim() || !conversationId) return;
-    sendMessage.mutate({ body: message, subject });
+    sendMessage.mutate({ body: message, subject, cc: cc.trim() || undefined });
   };
 
   if (!influencerEmail) {
@@ -604,13 +627,34 @@ function MessageComposer({ conversationId, influencerEmail, onSent }: { conversa
   return (
     <div className="p-3 border-t">
       {isExpanded && (
-        <Input 
-          placeholder={KO.pages.email.subject}
-          value={subject}
-          onChange={(e) => setSubject(e.target.value)}
-          className="mb-2 h-8 text-sm"
-          data-testid="input-email-subject"
-        />
+        <>
+          <Input 
+            placeholder={KO.pages.email.subject}
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
+            className="mb-2 h-8 text-sm"
+            data-testid="input-email-subject"
+          />
+          {showCc ? (
+            <Input 
+              placeholder="참조 (CC): 이메일 주소, 쉼표로 구분"
+              value={cc}
+              onChange={(e) => setCc(e.target.value)}
+              className="mb-2 h-8 text-sm"
+              data-testid="input-email-cc"
+            />
+          ) : (
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="mb-2 h-6 text-xs text-muted-foreground"
+              onClick={() => setShowCc(true)}
+              data-testid="button-add-cc"
+            >
+              + 참조 추가 (CC)
+            </Button>
+          )}
+        </>
       )}
       <div className="flex gap-2">
         <Textarea 

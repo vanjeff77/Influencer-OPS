@@ -69,6 +69,7 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
   
   const [step, setStep] = useState<Step>('template');
   const [subject, setSubject] = useState(`[${campaignName}] 안녕하세요, {{influencer_name}}님!`);
+  const [cc, setCc] = useState('');
   const [body, setBody] = useState(`<p>안녕하세요 {{influencer_name}}님,</p>
 <p>{{campaign_name}} 캠페인 협업 제안 드립니다.</p>
 <p>자세한 내용은 회신 부탁드립니다.</p>
@@ -105,6 +106,7 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
       const res = await apiRequest('POST', '/api/bulk-email/test', {
         subject,
         body,
+        cc: cc.trim() || undefined,
         testEmail,
         emailAccountId: parseInt(selectedEmailAccountId),
         influencerId: previewInfluencerId || lineItems[0]?.influencer?.id,
@@ -249,6 +251,17 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
                     data-testid="input-subject"
                   />
                   <p className="text-xs text-muted-foreground mt-1">{KO.pages.bulkEmail.variableHint}</p>
+                </div>
+                
+                <div>
+                  <Label>참조 (CC)</Label>
+                  <Input
+                    value={cc}
+                    onChange={(e) => setCc(e.target.value)}
+                    placeholder="참조할 이메일 주소 (쉼표로 구분, 모든 수신자에게 동일하게 적용)"
+                    data-testid="input-cc"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">모든 이메일에 동일하게 적용됩니다</p>
                 </div>
                 
                 <div>
