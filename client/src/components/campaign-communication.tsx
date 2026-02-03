@@ -264,7 +264,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 min-h-[400px] lg:h-[600px]">
       {/* Left Panel: Line Items List */}
-      <div className="lg:col-span-3 border rounded-lg overflow-hidden flex flex-col" data-testid="panel-conversations-list">
+      <div className="lg:col-span-3 border rounded-lg overflow-hidden flex flex-col bg-[#ffffff]" data-testid="panel-conversations-list">
         <div className="p-3 border-b bg-muted/30">
           <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
             <span className="text-sm font-medium">인플루언서</span>
@@ -371,7 +371,6 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
           )}
         </ScrollArea>
       </div>
-
       {/* Center Panel: Message Thread */}
       <div className="lg:col-span-5 border rounded-lg overflow-hidden flex flex-col" data-testid="panel-message-thread">
         {selectedLineItem ? (
@@ -436,7 +435,6 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
           </div>
         )}
       </div>
-
       {/* Right Panel: Influencer Details */}
       <div className="lg:col-span-4 border rounded-lg overflow-hidden" data-testid="panel-influencer-details">
         {selectedLineItem ? (
@@ -453,7 +451,6 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
           </div>
         )}
       </div>
-
       {/* Full Message Drawer */}
       <Sheet open={!!showFullMessage} onOpenChange={(open) => !open && setShowFullMessage(null)}>
         <SheetContent className="w-[500px] sm:max-w-[500px] flex flex-col h-full">
@@ -470,7 +467,6 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
           </ScrollArea>
         </SheetContent>
       </Sheet>
-
       {/* Bulk Email Dialog */}
       <BulkEmailDialog
         open={bulkEmailOpen}
@@ -479,14 +475,12 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
         campaignName={campaignName || ''}
         lineItems={lineItems}
       />
-
       {/* Bulk Email Log Dialog */}
       <BulkEmailLogDialog
         open={bulkEmailLogOpen}
         onOpenChange={setBulkEmailLogOpen}
         campaignId={campaignId}
       />
-
       {/* Attach Email Thread Dialog */}
       {selectedLineItem && (
         <AttachEmailThreadDialog
@@ -783,7 +777,7 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
 
   return (
     <ScrollArea className="h-full max-h-[600px]">
-      <div className="p-4 space-y-4">
+      <div className="p-4 space-y-4 bg-[#ffffff]">
         <div className="flex items-center gap-3">
           <Avatar className="h-12 w-12 shrink-0">
             <AvatarFallback>{influencer.name?.substring(0, 2)}</AvatarFallback>
