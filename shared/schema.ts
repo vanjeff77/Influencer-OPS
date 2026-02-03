@@ -250,6 +250,7 @@ export const campaignInfluencers = pgTable("campaign_influencers", {
 export const emailAccounts = pgTable("email_accounts", {
   id: serial("id").primaryKey(),
   workspaceId: integer("workspace_id").notNull(),
+  userId: integer("user_id"), // Each user has their own email accounts
   email: text("email").notNull(),
   provider: text("provider").default("gmail"),
   accessToken: text("access_token"),
@@ -521,6 +522,7 @@ export const campaignInfluencerRelations = relations(campaignInfluencers, ({ one
 
 export const emailAccountRelations = relations(emailAccounts, ({ one, many }) => ({
   workspace: one(workspaces, { fields: [emailAccounts.workspaceId], references: [workspaces.id] }),
+  user: one(users, { fields: [emailAccounts.userId], references: [users.id] }),
   threads: many(emailThreads),
   conversations: many(conversations),
 }));

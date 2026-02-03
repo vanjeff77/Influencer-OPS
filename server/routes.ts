@@ -1347,15 +1347,17 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Gmail not connected. Please connect Gmail first via Replit." });
       }
       
-      // Check if account already exists
-      const existingAccounts = await storage.getEmailAccounts(workspaceId);
+      const userId = (req.user as any).id;
+      
+      // Check if account already exists for this user
+      const existingAccounts = await storage.getEmailAccounts(userId, workspaceId);
       const existing = existingAccounts.find(a => a.email === profile.emailAddress);
       if (existing) {
         return res.json({ account: existing, message: "Account already registered" });
       }
       
-      // Create new email account
-      const account = await storage.createEmailAccount(workspaceId, {
+      // Create new email account for this user
+      const account = await storage.createEmailAccount(userId, workspaceId, {
         email: profile.emailAddress,
         provider: 'gmail',
         accessToken: null,
@@ -1394,17 +1396,17 @@ export async function registerRoutes(
         return res.status(403).json({ message: "Access denied to this workspace" });
       }
       
-      // Check if account already exists
-      const existingAccounts = await storage.getEmailAccounts(workspaceId);
+      // Check if account already exists for this user
+      const existingAccounts = await storage.getEmailAccounts(userId, workspaceId);
       const existing = existingAccounts.find(a => a.email === email);
       if (existing) {
         return res.status(400).json({ message: "Account already registered" });
       }
       
-      // Create new email account with encrypted password
+      // Create new email account with encrypted password for this user
       const imapSettings = JSON.stringify({ imapServer, imapPort, smtpServer, smtpPort });
       const encryptedPassword = encryptPassword(password);
-      const account = await storage.createEmailAccount(workspaceId, {
+      const account = await storage.createEmailAccount(userId, workspaceId, {
         email,
         provider: 'imap',
         accessToken: imapSettings,
@@ -1419,7 +1421,12 @@ export async function registerRoutes(
   });
 
   app.get(api.email.listAccounts.path, async (req, res) => {
-    const accounts = await storage.getEmailAccounts(parseInt(req.params.workspaceId));
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    const userId = (req.user as any).id;
+    const workspaceId = parseInt(req.params.workspaceId);
+    const accounts = await storage.getEmailAccounts(userId, workspaceId);
     res.json(accounts);
   });
 
@@ -1572,7 +1579,7 @@ export async function registerRoutes(
     }
   });
 
-  // === EMAIL ACCOUNTS BY WORKSPACE ===
+  // === EMAIL ACCOUNTS BY USER (per-user email accounts) ===
   app.get('/api/workspaces/:workspaceId/email-accounts', async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
@@ -1586,7 +1593,8 @@ export async function registerRoutes(
         return res.status(403).json({ message: "이 워크스페이스에 대한 접근 권한이 없습니다" });
       }
       
-      const accounts = await storage.getEmailAccounts(workspaceId);
+      // Get only the current user's email accounts
+      const accounts = await storage.getEmailAccounts(userId, workspaceId);
       const safeAccounts = accounts.map(acc => ({
         id: acc.id,
         email: acc.email,
@@ -3297,7 +3305,7 @@ async function seedDatabase() {
       encrypted += cipher.final('hex');
       const encryptedPassword = iv.toString('hex') + ':' + encrypted;
 
-      await storage.createEmailAccount(ws.id, {
+      await storage.createEmailAccount(demoUser.id, ws.id, {
         email: 'jaff77@naver.com',
         provider: 'naver',
         imapHost: 'imap.naver.com',

@@ -66,9 +66,9 @@ export interface IStorage {
   getWorkspaceMemberships(userId: number): Promise<{ workspaceId: number; role: string }[]>;
 
   // Email
-  getEmailAccounts(workspaceId: number): Promise<EmailAccount[]>;
+  getEmailAccounts(userId: number, workspaceId: number): Promise<EmailAccount[]>;
   getEmailAccountById(accountId: number): Promise<EmailAccount | null>;
-  createEmailAccount(workspaceId: number, account: any): Promise<EmailAccount>;
+  createEmailAccount(userId: number, workspaceId: number, account: any): Promise<EmailAccount>;
   deleteEmailAccount(accountId: number): Promise<void>;
   getEmailThreads(accountId: number): Promise<EmailThread[]>;
   createEmailThread(thread: any): Promise<EmailThread>;
@@ -487,8 +487,10 @@ export class DatabaseStorage implements IStorage {
     }).from(workspaceMembers).where(eq(workspaceMembers.userId, userId));
   }
 
-  async getEmailAccounts(workspaceId: number): Promise<EmailAccount[]> {
-    return await db.select().from(emailAccounts).where(eq(emailAccounts.workspaceId, workspaceId));
+  async getEmailAccounts(userId: number, workspaceId: number): Promise<EmailAccount[]> {
+    return await db.select().from(emailAccounts).where(
+      and(eq(emailAccounts.userId, userId), eq(emailAccounts.workspaceId, workspaceId))
+    );
   }
 
   async getEmailAccountById(accountId: number): Promise<EmailAccount | null> {
@@ -496,8 +498,8 @@ export class DatabaseStorage implements IStorage {
     return account || null;
   }
 
-  async createEmailAccount(workspaceId: number, account: any): Promise<EmailAccount> {
-    const [a] = await db.insert(emailAccounts).values({ ...account, workspaceId }).returning();
+  async createEmailAccount(userId: number, workspaceId: number, account: any): Promise<EmailAccount> {
+    const [a] = await db.insert(emailAccounts).values({ ...account, userId, workspaceId }).returning();
     return a;
   }
 
