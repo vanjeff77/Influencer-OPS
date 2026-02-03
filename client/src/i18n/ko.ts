@@ -585,7 +585,6 @@ export const KO = {
       signIn: "로그인",
       authenticating: "인증 중...",
       loginFailed: "로그인 실패",
-      demoCredentials: "아이디: demo@example.com / 비밀번호: password",
     },
   },
   toast: {

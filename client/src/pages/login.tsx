@@ -46,7 +46,7 @@ export default function Login() {
               <Input 
                 value={username} 
                 onChange={(e) => setUsername(e.target.value)} 
-                placeholder="demo@example.com"
+                placeholder="이메일을 입력하세요"
                 className="bg-background h-9 md:h-10 text-sm"
                 data-testid="input-username"
               />
@@ -70,9 +70,6 @@ export default function Login() {
             >
               {login.isPending ? KO.pages.login.authenticating : KO.pages.login.signIn}
             </Button>
-            <div className="text-center text-[10px] md:text-xs text-muted-foreground mt-3 md:mt-4">
-              {KO.pages.login.demoCredentials}
-            </div>
           </form>
         </CardContent>
       </Card>
