@@ -102,6 +102,8 @@ export interface IStorage {
       pendingTotal: number;
       incompleteInfoCount: number;
       holdCount: number;
+      settlementRequestCount: number;
+      settlementRequestTotal: number;
     };
     items: (CampaignInfluencer & { 
       campaign?: Campaign; 
@@ -601,6 +603,8 @@ export class DatabaseStorage implements IStorage {
       pendingTotal: number;
       incompleteInfoCount: number;
       holdCount: number;
+      settlementRequestCount: number;
+      settlementRequestTotal: number;
     };
     items: (CampaignInfluencer & { 
       campaign?: Campaign; 
@@ -611,7 +615,7 @@ export class DatabaseStorage implements IStorage {
   }> {
     const campaignList = await db.select().from(campaigns).where(eq(campaigns.workspaceId, workspaceId));
     if (campaignList.length === 0) {
-      return { kpi: { pendingCount: 0, pendingTotal: 0, incompleteInfoCount: 0, holdCount: 0 }, items: [] };
+      return { kpi: { pendingCount: 0, pendingTotal: 0, incompleteInfoCount: 0, holdCount: 0, settlementRequestCount: 0, settlementRequestTotal: 0 }, items: [] };
     }
     
     // Get clients for the workspace
@@ -630,7 +634,7 @@ export class DatabaseStorage implements IStorage {
     }
     
     if (campaignIds.length === 0) {
-      return { kpi: { pendingCount: 0, pendingTotal: 0, incompleteInfoCount: 0, holdCount: 0 }, items: [] };
+      return { kpi: { pendingCount: 0, pendingTotal: 0, incompleteInfoCount: 0, holdCount: 0, settlementRequestCount: 0, settlementRequestTotal: 0 }, items: [] };
     }
     
     let items = await db.select().from(campaignInfluencers).where(inArray(campaignInfluencers.campaignId, campaignIds));
@@ -685,14 +689,16 @@ export class DatabaseStorage implements IStorage {
     
     // Sort: incompleteInfo and pending first, then by uploadCompletedAt oldest first
     finalItems.sort((a, b) => {
-      // Priority: 정산정보미비 > 지급대기 > 증빙요청 > 증빙수령 > others
+      // Priority: 정산요청 > 정산정보미비 > 지급대기 > 증빙요청 > 증빙수령 > others
       const statusPriority: Record<string, number> = {
-        '정산정보미비': 1,
-        '지급대기': 2,
-        '증빙요청': 3,
-        '증빙수령': 4,
-        '보류': 5,
-        '지급완료': 6
+        '정산요청': 1,
+        '정산정보미비': 2,
+        '지급대기': 3,
+        '증빙요청': 4,
+        '증빙수령': 5,
+        '보류': 6,
+        '입금완료': 7,
+        '지급완료': 8
       };
       const aPriority = statusPriority[a.payoutStatus || '정산정보미비'] || 5;
       const bPriority = statusPriority[b.payoutStatus || '정산정보미비'] || 5;
@@ -708,13 +714,16 @@ export class DatabaseStorage implements IStorage {
     const pendingItems = enrichedItems.filter(i => i.payoutStatus === '지급대기');
     const incompleteInfoItems = enrichedItems.filter(i => !i.settlementInfoComplete || i.payoutStatus === '정산정보미비');
     const holdItems = enrichedItems.filter(i => i.payoutStatus === '보류');
+    const settlementRequestItems = enrichedItems.filter(i => i.payoutStatus === '정산요청');
     
     return {
       kpi: {
         pendingCount: pendingItems.length,
         pendingTotal: pendingItems.reduce((sum, i) => sum + (i.payoutTotal || i.payAmount || 0), 0),
         incompleteInfoCount: incompleteInfoItems.length,
-        holdCount: holdItems.length
+        holdCount: holdItems.length,
+        settlementRequestCount: settlementRequestItems.length,
+        settlementRequestTotal: settlementRequestItems.reduce((sum, i) => sum + (i.payoutTotal || i.offerFee || 0), 0)
       },
       items: finalItems
     };

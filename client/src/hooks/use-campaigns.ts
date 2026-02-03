@@ -248,6 +248,8 @@ export type SettlementQueueKPI = {
   pendingTotal: number;
   incompleteInfoCount: number;
   holdCount: number;
+  settlementRequestCount: number;
+  settlementRequestTotal: number;
 };
 
 export type SettlementQueueResult = {
