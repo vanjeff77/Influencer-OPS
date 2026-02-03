@@ -73,8 +73,14 @@ Preferred communication style: Simple, everyday language.
     - **Variable Substitution**: Supports {{인플루언서명}}, {{캠페인명}}, {{금액}}, {{날짜}}, {{초안예정일}}, {{업로드예정일}}, {{클라이언트명}}, {{이메일}}, {{연락처}} placeholders.
     - **Dual Format Export**: 
         - DOCX: Uses html-to-docx library for full HTML support with 맑은 고딕 font.
-        - PDF: Uses Puppeteer for full HTML/CSS rendering with Noto Sans KR font (via Google Fonts). Supports all rich text formatting including bold, italic, underline, colors, tables, and lists.
-    - **Font**: Both exports use 맑은 고딕 (Malgun Gothic) / Noto Sans KR for Korean text rendering.
+        - PDF: Uses Puppeteer for full HTML/CSS rendering with embedded Noto Sans KR fonts (base64). Supports all rich text formatting including bold, italic, underline, colors, tables, and lists.
+    - **Font**: PDF uses locally embedded Noto Sans KR fonts (`server/fonts/NotoSansKR-Regular.ttf` and `NotoSansKR-Bold.ttf`) as base64 for deterministic offline rendering. DOCX uses 맑은 고딕 (Malgun Gothic) font option.
+    - **Production Readiness**: 
+        - Startup preflight check validates Chromium/Puppeteer availability
+        - Font availability check at startup (required in production, optional in dev)
+        - Singleton browser pattern for efficient resource usage
+        - HTTP 503 status for service unavailability with Korean error messages
+        - Google Fonts fallback disabled in production for deterministic rendering
     - **Legacy Template Support**: Plain-text templates auto-detected via regex and converted to HTML with entity escaping.
     - **Inline Date Editing**: Direct editing of 초안 예정일 and 업로드 예정일 columns in Operations table.
     - **Error Handling**: Detailed Korean error messages with suggestions for troubleshooting.
