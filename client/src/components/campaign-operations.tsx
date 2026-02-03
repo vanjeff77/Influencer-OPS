@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useDeleteCampaignItem } from "@/hooks/use-campaigns";
+import { api } from "@shared/routes";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -130,17 +131,17 @@ export function CampaignOperations({ campaignId, lineItems }: CampaignOperations
       return apiRequest('PATCH', `/api/line-items/${data.id}/operations`, data.updates);
     },
     onMutate: async (data) => {
-      await queryClient.cancelQueries({ queryKey: ['/api/campaigns', campaignId] });
+      await queryClient.cancelQueries({ queryKey: [api.campaigns.get.path, campaignId] });
       await queryClient.cancelQueries({ queryKey: ['/api/line-items', data.id] });
       
-      const previousCampaign = queryClient.getQueryData(['/api/campaigns', campaignId]);
+      const previousCampaign = queryClient.getQueryData([api.campaigns.get.path, campaignId]);
       const previousItem = queryClient.getQueryData(['/api/line-items', data.id]);
       
-      queryClient.setQueryData(['/api/campaigns', campaignId], (old: any) => {
+      queryClient.setQueryData([api.campaigns.get.path, campaignId], (old: any) => {
         if (!old) return old;
         return {
           ...old,
-          lineItems: old.lineItems?.map((item: any) => 
+          items: old.items?.map((item: any) => 
             item.id === data.id ? { ...item, ...data.updates } : item
           )
         };
@@ -155,7 +156,7 @@ export function CampaignOperations({ campaignId, lineItems }: CampaignOperations
     },
     onError: (err, data, context) => {
       if (context?.previousCampaign) {
-        queryClient.setQueryData(['/api/campaigns', campaignId], context.previousCampaign);
+        queryClient.setQueryData([api.campaigns.get.path, campaignId], context.previousCampaign);
       }
       if (context?.previousItem) {
         queryClient.setQueryData(['/api/line-items', context.id], context.previousItem);
@@ -166,7 +167,7 @@ export function CampaignOperations({ campaignId, lineItems }: CampaignOperations
       toast({ title: KO.pages.operations.panel.saved });
     },
     onSettled: (_, __, data) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/campaigns', campaignId] });
+      queryClient.invalidateQueries({ queryKey: [api.campaigns.get.path, campaignId] });
       queryClient.invalidateQueries({ queryKey: ['/api/line-items', data.id] });
     }
   });
