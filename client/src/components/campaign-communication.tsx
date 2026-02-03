@@ -83,11 +83,13 @@ interface ConversationMessage {
   id: number;
   conversationId: number;
   direction: string;
+  senderEmail: string | null;
+  senderName: string | null;
+  recipientEmail: string | null;
+  ccEmails: string[] | null;
   snippet: string | null;
   bodyHtml: string | null;
   bodyText: string | null;
-  recipientEmail: string | null;
-  ccEmails: string[] | null;
   sendStatus: string | null;
   sentAt: string | null;
   receivedAt: string | null;
@@ -171,10 +173,37 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
       });
       return res.json();
     },
+    onMutate: async ({ lineItemId, completed }) => {
+      await queryClient.cancelQueries({ queryKey: ['/api/campaigns', campaignId.toString()] });
+      
+      const previousCampaign = queryClient.getQueryData(['/api/campaigns', campaignId.toString()]);
+      
+      queryClient.setQueryData(['/api/campaigns', campaignId.toString()], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          lineItems: old.lineItems?.map((item: any) => 
+            item.id === lineItemId 
+              ? { ...item, firstContactCompleted: completed, firstContactAt: completed ? new Date().toISOString() : null } 
+              : item
+          )
+        };
+      });
+      
+      return { previousCampaign };
+    },
+    onError: (err, vars, context) => {
+      if (context?.previousCampaign) {
+        queryClient.setQueryData(['/api/campaigns', campaignId.toString()], context.previousCampaign);
+      }
+      toast({ title: "저장 실패", variant: "destructive" });
+    },
     onSuccess: () => {
+      toast({ title: KO.pages.bulkEmail.toggleFirstContact });
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/campaigns'] });
       queryClient.invalidateQueries({ queryKey: ['/api/campaigns', campaignId.toString()] });
-      toast({ title: KO.pages.bulkEmail.toggleFirstContact });
     },
   });
 
@@ -510,11 +539,11 @@ function MessageThread({ messages, onViewFull }: { messages: ConversationMessage
     'bg-cyan-100 dark:bg-cyan-900',
   ];
 
-  const uniqueInboundSenders = [...new Set(
+  const uniqueInboundSenders = Array.from(new Set(
     messages
       .filter(m => m.direction === 'inbound' && m.senderEmail)
       .map(m => m.senderEmail?.toLowerCase())
-  )];
+  ));
 
   const getSenderColor = (senderEmail: string | null | undefined): string => {
     if (!senderEmail) return inboundSenderColors[0];

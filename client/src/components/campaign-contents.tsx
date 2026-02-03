@@ -75,9 +75,34 @@ export function CampaignContents({ campaignId, lineItems }: CampaignContentsProp
     mutationFn: async (data: { id: number; updates: Partial<CampaignInfluencer> }) => {
       return apiRequest('PATCH', `/api/line-items/${data.id}/operations`, data.updates);
     },
+    onMutate: async (data) => {
+      await queryClient.cancelQueries({ queryKey: ['/api/campaigns', campaignId] });
+      
+      const previousCampaign = queryClient.getQueryData(['/api/campaigns', campaignId]);
+      
+      queryClient.setQueryData(['/api/campaigns', campaignId], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          lineItems: old.lineItems?.map((item: any) => 
+            item.id === data.id ? { ...item, ...data.updates } : item
+          )
+        };
+      });
+      
+      return { previousCampaign };
+    },
+    onError: (err, data, context) => {
+      if (context?.previousCampaign) {
+        queryClient.setQueryData(['/api/campaigns', campaignId], context.previousCampaign);
+      }
+      toast({ title: "저장 실패", variant: "destructive" });
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/campaigns', campaignId] });
       toast({ title: "저장되었습니다" });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/campaigns', campaignId] });
     }
   });
 

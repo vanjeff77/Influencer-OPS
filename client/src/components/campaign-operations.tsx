@@ -129,10 +129,45 @@ export function CampaignOperations({ campaignId, lineItems }: CampaignOperations
     mutationFn: async (data: { id: number; updates: Partial<CampaignInfluencer> }) => {
       return apiRequest('PATCH', `/api/line-items/${data.id}/operations`, data.updates);
     },
+    onMutate: async (data) => {
+      await queryClient.cancelQueries({ queryKey: ['/api/campaigns', campaignId] });
+      await queryClient.cancelQueries({ queryKey: ['/api/line-items', data.id] });
+      
+      const previousCampaign = queryClient.getQueryData(['/api/campaigns', campaignId]);
+      const previousItem = queryClient.getQueryData(['/api/line-items', data.id]);
+      
+      queryClient.setQueryData(['/api/campaigns', campaignId], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          lineItems: old.lineItems?.map((item: any) => 
+            item.id === data.id ? { ...item, ...data.updates } : item
+          )
+        };
+      });
+      
+      queryClient.setQueryData(['/api/line-items', data.id], (old: any) => {
+        if (!old) return old;
+        return { ...old, ...data.updates };
+      });
+      
+      return { previousCampaign, previousItem, id: data.id };
+    },
+    onError: (err, data, context) => {
+      if (context?.previousCampaign) {
+        queryClient.setQueryData(['/api/campaigns', campaignId], context.previousCampaign);
+      }
+      if (context?.previousItem) {
+        queryClient.setQueryData(['/api/line-items', context.id], context.previousItem);
+      }
+      toast({ title: "저장 실패", variant: "destructive" });
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/campaigns', campaignId] });
-      queryClient.invalidateQueries({ queryKey: ['/api/line-items', selectedItemId] });
       toast({ title: KO.pages.operations.panel.saved });
+    },
+    onSettled: (_, __, data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/campaigns', campaignId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/line-items', data.id] });
     }
   });
 
