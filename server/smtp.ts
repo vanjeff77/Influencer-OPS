@@ -14,6 +14,7 @@ interface SmtpConfig {
 interface SendEmailOptions {
   from: string;
   to: string;
+  cc?: string[];
   subject: string;
   html: string;
 }
@@ -40,6 +41,7 @@ export async function sendEmail(transporter: Transporter, options: SendEmailOpti
     const info = await transporter.sendMail({
       from: options.from,
       to: options.to,
+      cc: options.cc && options.cc.length > 0 ? options.cc.join(', ') : undefined,
       subject: options.subject,
       html: options.html,
     });

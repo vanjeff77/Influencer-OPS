@@ -280,6 +280,8 @@ export const conversationMessages = pgTable("conversation_messages", {
   direction: text("direction").notNull(), // inbound, outbound
   senderEmail: text("sender_email"),
   senderName: text("sender_name"),
+  recipientEmail: text("recipient_email"), // To: field
+  ccEmails: text("cc_emails").array(), // CC recipients
   snippet: text("snippet"),
   bodyHtml: text("body_html"),
   bodyText: text("body_text"),

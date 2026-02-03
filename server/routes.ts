@@ -1786,13 +1786,18 @@ export async function registerRoutes(
       const conv = await storage.getConversation(conversationId);
       if (!conv) return res.status(404).json({ message: "Conversation not found" });
       
-      const { body, subject } = req.body;
+      const { body, subject, cc } = req.body;
       const influencer = conv.lineItem.influencer;
       const toEmail = influencer?.email;
       
       if (!toEmail) {
         return res.status(400).json({ message: "인플루언서 이메일이 없습니다" });
       }
+      
+      // Parse CC emails from request (can be array or comma-separated string)
+      const ccEmails: string[] = cc 
+        ? (Array.isArray(cc) ? cc : cc.split(',').map((e: string) => e.trim()).filter(Boolean))
+        : [];
       
       let gmailMessageId: string | undefined;
       let gmailThreadId: string | undefined;
@@ -1801,7 +1806,7 @@ export async function registerRoutes(
       try {
         const { sendEmail, generateSnippet } = await import('./gmail');
         const finalSubject = conv.subjectPrefix ? `${conv.subjectPrefix} ${subject || ''}`.trim() : subject;
-        const result = await sendEmail(toEmail, finalSubject, body, conv.gmailThreadId || undefined);
+        const result = await sendEmail(toEmail, finalSubject, body, conv.gmailThreadId || undefined, ccEmails);
         gmailMessageId = result.id || undefined;
         gmailThreadId = result.threadId || undefined;
         
@@ -1822,6 +1827,8 @@ export async function registerRoutes(
         direction: 'outbound',
         senderEmail: account?.email || null,
         senderName: null,
+        recipientEmail: toEmail,
+        ccEmails: ccEmails.length > 0 ? ccEmails : null,
         snippet,
         bodyHtml: body,
         bodyText: body.replace(/<[^>]*>/g, ''),
@@ -1903,6 +1910,8 @@ export async function registerRoutes(
           direction: 'inbound',
           senderEmail,
           senderName,
+          recipientEmail: headers.to || null,
+          ccEmails: headers.ccEmails && headers.ccEmails.length > 0 ? headers.ccEmails : null,
           snippet,
           bodyHtml: body.html,
           bodyText: body.text,

@@ -57,8 +57,8 @@ export async function getGmailProfile() {
   return profile.data;
 }
 
-// Send email
-export async function sendEmail(to: string, subject: string, body: string, threadId?: string) {
+// Send email with optional CC support
+export async function sendEmail(to: string, subject: string, body: string, threadId?: string, cc?: string[]) {
   const gmail = await getUncachableGmailClient();
   
   const profile = await gmail.users.getProfile({ userId: 'me' });
@@ -67,11 +67,19 @@ export async function sendEmail(to: string, subject: string, body: string, threa
   const messageParts = [
     `From: ${from}`,
     `To: ${to}`,
+  ];
+  
+  // Add CC header if provided
+  if (cc && cc.length > 0) {
+    messageParts.push(`Cc: ${cc.join(', ')}`);
+  }
+  
+  messageParts.push(
     `Subject: ${subject}`,
     'Content-Type: text/html; charset=utf-8',
     '',
     body
-  ];
+  );
   
   const message = messageParts.join('\n');
   const encodedMessage = Buffer.from(message)
@@ -118,14 +126,26 @@ export async function getMessage(messageId: string) {
   return response.data;
 }
 
-// Parse message headers
+// Parse message headers including CC
 export function parseMessageHeaders(message: any) {
   const headers = message.payload?.headers || [];
   const getHeader = (name: string) => headers.find((h: any) => h.name.toLowerCase() === name.toLowerCase())?.value || '';
   
+  // Parse CC header into array of emails
+  const ccHeader = getHeader('Cc');
+  const ccEmails = ccHeader 
+    ? ccHeader.split(',').map((email: string) => {
+        // Extract email from "Name <email@domain.com>" format
+        const match = email.trim().match(/<([^>]+)>/) || [null, email.trim()];
+        return match[1];
+      }).filter(Boolean)
+    : [];
+  
   return {
     from: getHeader('From'),
     to: getHeader('To'),
+    cc: ccHeader,
+    ccEmails,
     subject: getHeader('Subject'),
     date: getHeader('Date'),
     messageId: getHeader('Message-ID'),
