@@ -19,6 +19,11 @@ The platform aims to streamline agency workflows, enhance influencer relationshi
 
 Preferred communication style: Simple, everyday language.
 
+## Development Testing
+
+- **Test Account**: demo@example.com / password (or "test")
+- Use this account for all development testing and verification
+
 ## System Architecture
 
 ### Frontend
