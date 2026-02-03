@@ -192,8 +192,8 @@ export function CampaignContents({ campaignId, lineItems }: CampaignContentsProp
                   <TableHead className="min-w-[180px]">인플루언서</TableHead>
                   <TableHead className="w-24">검토 상태</TableHead>
                   <TableHead className="w-32">초안</TableHead>
-                  <TableHead className="w-32">완성본</TableHead>
                   <TableHead className="w-24">피드백</TableHead>
+                  <TableHead className="w-32">완성본</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -254,6 +254,13 @@ export function CampaignContents({ campaignId, lineItems }: CampaignContentsProp
                       )}
                     </TableCell>
                     <TableCell>
+                      {item.feedbackSummary ? (
+                        <CheckCircle2 className="w-4 h-4 text-green-600" />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
                       {item.finalUrl ? (
                         <Button 
                           variant="ghost" 
@@ -267,13 +274,6 @@ export function CampaignContents({ campaignId, lineItems }: CampaignContentsProp
                           <ExternalLink className="w-3 h-3 mr-1" />
                           보기
                         </Button>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {item.feedbackSummary ? (
-                        <CheckCircle2 className="w-4 h-4 text-green-600" />
                       ) : (
                         <span className="text-xs text-muted-foreground">-</span>
                       )}
