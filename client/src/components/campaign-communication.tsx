@@ -407,7 +407,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                 </Button>
               </div>
             </div>
-            <ScrollArea className="flex-1 p-4">
+            <ScrollArea className="relative overflow-hidden flex-1 p-4 bg-[#ffffff]">
               {isLoadingMessages ? (
                 <div className="flex items-center justify-center h-full">
                   <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
