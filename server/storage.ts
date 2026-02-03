@@ -694,11 +694,9 @@ export class DatabaseStorage implements IStorage {
         '정산요청': 1,
         '정산정보미비': 2,
         '지급대기': 3,
-        '증빙요청': 4,
-        '증빙수령': 5,
-        '보류': 6,
-        '입금완료': 7,
-        '지급완료': 8
+        '대기': 4,
+        '보류': 5,
+        '입금완료': 6
       };
       const aPriority = statusPriority[a.payoutStatus || '정산정보미비'] || 5;
       const bPriority = statusPriority[b.payoutStatus || '정산정보미비'] || 5;

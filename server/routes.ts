@@ -1161,7 +1161,7 @@ export async function registerRoutes(
       }
       
       const updated = await storage.updateLineItemPayout(itemId, {
-        payoutStatus: '지급완료',
+        payoutStatus: '입금완료',
         paidAt: new Date()
       });
       
