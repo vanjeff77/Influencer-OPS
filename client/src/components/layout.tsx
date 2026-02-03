@@ -172,8 +172,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         {!isClientRole && <NavItem href="/discover" icon={Search} label={KO.nav.discover} onClick={onNavClick} />}
         <NavItem href="/campaigns" icon={Megaphone} label={KO.nav.campaigns} onClick={onNavClick} />
         {!isClientRole && <NavItem href="/groups" icon={Users} label={KO.nav.groups} onClick={onNavClick} />}
-        
-        <div className="px-3 md:px-4 mt-6 md:mt-8 mb-2 md:mb-3 text-[10px] md:text-xs font-bold text-muted-foreground/70 uppercase tracking-widest">{KO.nav.operations}</div>
         <NavItem href="/finance" icon={Briefcase} label={KO.nav.finance} onClick={onNavClick} />
         {!isClientRole && <NavItem href="/tracking" icon={LineChart} label={KO.nav.tracking} onClick={onNavClick} />}
         
