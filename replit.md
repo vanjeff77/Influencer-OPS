@@ -43,6 +43,7 @@ Preferred communication style: Simple, everyday language.
     - `WORKSPACE_OWNER`: Full access to all features including settings, client management, and user management
     - `WORKSPACE_MEMBER`: Standard access to all operational features (influencers, campaigns, finance, email, tracking, groups)
     - `CLIENT`: Restricted access with server-side data filtering based on assigned clients (campaigns and finance only)
+    - `PLATFORM_ADMIN` (isPlatformAdmin flag on users table): Cross-workspace privileges, can manage members and grant WORKSPACE_OWNER role in any workspace
 - **Email Services**: IMAP for searching/fetching threads, SMTP queue-based system for bulk email sending with throttling and variable substitution. Email accounts are per-user (not workspace-shared), allowing each team member to connect their own accounts.
 
 ### Data Storage
