@@ -7,7 +7,7 @@ import { api } from "@shared/routes";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
-import { campaignInfluencers, campaigns, users, workspaceMembers } from "@shared/schema";
+import { campaignInfluencers, campaigns, users, workspaceMembers, workspaces } from "@shared/schema";
 import { eq, and, inArray } from "drizzle-orm";
 
 // Singleton browser instance for PDF generation
@@ -173,6 +173,37 @@ async function ensureWorkspaceMembers() {
         });
         
         console.log(`[init] Assigned user ${firstUser.email} as WORKSPACE_OWNER to ${firstWorkspace.name}`);
+      }
+      
+      // Migration: Move members from Main Workspace to VANCED and delete Main Workspace
+      const vancedWorkspace = allWorkspaces.find(w => w.name === 'VANCED');
+      const mainWorkspace = allWorkspaces.find(w => w.name === 'Main Workspace');
+      
+      if (vancedWorkspace && mainWorkspace) {
+        const vancedMembers = existingMembers.filter(m => m.workspaceId === vancedWorkspace.id);
+        const mainMembers = existingMembers.filter(m => m.workspaceId === mainWorkspace.id);
+        
+        // If VANCED has no members but Main Workspace does, migrate members
+        if (vancedMembers.length === 0 && mainMembers.length > 0) {
+          console.log("[migration] Migrating members from Main Workspace to VANCED...");
+          
+          for (const member of mainMembers) {
+            await db.insert(workspaceMembers).values({
+              workspaceId: vancedWorkspace.id,
+              userId: member.userId,
+              role: member.role
+            }).onConflictDoNothing();
+            console.log(`[migration] Migrated user ${member.userId} to VANCED with role ${member.role}`);
+          }
+          
+          // Delete Main Workspace members first
+          await db.delete(workspaceMembers).where(eq(workspaceMembers.workspaceId, mainWorkspace.id));
+          console.log("[migration] Deleted Main Workspace members");
+          
+          // Delete Main Workspace
+          await db.delete(workspaces).where(eq(workspaces.id, mainWorkspace.id));
+          console.log("[migration] Deleted Main Workspace");
+        }
       }
     }
   } catch (error) {
