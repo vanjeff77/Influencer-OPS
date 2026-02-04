@@ -45,7 +45,12 @@ export const api = {
       method: 'GET' as const,
       path: '/api/auth/me',
       responses: {
-        200: z.object({ id: z.number(), email: z.string(), name: z.string() }).nullable(),
+        200: z.object({ 
+          id: z.number(), 
+          email: z.string(), 
+          name: z.string(),
+          isPlatformAdmin: z.boolean().optional()
+        }).nullable(),
       },
     },
   },

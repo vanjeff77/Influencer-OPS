@@ -209,10 +209,17 @@ export async function registerRoutes(
     });
   });
 
-  app.get(api.auth.me.path, (req, res) => {
+  app.get(api.auth.me.path, async (req, res) => {
     if (!req.isAuthenticated()) return res.json(null);
     const user = req.user as any;
-    res.json({ id: user.id, email: user.email, name: user.name });
+    // Fetch full user data to include isPlatformAdmin
+    const fullUser = await storage.getUser(user.id);
+    res.json({ 
+      id: user.id, 
+      email: user.email, 
+      name: user.name,
+      isPlatformAdmin: fullUser?.isPlatformAdmin || false
+    });
   });
 
   // === WORKSPACES ===
@@ -3006,6 +3013,18 @@ export async function registerRoutes(
     return member?.role === 'WORKSPACE_OWNER';
   }
 
+  // Helper to check if user is platform admin
+  async function isPlatformAdmin(userId: number): Promise<boolean> {
+    const user = await storage.getUser(userId);
+    return user?.isPlatformAdmin === true;
+  }
+
+  // Helper to check if user can manage workspace members (owner or platform admin)
+  async function canManageWorkspaceMembers(userId: number, workspaceId: number): Promise<boolean> {
+    if (await isPlatformAdmin(userId)) return true;
+    return await isWorkspaceOwner(userId, workspaceId);
+  }
+
   app.get('/api/clients', async (req, res) => {
     try {
       if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
@@ -3176,8 +3195,8 @@ export async function registerRoutes(
       const targetUserId = parseInt(req.params.userId);
       const currentUserId = (req.user as any).id;
       
-      if (!await isWorkspaceOwner(currentUserId, parsed.data.workspaceId)) {
-        return res.status(403).json({ message: "소유자만 역할을 변경할 수 있습니다" });
+      if (!await canManageWorkspaceMembers(currentUserId, parsed.data.workspaceId)) {
+        return res.status(403).json({ message: "소유자 또는 플랫폼 어드민만 역할을 변경할 수 있습니다" });
       }
       
       await storage.updateWorkspaceMemberRole(targetUserId, parsed.data.workspaceId, parsed.data.role);
@@ -3207,8 +3226,8 @@ export async function registerRoutes(
       const targetUserId = parseInt(req.params.userId);
       const currentUserId = (req.user as any).id;
       
-      if (!await isWorkspaceOwner(currentUserId, workspaceId)) {
-        return res.status(403).json({ message: "소유자만 사용자 상태를 변경할 수 있습니다" });
+      if (!await canManageWorkspaceMembers(currentUserId, workspaceId)) {
+        return res.status(403).json({ message: "소유자 또는 플랫폼 어드민만 사용자 상태를 변경할 수 있습니다" });
       }
       
       const updated = await storage.updateUser(targetUserId, { isActive });

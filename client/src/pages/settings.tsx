@@ -1,6 +1,7 @@
 import { useState, lazy, Suspense } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useWorkspaces } from "@/hooks/use-workspaces";
+import { useUser } from "@/hooks/use-auth";
 import Layout from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -80,12 +81,16 @@ export default function SettingsPage() {
   const [userRole, setUserRole] = useState("WORKSPACE_MEMBER");
   const [selectedClientIds, setSelectedClientIds] = useState<number[]>([]);
 
+  const { data: currentUser } = useUser();
+
   const { data: myRoleData } = useQuery<MyRoleInfo>({
     queryKey: [`/api/workspace-users/me?workspaceId=${workspaceId}`],
     enabled: !!workspaceId,
   });
 
   const isOwner = myRoleData?.role === 'WORKSPACE_OWNER';
+  const isPlatformAdmin = currentUser?.isPlatformAdmin === true;
+  const canManageMembers = isOwner || isPlatformAdmin;
   const isMemberOrOwner = myRoleData?.role === 'WORKSPACE_OWNER' || myRoleData?.role === 'WORKSPACE_MEMBER';
 
   const { data: clients = [], isLoading: loadingClients } = useQuery<Client[]>({
@@ -283,7 +288,7 @@ export default function SettingsPage() {
           <p className="text-muted-foreground text-xs md:text-sm">{KO.settings.subtitle}</p>
         </div>
 
-      {!isOwner && (
+      {!canManageMembers && (
         <Card className="border-yellow-500/50 bg-yellow-500/10">
           <CardContent className="py-4">
             <p className="text-sm text-yellow-700 dark:text-yellow-400">{KO.settings.ownerOnly}</p>
@@ -291,8 +296,8 @@ export default function SettingsPage() {
         </Card>
       )}
 
-      <Tabs defaultValue={isOwner ? "workspace" : "clients"}>
-        <TabsList className={`grid w-full ${isOwner ? 'grid-cols-4' : 'grid-cols-2'} md:w-auto md:inline-flex`}>
+      <Tabs defaultValue={isOwner ? "workspace" : (canManageMembers ? "users" : "clients")}>
+        <TabsList className={`grid w-full ${isOwner ? 'grid-cols-4' : (canManageMembers ? 'grid-cols-3' : 'grid-cols-2')} md:w-auto md:inline-flex`}>
           {isOwner && (
             <TabsTrigger value="workspace" className="gap-2" data-testid="tab-workspace">
               <Settings className="w-4 h-4" />
@@ -303,7 +308,7 @@ export default function SettingsPage() {
             <Building2 className="w-4 h-4" />
             {KO.settings.clientsTab}
           </TabsTrigger>
-          {isOwner && (
+          {canManageMembers && (
             <TabsTrigger value="users" className="gap-2" data-testid="tab-users">
               <Users className="w-4 h-4" />
               {KO.settings.usersTab}
@@ -464,7 +469,7 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        {isOwner && (
+        {canManageMembers && (
           <TabsContent value="users" className="mt-6">
             <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-4">
@@ -472,7 +477,7 @@ export default function SettingsPage() {
                 <CardTitle className="text-lg">{KO.settings.users}</CardTitle>
                 <CardDescription>워크스페이스 멤버와 권한을 관리합니다.</CardDescription>
               </div>
-              {isOwner && (
+              {canManageMembers && (
                 <Dialog open={userDialogOpen && !editingUser} onOpenChange={(open) => {
                   setUserDialogOpen(open);
                   if (!open) resetUserForm();
@@ -601,7 +606,7 @@ export default function SettingsPage() {
                           )}
                         </div>
                       </div>
-                      {isOwner && (
+                      {canManageMembers && (
                         <div className="flex items-center gap-2">
                           <Button
                             size="icon"
