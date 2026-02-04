@@ -3,7 +3,7 @@ import {
   users, workspaces, workspaceMembers, influencers, influencerAccounts, groups, groupInfluencers, campaigns, campaignInfluencers,
   emailAccounts, emailThreads, trackingJobs, trackingMetrics, contents, timelineEvents, auditLogs, notifications,
   conversations, conversationMessages, emailTemplates, bulkEmailJobs, bulkEmailQueueItems, campaignContents, feedbackNotes,
-  clients, clientUserAssignments, contractTemplates,
+  clients, clientUserAssignments, contractTemplates, contentSubmissions,
   type User, type InsertUser, type Workspace, type InsertWorkspace,
   type Client, type InsertClient, type ClientUserAssignment, type InsertClientUserAssignment,
   type Influencer, type CreateInfluencerWithAccounts, type InfluencerAccount,
@@ -15,7 +15,8 @@ import {
   type BulkEmailJob, type BulkEmailQueueItem, type InsertBulkEmailJob, type InsertBulkEmailQueueItem,
   type CampaignContent, type InsertCampaignContent,
   type FeedbackNote, type InsertFeedbackNote,
-  type ContractTemplate, type InsertContractTemplate
+  type ContractTemplate, type InsertContractTemplate,
+  type ContentSubmission, type InsertContentSubmission
 } from "@shared/schema";
 import { eq, like, or, and, sql, inArray, desc } from "drizzle-orm";
 
@@ -1403,6 +1404,56 @@ export class DatabaseStorage implements IStorage {
 
   async deleteContractTemplate(id: number): Promise<void> {
     await db.delete(contractTemplates).where(eq(contractTemplates.id, id));
+  }
+
+  // Content Submissions
+  async getContentSubmissions(campaignId: number): Promise<ContentSubmission[]> {
+    return await db.select().from(contentSubmissions)
+      .where(eq(contentSubmissions.campaignId, campaignId))
+      .orderBy(desc(contentSubmissions.submittedAt));
+  }
+
+  async getContentSubmissionsByLineItem(lineItemId: number): Promise<ContentSubmission[]> {
+    return await db.select().from(contentSubmissions)
+      .where(eq(contentSubmissions.lineItemId, lineItemId))
+      .orderBy(desc(contentSubmissions.submittedAt));
+  }
+
+  async createContentSubmission(data: InsertContentSubmission): Promise<ContentSubmission> {
+    const [submission] = await db.insert(contentSubmissions).values(data).returning();
+    return submission;
+  }
+
+  async updateContentSubmission(id: number, data: Partial<ContentSubmission>): Promise<ContentSubmission> {
+    const [updated] = await db.update(contentSubmissions)
+      .set(data)
+      .where(eq(contentSubmissions.id, id))
+      .returning();
+    return updated;
+  }
+
+  async findInfluencerByEmailInCampaign(campaignId: number, email: string): Promise<{ influencer: Influencer; lineItem: CampaignInfluencer } | null> {
+    const lineItems = await db.select().from(campaignInfluencers)
+      .where(eq(campaignInfluencers.campaignId, campaignId));
+    
+    if (lineItems.length === 0) return null;
+    
+    const influencerIds = lineItems.map(li => li.influencerId);
+    const matchingInfluencers = await db.select().from(influencers)
+      .where(and(
+        inArray(influencers.id, influencerIds),
+        or(
+          eq(influencers.email, email),
+          eq(influencers.contactPoint, email)
+        )
+      ));
+    
+    if (matchingInfluencers.length === 0) return null;
+    
+    const influencer = matchingInfluencers[0];
+    const lineItem = lineItems.find(li => li.influencerId === influencer.id);
+    
+    return lineItem ? { influencer, lineItem } : null;
   }
 }
 

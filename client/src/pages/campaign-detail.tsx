@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ArrowLeft, CheckCircle2, CircleDollarSign, FileText, Plus, Search, Users, Instagram, Youtube, Twitter, Save, MessageCircle, ExternalLink, Eye, Heart, MessageSquare, Share2, Trash2, Edit3, Image, Pencil, Calendar } from "lucide-react";
+import { ArrowLeft, CheckCircle2, CircleDollarSign, FileText, Plus, Search, Users, Instagram, Youtube, Twitter, Save, MessageCircle, ExternalLink, Eye, Heart, MessageSquare, Share2, Trash2, Edit3, Image, Pencil, Calendar, Copy, Upload } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Link } from "wouter";
@@ -341,6 +341,20 @@ export default function CampaignDetail() {
               <div className="text-lg font-bold font-mono">{campaign.budget?.toLocaleString()}원</div>
               <div className="text-xs text-muted-foreground">사용률: {budgetUtilization}%</div>
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8"
+              onClick={() => {
+                const submitUrl = `${window.location.origin}/submit/${campaign.id}`;
+                navigator.clipboard.writeText(submitUrl);
+                toast({ title: "링크 복사됨", description: "인플루언서에게 이 링크를 공유하세요." });
+              }}
+              data-testid="button-copy-submit-link"
+            >
+              <Upload className="w-3 h-3 mr-1" />
+              제출 링크
+            </Button>
             <Button 
               variant="outline" 
               size="sm" 

@@ -3370,6 +3370,174 @@ export async function registerRoutes(
     }
   });
 
+  // === CONTENT SUBMISSION ROUTES (인플루언서 콘텐츠 제출) ===
+  
+  // Public: 캠페인 정보 조회 (제출 페이지용)
+  app.get('/api/submit/:campaignId/info', async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.campaignId);
+      const campaign = await storage.getCampaign(campaignId);
+      if (!campaign) {
+        return res.status(404).json({ message: "캠페인을 찾을 수 없습니다" });
+      }
+      res.json({
+        id: campaign.id,
+        name: campaign.name,
+        clientName: campaign.clientName,
+        status: campaign.status
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Public: 이메일로 인플루언서 검증
+  app.post('/api/submit/:campaignId/verify', async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.campaignId);
+      const { email } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({ message: "이메일을 입력해주세요" });
+      }
+      
+      const result = await storage.findInfluencerByEmailInCampaign(campaignId, email.toLowerCase().trim());
+      if (!result) {
+        return res.status(404).json({ message: "등록되지 않은 이메일입니다. 담당자에게 문의해주세요." });
+      }
+      
+      res.json({
+        influencerId: result.influencer.id,
+        influencerName: result.influencer.name,
+        lineItemId: result.lineItem.id
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Public: OneDrive 업로드 세션 생성
+  app.post('/api/submit/:campaignId/upload-session', async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.campaignId);
+      const { influencerId, fileName, submissionType } = req.body;
+      
+      const campaign = await storage.getCampaign(campaignId);
+      if (!campaign) {
+        return res.status(404).json({ message: "캠페인을 찾을 수 없습니다" });
+      }
+      
+      const influencer = await storage.getInfluencer(influencerId);
+      if (!influencer) {
+        return res.status(404).json({ message: "인플루언서를 찾을 수 없습니다" });
+      }
+      
+      const { createFolderIfNotExists, createUploadSession } = await import('./onedrive');
+      
+      // 폴더 경로: 콘텐츠제출/캠페인명/인플루언서명
+      const sanitizedCampaignName = campaign.name.replace(/[<>:"/\\|?*]/g, '_');
+      const sanitizedInfluencerName = influencer.name.replace(/[<>:"/\\|?*]/g, '_');
+      const folderPath = `콘텐츠제출/${sanitizedCampaignName}/${sanitizedInfluencerName}`;
+      
+      const folderId = await createFolderIfNotExists(folderPath);
+      
+      // 파일명에 타입과 타임스탬프 추가
+      const timestamp = new Date().toISOString().split('T')[0];
+      const typePrefix = submissionType === 'draft' ? '초안' : '완성본';
+      const ext = fileName.split('.').pop() || '';
+      const baseName = fileName.replace(`.${ext}`, '');
+      const finalFileName = `${typePrefix}_${timestamp}_${baseName}.${ext}`;
+      
+      const session = await createUploadSession(folderId, finalFileName);
+      
+      res.json({
+        uploadUrl: session.uploadUrl,
+        expirationDateTime: session.expirationDateTime,
+        folderId,
+        finalFileName
+      });
+    } catch (err: any) {
+      console.error('Upload session error:', err);
+      res.status(500).json({ message: err.message || "업로드 세션 생성 실패" });
+    }
+  });
+
+  // Public: 제출 완료 기록
+  app.post('/api/submit/:campaignId/complete', async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.campaignId);
+      const { influencerId, lineItemId, submissionType, fileName, fileSize, folderId, memo } = req.body;
+      
+      const submission = await storage.createContentSubmission({
+        campaignId,
+        lineItemId,
+        influencerId,
+        submissionType,
+        fileName,
+        fileSize,
+        oneDriveFolderId: folderId,
+        memo
+      });
+      
+      // 담당자에게 이메일 알림 발송
+      try {
+        const campaign = await storage.getCampaign(campaignId);
+        const influencer = await storage.getInfluencer(influencerId);
+        
+        if (campaign && influencer) {
+          // 캠페인 담당자의 이메일 계정을 찾아서 알림 발송
+          const lineItems = await db.select().from(campaignInfluencers)
+            .where(eq(campaignInfluencers.id, lineItemId));
+          
+          if (lineItems.length > 0) {
+            const lineItem = lineItems[0];
+            // 타임라인 이벤트 생성
+            await storage.createTimelineEvent({
+              workspaceId: campaign.workspaceId,
+              influencerId,
+              campaignId,
+              lineItemId,
+              eventType: 'content_submitted',
+              title: `${submissionType === 'draft' ? '초안' : '완성본'} 제출`,
+              description: `${influencer.name}님이 ${fileName}을 제출했습니다`,
+              metadata: { submissionId: submission.id, fileName, fileSize }
+            });
+          }
+        }
+        
+        await storage.updateContentSubmission(submission.id, { notifiedAt: new Date() });
+      } catch (notifyErr) {
+        console.error('Failed to send notification:', notifyErr);
+      }
+      
+      res.json({ success: true, submissionId: submission.id });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Authenticated: 캠페인별 제출 이력 조회
+  app.get('/api/campaigns/:id/submissions', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const campaignId = parseInt(req.params.id);
+      const submissions = await storage.getContentSubmissions(campaignId);
+      
+      // 인플루언서 정보 추가
+      const result = await Promise.all(submissions.map(async (sub) => {
+        const influencer = await storage.getInfluencer(sub.influencerId);
+        return {
+          ...sub,
+          influencerName: influencer?.name || '알 수 없음'
+        };
+      }));
+      
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   // SEED DATA
   seedDatabase();
 

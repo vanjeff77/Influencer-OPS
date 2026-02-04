@@ -15,6 +15,7 @@ import Finance from "@/pages/finance";
 import Tracking from "@/pages/tracking";
 import Groups from "@/pages/groups";
 import Settings from "@/pages/settings";
+import Submit from "@/pages/submit";
 
 function Router() {
   return (
@@ -29,6 +30,7 @@ function Router() {
       <Route path="/finance" component={Finance} />
       <Route path="/tracking" component={Tracking} />
       <Route path="/settings" component={Settings} />
+      <Route path="/submit/:campaignId" component={Submit} />
       <Route component={NotFound} />
     </Switch>
   );

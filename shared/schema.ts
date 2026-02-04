@@ -641,3 +641,24 @@ export type CreateAccountInput = Omit<z.infer<typeof insertInfluencerAccountSche
 export type CreateInfluencerWithAccounts = z.infer<typeof insertInfluencerSchema> & {
   accounts?: CreateAccountInput[];
 };
+
+// === CONTENT SUBMISSIONS (인플루언서 콘텐츠 제출) ===
+export const contentSubmissions = pgTable("content_submissions", {
+  id: serial("id").primaryKey(),
+  campaignId: integer("campaign_id").notNull(),
+  lineItemId: integer("line_item_id").notNull(),
+  influencerId: integer("influencer_id").notNull(),
+  submissionType: text("submission_type").notNull(), // draft (초안), final (완성본)
+  fileName: text("file_name").notNull(),
+  fileSize: integer("file_size"), // bytes
+  oneDriveFolderId: text("onedrive_folder_id"),
+  oneDriveFileId: text("onedrive_file_id"),
+  oneDriveLink: text("onedrive_link"),
+  memo: text("memo"),
+  submittedAt: timestamp("submitted_at").defaultNow(),
+  notifiedAt: timestamp("notified_at"), // 담당자에게 알림 발송 시간
+});
+
+export const insertContentSubmissionSchema = createInsertSchema(contentSubmissions).omit({ id: true, submittedAt: true });
+export type InsertContentSubmission = z.infer<typeof insertContentSubmissionSchema>;
+export type ContentSubmission = typeof contentSubmissions.$inferSelect;
