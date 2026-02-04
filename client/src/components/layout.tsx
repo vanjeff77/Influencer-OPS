@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useUser, useLogout } from "@/hooks/use-auth";
 import { useWorkspaces, useCreateWorkspace } from "@/hooks/use-workspaces";
 import { Button } from "@/components/ui/button";
+import { TourGuide } from "@/components/onboarding";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -169,17 +170,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <div className="flex-1 overflow-y-auto py-4 md:py-6 px-2 md:px-3 space-y-1">
         <div className="px-3 md:px-4 mb-2 md:mb-3 text-[10px] md:text-xs font-bold text-muted-foreground/70 uppercase tracking-widest">{KO.nav.platform}</div>
         {!isClientRole && <NavItem href="/" icon={LayoutDashboard} label={KO.nav.overview} onClick={onNavClick} />}
-        {!isClientRole && <NavItem href="/discover" icon={Search} label={KO.nav.discover} onClick={onNavClick} />}
-        <NavItem href="/campaigns" icon={Megaphone} label={KO.nav.campaigns} onClick={onNavClick} />
+        {!isClientRole && <div data-tour="discover"><NavItem href="/discover" icon={Search} label={KO.nav.discover} onClick={onNavClick} /></div>}
+        <div data-tour="campaigns"><NavItem href="/campaigns" icon={Megaphone} label={KO.nav.campaigns} onClick={onNavClick} /></div>
         {!isClientRole && <NavItem href="/groups" icon={Users} label={KO.nav.groups} onClick={onNavClick} />}
-        <NavItem href="/finance" icon={Briefcase} label={KO.nav.finance} onClick={onNavClick} />
+        <div data-tour="finance"><NavItem href="/finance" icon={Briefcase} label={KO.nav.finance} onClick={onNavClick} /></div>
         {!isClientRole && <NavItem href="/tracking" icon={LineChart} label={KO.nav.tracking} onClick={onNavClick} />}
         
         {!isClientRole && (
           <>
             <div className="px-3 md:px-4 mt-6 md:mt-8 mb-2 md:mb-3 text-[10px] md:text-xs font-bold text-muted-foreground/70 uppercase tracking-widest">{KO.nav.management}</div>
-            <NavItem href="/email" icon={Mail} label={KO.nav.emailCenter} onClick={onNavClick} />
-            <NavItem href="/settings" icon={Settings} label={KO.nav.settings} onClick={onNavClick} />
+            <div data-tour="email"><NavItem href="/email" icon={Mail} label={KO.nav.emailCenter} onClick={onNavClick} /></div>
+            <div data-tour="settings"><NavItem href="/settings" icon={Settings} label={KO.nav.settings} onClick={onNavClick} /></div>
           </>
         )}
       </div>
@@ -245,6 +246,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </main>
       </div>
+      <TourGuide />
     </div>
   );
 }

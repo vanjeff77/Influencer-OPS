@@ -32,6 +32,8 @@ export const users = pgTable("users", {
   name: text("name").notNull(),
   isActive: boolean("is_active").default(true), // For account activation status
   isPlatformAdmin: boolean("is_platform_admin").default(false), // Platform-wide admin privileges
+  onboardingCompleted: boolean("onboarding_completed").default(false), // Main tour completed
+  dismissedHints: text("dismissed_hints").array().default([]), // Array of dismissed hint IDs
   createdAt: timestamp("created_at").defaultNow(),
 });
 

@@ -17,7 +17,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { KO } from "@/i18n/ko";
-import { Plus, Pencil, Trash2, Building2, Users, Shield, FileText, Star, Settings } from "lucide-react";
+import { Plus, Pencil, Trash2, Building2, Users, Shield, FileText, Star, Settings, RotateCcw } from "lucide-react";
+import { useResetOnboarding } from "@/hooks/use-auth";
 
 const ReactQuill = lazy(() => import('react-quill-new'));
 import 'react-quill-new/dist/quill.snow.css';
@@ -82,6 +83,7 @@ export default function SettingsPage() {
   const [selectedClientIds, setSelectedClientIds] = useState<number[]>([]);
 
   const { data: currentUser } = useUser();
+  const resetOnboarding = useResetOnboarding();
 
   const { data: myRoleData } = useQuery<MyRoleInfo>({
     queryKey: [`/api/workspace-users/me?workspaceId=${workspaceId}`],
@@ -321,7 +323,7 @@ export default function SettingsPage() {
         </TabsList>
 
         {isOwner && (
-          <TabsContent value="workspace" className="mt-6">
+          <TabsContent value="workspace" className="mt-6 space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">{KO.settings.workspace}</CardTitle>
@@ -352,6 +354,32 @@ export default function SettingsPage() {
                     </div>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">온보딩</CardTitle>
+                <CardDescription>플랫폼 사용 안내 투어를 다시 볼 수 있습니다</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button 
+                  variant="outline"
+                  onClick={() => {
+                    resetOnboarding.mutate(undefined, {
+                      onSuccess: () => {
+                        toast({ title: "온보딩이 초기화되었습니다", description: "페이지를 새로고침합니다" });
+                        setTimeout(() => window.location.reload(), 500);
+                      }
+                    });
+                  }}
+                  disabled={resetOnboarding.isPending}
+                  className="gap-2"
+                  data-testid="button-reset-onboarding"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  온보딩 다시 보기
+                </Button>
               </CardContent>
             </Card>
           </TabsContent>

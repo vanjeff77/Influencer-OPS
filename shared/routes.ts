@@ -49,7 +49,9 @@ export const api = {
           id: z.number(), 
           email: z.string(), 
           name: z.string(),
-          isPlatformAdmin: z.boolean().optional()
+          isPlatformAdmin: z.boolean().optional(),
+          onboardingCompleted: z.boolean().optional(),
+          dismissedHints: z.array(z.string()).optional()
         }).nullable(),
       },
     },

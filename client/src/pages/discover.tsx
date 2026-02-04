@@ -28,6 +28,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CampaignInfluencer } from "@shared/schema";
 import { PasteImportDialog } from "@/components/paste-import-dialog";
 import { BulkEditDialog } from "@/components/bulk-edit-dialog";
+import { FeatureHint } from "@/components/onboarding";
 import { Pencil } from "lucide-react";
 
 export default function Discover() {
@@ -366,6 +367,12 @@ export default function Discover() {
   return (
     <Layout>
       <div className="flex flex-col gap-3 md:gap-4 h-full">
+        <FeatureHint
+          hintId="discover-intro"
+          title="인플루언서 등록하기"
+          description="'대량 추가' 버튼을 눌러 엑셀에서 복사한 인플루언서 정보를 붙여넣거나, '+' 버튼으로 개별 등록할 수 있습니다."
+          className="mb-2"
+        />
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-4">
           <div>
             <h1 className="text-lg md:text-2xl font-bold tracking-tight">{KO.pages.discover.title}</h1>

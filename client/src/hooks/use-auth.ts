@@ -59,3 +59,49 @@ export function useLogout() {
     },
   });
 }
+
+export function useCompleteOnboarding() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/onboarding/complete", { method: "POST" });
+      if (!res.ok) throw new Error("Failed to complete onboarding");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.auth.me.path] });
+    },
+  });
+}
+
+export function useResetOnboarding() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/onboarding/reset", { method: "POST" });
+      if (!res.ok) throw new Error("Failed to reset onboarding");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.auth.me.path] });
+    },
+  });
+}
+
+export function useDismissHint() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (hintId: string) => {
+      const res = await fetch("/api/onboarding/dismiss-hint", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hintId }),
+      });
+      if (!res.ok) throw new Error("Failed to dismiss hint");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.auth.me.path] });
+    },
+  });
+}

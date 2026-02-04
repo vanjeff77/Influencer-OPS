@@ -243,14 +243,44 @@ export async function registerRoutes(
   app.get(api.auth.me.path, async (req, res) => {
     if (!req.isAuthenticated()) return res.json(null);
     const user = req.user as any;
-    // Fetch full user data to include isPlatformAdmin
+    // Fetch full user data to include isPlatformAdmin and onboarding status
     const fullUser = await storage.getUser(user.id);
     res.json({ 
       id: user.id, 
       email: user.email, 
       name: user.name,
-      isPlatformAdmin: fullUser?.isPlatformAdmin || false
+      isPlatformAdmin: fullUser?.isPlatformAdmin || false,
+      onboardingCompleted: fullUser?.onboardingCompleted || false,
+      dismissedHints: fullUser?.dismissedHints || []
     });
+  });
+
+  // === ONBOARDING ===
+  app.post("/api/onboarding/complete", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    await db.update(users).set({ onboardingCompleted: true }).where(eq(users.id, user.id));
+    res.json({ success: true });
+  });
+
+  app.post("/api/onboarding/reset", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    await db.update(users).set({ onboardingCompleted: false, dismissedHints: [] }).where(eq(users.id, user.id));
+    res.json({ success: true });
+  });
+
+  app.post("/api/onboarding/dismiss-hint", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const { hintId } = req.body;
+    if (!hintId) return res.status(400).json({ message: "hintId required" });
+    const fullUser = await storage.getUser(user.id);
+    const currentHints = fullUser?.dismissedHints || [];
+    if (!currentHints.includes(hintId)) {
+      await db.update(users).set({ dismissedHints: [...currentHints, hintId] }).where(eq(users.id, user.id));
+    }
+    res.json({ success: true });
   });
 
   // === WORKSPACES ===

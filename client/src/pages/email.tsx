@@ -18,6 +18,7 @@ import { KO } from "@/i18n/ko";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SiGmail } from "react-icons/si";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { FeatureHint } from "@/components/onboarding";
 
 const EMAIL_PRESETS: Record<string, { imapServer: string; imapPort: string; smtpServer: string; smtpPort: string }> = {
   naver: { imapServer: "imap.naver.com", imapPort: "993", smtpServer: "smtp.naver.com", smtpPort: "587" },
@@ -146,6 +147,12 @@ export default function EmailCenter() {
   return (
     <Layout>
       <div className="h-[calc(100vh-8rem)] flex flex-col">
+        <FeatureHint
+          hintId="email-intro"
+          title="이메일 계정 연동하기"
+          description="Gmail 계정을 연동하면 인플루언서와 이메일로 소통하고, 캠페인 상세 페이지에서 대량 이메일을 발송할 수 있습니다."
+          className="mb-4"
+        />
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">{KO.pages.email.title}</h1>

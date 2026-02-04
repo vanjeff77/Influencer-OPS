@@ -14,6 +14,7 @@ import { Link, useLocation, useSearch } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { KO } from "@/i18n/ko";
+import { FeatureHint } from "@/components/onboarding";
 
 interface Client {
   id: number;
@@ -132,6 +133,12 @@ export default function Campaigns() {
   return (
     <Layout>
       <div className="flex flex-col gap-4 md:gap-8">
+        <FeatureHint
+          hintId="campaigns-intro"
+          title="캠페인 생성하기"
+          description="'새 캠페인' 버튼을 눌러 캠페인을 생성하세요. 캠페인에는 반드시 클라이언트를 지정해야 합니다."
+          className="mb-2"
+        />
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
           <div>
             <h1 className="text-xl md:text-3xl font-bold tracking-tight">{KO.pages.campaigns.title}</h1>
