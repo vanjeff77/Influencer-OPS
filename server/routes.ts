@@ -7,8 +7,8 @@ import { api } from "@shared/routes";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
-import { campaignInfluencers, campaigns, users, workspaceMembers, workspaces } from "@shared/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import { campaignInfluencers, campaigns, influencers, users, workspaceMembers, workspaces } from "@shared/schema";
+import { eq, and, or, inArray } from "drizzle-orm";
 
 // Singleton browser instance for PDF generation
 let sharedBrowser: any = null;
@@ -3420,17 +3420,37 @@ export async function registerRoutes(
   app.post('/api/submit/:campaignId/upload-session', async (req, res) => {
     try {
       const campaignId = parseInt(req.params.campaignId);
-      const { influencerId, fileName, submissionType } = req.body;
+      const { email, fileName, submissionType } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({ message: "이메일이 필요합니다" });
+      }
       
       const campaign = await storage.getCampaign(campaignId);
       if (!campaign) {
         return res.status(404).json({ message: "캠페인을 찾을 수 없습니다" });
       }
       
-      const influencer = await storage.getInfluencer(influencerId);
-      if (!influencer) {
-        return res.status(404).json({ message: "인플루언서를 찾을 수 없습니다" });
+      // 이메일로 인플루언서/라인아이템 재검증
+      const lineItems = await db.select({
+        lineItem: campaignInfluencers,
+        influencer: influencers
+      })
+        .from(campaignInfluencers)
+        .innerJoin(influencers, eq(campaignInfluencers.influencerId, influencers.id))
+        .where(and(
+          eq(campaignInfluencers.campaignId, campaignId),
+          or(
+            eq(influencers.email, email.toLowerCase().trim()),
+            eq(influencers.contactPoint, email.toLowerCase().trim())
+          )
+        ));
+      
+      if (lineItems.length === 0) {
+        return res.status(403).json({ message: "이 캠페인에 등록된 이메일이 아닙니다" });
       }
+      
+      const { lineItem, influencer } = lineItems[0];
       
       const { createFolderIfNotExists, createUploadSession } = await import('./onedrive');
       
@@ -3454,7 +3474,10 @@ export async function registerRoutes(
         uploadUrl: session.uploadUrl,
         expirationDateTime: session.expirationDateTime,
         folderId,
-        finalFileName
+        finalFileName,
+        influencerId: influencer.id,
+        lineItemId: lineItem.id,
+        influencerName: influencer.name
       });
     } catch (err: any) {
       console.error('Upload session error:', err);
@@ -3466,12 +3489,37 @@ export async function registerRoutes(
   app.post('/api/submit/:campaignId/complete', async (req, res) => {
     try {
       const campaignId = parseInt(req.params.campaignId);
-      const { influencerId, lineItemId, submissionType, fileName, fileSize, folderId, memo } = req.body;
+      const { email, submissionType, fileName, fileSize, folderId, memo } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({ message: "이메일이 필요합니다" });
+      }
+      
+      // 이메일로 인플루언서/라인아이템 재검증
+      const verifyResult = await db.select({
+        lineItem: campaignInfluencers,
+        influencer: influencers
+      })
+        .from(campaignInfluencers)
+        .innerJoin(influencers, eq(campaignInfluencers.influencerId, influencers.id))
+        .where(and(
+          eq(campaignInfluencers.campaignId, campaignId),
+          or(
+            eq(influencers.email, email.toLowerCase().trim()),
+            eq(influencers.contactPoint, email.toLowerCase().trim())
+          )
+        ));
+      
+      if (verifyResult.length === 0) {
+        return res.status(403).json({ message: "이 캠페인에 등록된 이메일이 아닙니다" });
+      }
+      
+      const { lineItem, influencer } = verifyResult[0];
       
       const submission = await storage.createContentSubmission({
         campaignId,
-        lineItemId,
-        influencerId,
+        lineItemId: lineItem.id,
+        influencerId: influencer.id,
         submissionType,
         fileName,
         fileSize,
@@ -3482,27 +3530,19 @@ export async function registerRoutes(
       // 담당자에게 이메일 알림 발송
       try {
         const campaign = await storage.getCampaign(campaignId);
-        const influencer = await storage.getInfluencer(influencerId);
         
-        if (campaign && influencer) {
-          // 캠페인 담당자의 이메일 계정을 찾아서 알림 발송
-          const lineItems = await db.select().from(campaignInfluencers)
-            .where(eq(campaignInfluencers.id, lineItemId));
-          
-          if (lineItems.length > 0) {
-            const lineItem = lineItems[0];
-            // 타임라인 이벤트 생성
-            await storage.createTimelineEvent({
-              workspaceId: campaign.workspaceId,
-              influencerId,
-              campaignId,
-              lineItemId,
-              eventType: 'content_submitted',
-              title: `${submissionType === 'draft' ? '초안' : '완성본'} 제출`,
-              description: `${influencer.name}님이 ${fileName}을 제출했습니다`,
-              metadata: { submissionId: submission.id, fileName, fileSize }
-            });
-          }
+        if (campaign) {
+          // 타임라인 이벤트 생성
+          await storage.createTimelineEvent({
+            workspaceId: campaign.workspaceId,
+            influencerId: influencer.id,
+            campaignId,
+            lineItemId: lineItem.id,
+            eventType: 'content_submitted',
+            title: `${submissionType === 'draft' ? '초안' : '완성본'} 제출`,
+            description: `${influencer.name}님이 ${fileName}을 제출했습니다`,
+            metadata: { submissionId: submission.id, fileName, fileSize }
+          });
         }
         
         await storage.updateContentSubmission(submission.id, { notifiedAt: new Date() });

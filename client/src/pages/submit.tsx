@@ -76,12 +76,12 @@ export default function SubmitPage() {
     setUploadProgress(0);
 
     try {
-      // 1. 업로드 세션 생성
+      // 1. 업로드 세션 생성 (이메일로 재검증)
       const sessionRes = await fetch(`/api/submit/${campaignId}/upload-session`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          influencerId: verifiedData.influencerId,
+          email,
           fileName: selectedFile.name,
           submissionType
         })
@@ -119,13 +119,12 @@ export default function SubmitPage() {
         setUploadProgress(Math.round(((i + 1) / totalChunks) * 100));
       }
 
-      // 3. 제출 완료 기록
+      // 3. 제출 완료 기록 (이메일로 재검증)
       const completeRes = await fetch(`/api/submit/${campaignId}/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          influencerId: verifiedData.influencerId,
-          lineItemId: verifiedData.lineItemId,
+          email,
           submissionType,
           fileName: session.finalFileName,
           fileSize: selectedFile.size,

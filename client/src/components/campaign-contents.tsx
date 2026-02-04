@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { format } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { 
   Search, ExternalLink, Save, FileText, CheckCircle2, Image,
-  Instagram, Youtube, Twitter, Copy
+  Instagram, Youtube, Twitter, Copy, Upload, Download
 } from "lucide-react";
 import type { CampaignInfluencer, Influencer, InfluencerAccount, FeedbackNote, User } from "@shared/schema";
 import { KO } from "@/i18n/ko";
@@ -48,16 +49,37 @@ const PlatformIcon = ({ p }: { p: string }) => {
   }
 };
 
+interface ContentSubmission {
+  id: number;
+  campaignId: number;
+  lineItemId: number;
+  influencerId: number;
+  influencerName: string;
+  type: string;
+  fileName: string;
+  fileSize: number;
+  oneDriveItemId: string | null;
+  oneDrivePath: string | null;
+  memo: string | null;
+  submittedAt: string;
+}
+
 export function CampaignContents({ campaignId, lineItems }: CampaignContentsProps) {
   const { toast } = useToast();
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [reviewFilter, setReviewFilter] = useState<string>("all");
+  const [showSubmissions, setShowSubmissions] = useState(false);
   
   const [draftUrl, setDraftUrl] = useState("");
   const [finalUrl, setFinalUrl] = useState("");
   const [reviewStatus, setReviewStatus] = useState("");
   const [internalFeedback, setInternalFeedback] = useState("");
+  
+  const { data: submissions = [], isLoading: submissionsLoading, isError: submissionsError } = useQuery<ContentSubmission[]>({
+    queryKey: ['/api/campaigns', campaignId, 'submissions'],
+    enabled: showSubmissions
+  });
 
   const selectedItem = useMemo(() => {
     return lineItems.find(item => item.id === selectedItemId);
@@ -169,19 +191,79 @@ export function CampaignContents({ campaignId, lineItems }: CampaignContentsProp
         </Select>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {REVIEW_STATUSES.map(status => (
-          <Badge 
-            key={status}
-            variant="outline" 
-            className={`cursor-pointer ${reviewFilter === status ? getReviewStatusColor(status) : ''}`}
-            onClick={() => setReviewFilter(reviewFilter === status ? "all" : status)}
-            data-testid={`badge-filter-${status}`}
-          >
-            {status}: {statusCounts[status]}
-          </Badge>
-        ))}
+      <div className="flex flex-wrap gap-2 items-center justify-between">
+        <div className="flex flex-wrap gap-2">
+          {REVIEW_STATUSES.map(status => (
+            <Badge 
+              key={status}
+              variant="outline" 
+              className={`cursor-pointer ${reviewFilter === status ? getReviewStatusColor(status) : ''}`}
+              onClick={() => setReviewFilter(reviewFilter === status ? "all" : status)}
+              data-testid={`badge-filter-${status}`}
+            >
+              {status}: {statusCounts[status]}
+            </Badge>
+          ))}
+        </div>
+        <Button
+          variant={showSubmissions ? "default" : "outline"}
+          size="sm"
+          onClick={() => setShowSubmissions(!showSubmissions)}
+          data-testid="button-toggle-submissions"
+        >
+          <Upload className="w-4 h-4 mr-1" />
+          인플루언서 제출 이력 {submissions.length > 0 && `(${submissions.length})`}
+        </Button>
       </div>
+
+      {showSubmissions && (
+        <Card>
+          <CardContent className="p-4">
+            <h3 className="font-semibold mb-3 flex items-center gap-2">
+              <Upload className="w-4 h-4" />
+              인플루언서 제출 이력
+            </h3>
+            {submissionsLoading ? (
+              <div className="text-sm text-muted-foreground">로딩 중...</div>
+            ) : submissionsError ? (
+              <div className="text-sm text-destructive">제출 이력을 불러오는데 실패했습니다.</div>
+            ) : submissions.length === 0 ? (
+              <div className="text-sm text-muted-foreground">제출된 콘텐츠가 없습니다.</div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>인플루언서</TableHead>
+                    <TableHead>유형</TableHead>
+                    <TableHead>파일명</TableHead>
+                    <TableHead>크기</TableHead>
+                    <TableHead>메모</TableHead>
+                    <TableHead>제출일시</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {submissions.map((sub) => (
+                    <TableRow key={sub.id} data-testid={`row-submission-${sub.id}`}>
+                      <TableCell className="font-medium">{sub.influencerName}</TableCell>
+                      <TableCell>
+                        <Badge variant={sub.type === 'final' ? 'default' : 'outline'}>
+                          {sub.type === 'final' ? '완성본' : '초안'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="max-w-[200px] truncate">{sub.fileName}</TableCell>
+                      <TableCell>{(sub.fileSize / 1024 / 1024).toFixed(2)} MB</TableCell>
+                      <TableCell className="max-w-[150px] truncate">{sub.memo || '-'}</TableCell>
+                      <TableCell>
+                        {sub.submittedAt ? format(new Date(sub.submittedAt), 'yyyy-MM-dd HH:mm') : '-'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardContent className="p-0">
