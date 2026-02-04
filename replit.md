@@ -91,6 +91,12 @@ Preferred communication style: Simple, everyday language.
     - **Legacy Template Support**: Plain-text templates auto-detected via regex and converted to HTML with entity escaping.
     - **Inline Date Editing**: Direct editing of 초안 예정일 and 업로드 예정일 columns in Operations table.
     - **Error Handling**: Detailed Korean error messages with suggestions for troubleshooting.
+- **User Onboarding System**:
+    - **TourGuide Component**: Step-by-step walkthrough overlay for new users (5 steps: Discover → Campaigns → Email → Finance → Settings).
+    - **FeatureHint Component**: Contextual page-level hint cards with dismiss functionality.
+    - **State Management**: Stored per-user with `onboardingCompleted` flag and `dismissedHints` array.
+    - **Reset Onboarding**: Available in Settings page to restart the tour and show all hints again.
+    - **API Endpoints**: `/api/onboarding/complete`, `/api/onboarding/dismiss-hint`, `/api/onboarding/reset`.
 
 ## External Dependencies
 

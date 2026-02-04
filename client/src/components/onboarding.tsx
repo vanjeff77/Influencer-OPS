@@ -51,32 +51,54 @@ export function TourGuide() {
   const [currentStep, setCurrentStep] = useState(0);
   const [isVisible, setIsVisible] = useState(false);
   const [tooltipPosition, setTooltipPosition] = useState({ top: 0, left: 0 });
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     if (user && user.onboardingCompleted === false) {
-      setIsVisible(true);
+      const timer = setTimeout(() => {
+        setIsVisible(true);
+        setIsReady(true);
+      }, 500);
+      return () => clearTimeout(timer);
     }
   }, [user]);
 
   useEffect(() => {
-    if (!isVisible) return;
+    if (!isVisible || !isReady) return;
 
     const step = tourSteps[currentStep];
     const element = document.querySelector(step.target);
     
+    const TOOLTIP_WIDTH = 320;
+    const TOOLTIP_HEIGHT = 140;
+    const MARGIN = 16;
+    
     if (element) {
       const rect = element.getBoundingClientRect();
-      let top = rect.top + rect.height / 2;
-      let left = rect.right + 16;
+      let top = rect.top + rect.height / 2 - TOOLTIP_HEIGHT / 2;
+      let left = rect.right + MARGIN;
 
       if (step.position === "bottom") {
-        top = rect.bottom + 16;
-        left = rect.left + rect.width / 2 - 150;
+        top = rect.bottom + MARGIN;
+        left = rect.left + rect.width / 2 - TOOLTIP_WIDTH / 2;
       } else if (step.position === "top") {
-        top = rect.top - 16;
-        left = rect.left + rect.width / 2 - 150;
+        top = rect.top - TOOLTIP_HEIGHT - MARGIN;
+        left = rect.left + rect.width / 2 - TOOLTIP_WIDTH / 2;
       } else if (step.position === "left") {
-        left = rect.left - 316;
+        left = rect.left - TOOLTIP_WIDTH - MARGIN;
+      }
+
+      if (left + TOOLTIP_WIDTH > window.innerWidth - MARGIN) {
+        left = window.innerWidth - TOOLTIP_WIDTH - MARGIN;
+      }
+      if (left < MARGIN) {
+        left = MARGIN;
+      }
+      if (top + TOOLTIP_HEIGHT > window.innerHeight - MARGIN) {
+        top = window.innerHeight - TOOLTIP_HEIGHT - MARGIN;
+      }
+      if (top < MARGIN) {
+        top = MARGIN;
       }
 
       setTooltipPosition({ top, left });
@@ -86,8 +108,13 @@ export function TourGuide() {
       return () => {
         element.classList.remove("ring-2", "ring-primary", "ring-offset-2", "z-50");
       };
+    } else {
+      setTooltipPosition({
+        top: window.innerHeight / 2 - TOOLTIP_HEIGHT / 2,
+        left: window.innerWidth / 2 - TOOLTIP_WIDTH / 2,
+      });
     }
-  }, [currentStep, isVisible]);
+  }, [currentStep, isVisible, isReady]);
 
   const handleNext = () => {
     if (currentStep < tourSteps.length - 1) {
