@@ -16,7 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { KO } from "@/i18n/ko";
-import { Plus, Pencil, Trash2, Building2, Users, Shield, FileText, Star } from "lucide-react";
+import { Plus, Pencil, Trash2, Building2, Users, Shield, FileText, Star, Settings } from "lucide-react";
 
 const ReactQuill = lazy(() => import('react-quill-new'));
 import 'react-quill-new/dist/quill.snow.css';
@@ -71,6 +71,8 @@ export default function SettingsPage() {
   const [clientName, setClientName] = useState("");
   const [clientMemo, setClientMemo] = useState("");
   const [clientStatus, setClientStatus] = useState("active");
+
+  const [workspaceName, setWorkspaceName] = useState("");
 
   const [userName, setUserName] = useState("");
   const [userEmail, setUserEmail] = useState("");
@@ -177,6 +179,20 @@ export default function SettingsPage() {
     },
   });
 
+  const updateWorkspaceNameMutation = useMutation({
+    mutationFn: (data: { name: string }) =>
+      apiRequest('PATCH', `/api/workspaces/${workspaceId}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/workspaces'] });
+      toast({ title: KO.settings.workspaceNameUpdated });
+    },
+    onError: (err: any) => {
+      toast({ title: KO.toast.saveFailed, description: err.message, variant: "destructive" });
+    },
+  });
+
+  const currentWorkspace = workspaces?.find(w => w.id === workspaceId);
+
   const resetClientForm = () => {
     setClientName("");
     setClientMemo("");
@@ -275,8 +291,14 @@ export default function SettingsPage() {
         </Card>
       )}
 
-      <Tabs defaultValue="clients">
-        <TabsList className={`grid w-full ${isOwner ? 'grid-cols-3' : 'grid-cols-2'} md:w-auto md:inline-flex`}>
+      <Tabs defaultValue={isOwner ? "workspace" : "clients"}>
+        <TabsList className={`grid w-full ${isOwner ? 'grid-cols-4' : 'grid-cols-2'} md:w-auto md:inline-flex`}>
+          {isOwner && (
+            <TabsTrigger value="workspace" className="gap-2" data-testid="tab-workspace">
+              <Settings className="w-4 h-4" />
+              {KO.settings.workspaceTab}
+            </TabsTrigger>
+          )}
           <TabsTrigger value="clients" className="gap-2" data-testid="tab-clients">
             <Building2 className="w-4 h-4" />
             {KO.settings.clientsTab}
@@ -292,6 +314,43 @@ export default function SettingsPage() {
             {KO.settings.templatesTab}
           </TabsTrigger>
         </TabsList>
+
+        {isOwner && (
+          <TabsContent value="workspace" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">{KO.settings.workspace}</CardTitle>
+                <CardDescription>{KO.settings.workspaceNameDesc}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div>
+                    <Label>{KO.settings.workspaceName}</Label>
+                    <div className="flex gap-2 mt-1">
+                      <Input
+                        value={workspaceName || currentWorkspace?.name || ""}
+                        onChange={(e) => setWorkspaceName(e.target.value)}
+                        placeholder={currentWorkspace?.name || ""}
+                        data-testid="input-workspace-name"
+                      />
+                      <Button 
+                        onClick={() => {
+                          if (workspaceName.trim()) {
+                            updateWorkspaceNameMutation.mutate({ name: workspaceName.trim() });
+                          }
+                        }}
+                        disabled={updateWorkspaceNameMutation.isPending || !workspaceName.trim() || workspaceName.trim() === currentWorkspace?.name}
+                        data-testid="button-save-workspace-name"
+                      >
+                        {updateWorkspaceNameMutation.isPending ? KO.common.loading : KO.common.save}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
 
         <TabsContent value="clients" className="mt-6">
           <Card>

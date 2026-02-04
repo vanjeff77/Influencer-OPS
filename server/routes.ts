@@ -227,6 +227,39 @@ export async function registerRoutes(
     res.status(201).json(w);
   });
 
+  // Update workspace (name change)
+  app.patch('/api/workspaces/:workspaceId', async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const workspaceId = parseInt(req.params.workspaceId);
+    if (isNaN(workspaceId)) {
+      return res.status(400).json({ message: '잘못된 워크스페이스 ID입니다.' });
+    }
+
+    const userId = (req.user as any).id;
+
+    // Check if user is WORKSPACE_OWNER
+    const membership = await storage.getWorkspaceMember(userId, workspaceId);
+    if (!membership || membership.role !== 'WORKSPACE_OWNER') {
+      return res.status(403).json({ message: '워크스페이스 소유자만 이름을 변경할 수 있습니다.' });
+    }
+
+    const { name } = req.body as { name?: string };
+    if (!name || !name.trim()) {
+      return res.status(400).json({ message: '워크스페이스 이름을 입력해주세요.' });
+    }
+
+    const trimmedName = name.trim();
+    if (trimmedName.length > 100) {
+      return res.status(400).json({ message: '워크스페이스 이름은 100자를 초과할 수 없습니다.' });
+    }
+
+    const updated = await storage.updateWorkspace(workspaceId, { name: trimmedName });
+    res.json(updated);
+  });
+
   // === INFLUENCERS ===
   app.get(api.influencers.list.path, async (req, res) => {
     const wId = parseInt(req.params.workspaceId);
