@@ -31,6 +31,7 @@ export const users = pgTable("users", {
   password: text("password").notNull(), // bcrypt hash
   name: text("name").notNull(),
   isActive: boolean("is_active").default(true), // For account activation status
+  isPlatformAdmin: boolean("is_platform_admin").default(false), // Platform-wide admin privileges
   createdAt: timestamp("created_at").defaultNow(),
 });
 
