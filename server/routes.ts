@@ -1757,9 +1757,52 @@ export async function registerRoutes(
         provider: acc.provider,
         imapHost: acc.imapHost,
         smtpHost: acc.smtpHost,
+        signature: acc.signature,
+        useSignature: acc.useSignature ?? true,
       }));
       res.json(safeAccounts);
     } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // === EMAIL ACCOUNT SIGNATURE UPDATE ===
+  const emailSignatureSchema = z.object({
+    signature: z.string().nullable().optional(),
+    useSignature: z.boolean().optional(),
+  });
+
+  app.patch('/api/email/accounts/:id/signature', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      const accountId = parseInt(req.params.id);
+      const userId = (req.user as any).id;
+      
+      const parsed = emailSignatureSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid request", errors: parsed.error.errors });
+      }
+      
+      const account = await storage.getEmailAccountById(accountId);
+      if (!account) {
+        return res.status(404).json({ message: "이메일 계정을 찾을 수 없습니다" });
+      }
+      
+      // Verify the account belongs to the current user
+      if (account.userId !== userId) {
+        return res.status(403).json({ message: "이 이메일 계정에 대한 권한이 없습니다" });
+      }
+      
+      const updated = await storage.updateEmailAccountSignature(accountId, parsed.data);
+      res.json({ 
+        id: updated.id,
+        signature: updated.signature,
+        useSignature: updated.useSignature 
+      });
+    } catch (err: any) {
+      console.error('Update email signature error:', err);
       res.status(500).json({ message: err.message });
     }
   });
@@ -1958,6 +2001,13 @@ export async function registerRoutes(
         return res.status(400).json({ message: "인플루언서 이메일이 없습니다" });
       }
       
+      // Get email account for signature
+      const account = conv.emailAccountId ? await storage.getEmailAccountById(conv.emailAccountId) : null;
+      let finalBody = body;
+      if (account?.useSignature && account?.signature) {
+        finalBody = body + `<br><br>--<br>${account.signature}`;
+      }
+      
       // Parse CC emails from request (can be array or comma-separated string)
       const ccEmails: string[] = cc 
         ? (Array.isArray(cc) ? cc : cc.split(',').map((e: string) => e.trim()).filter(Boolean))
@@ -1970,7 +2020,7 @@ export async function registerRoutes(
       try {
         const { sendEmail, generateSnippet } = await import('./gmail');
         const finalSubject = conv.subjectPrefix ? `${conv.subjectPrefix} ${subject || ''}`.trim() : subject;
-        const result = await sendEmail(toEmail, finalSubject, body, conv.gmailThreadId || undefined, ccEmails);
+        const result = await sendEmail(toEmail, finalSubject, finalBody, conv.gmailThreadId || undefined, ccEmails);
         gmailMessageId = result.id || undefined;
         gmailThreadId = result.threadId || undefined;
         
@@ -1984,7 +2034,7 @@ export async function registerRoutes(
       }
       
       const { generateSnippet } = await import('./gmail');
-      const snippet = generateSnippet(body);
+      const snippet = generateSnippet(finalBody);
       
       const message = await storage.createConversationMessage({
         conversationId,
@@ -1994,8 +2044,8 @@ export async function registerRoutes(
         recipientEmail: toEmail,
         ccEmails: ccEmails.length > 0 ? ccEmails : null,
         snippet,
-        bodyHtml: body,
-        bodyText: body.replace(/<[^>]*>/g, ''),
+        bodyHtml: finalBody,
+        bodyText: finalBody.replace(/<[^>]*>/g, ''),
         gmailMessageId,
         gmailThreadId,
         sendStatus,
@@ -2242,7 +2292,12 @@ export async function registerRoutes(
       };
       
       const renderedSubject = `[테스트] ${renderTemplate(subject, variables)}`;
-      const renderedBody = renderTemplate(body, variables);
+      let renderedBody = renderTemplate(body, variables);
+      
+      // Add signature if enabled
+      if (emailAccount.useSignature && emailAccount.signature) {
+        renderedBody += `<br><br>--<br>${emailAccount.signature}`;
+      }
       
       if (emailAccount.provider === 'imap' && emailAccount.accessToken) {
         const config = JSON.parse(emailAccount.accessToken);
@@ -2383,13 +2438,18 @@ export async function registerRoutes(
       if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
       const user = req.user as any;
       
-      const { subject, body, campaignId, emailAccountId, eligible } = req.body;
+      const { subject, body, campaignId, emailAccountId, eligible, useSignature: useSignatureOverride } = req.body;
       const { renderTemplate, startBulkEmailWorker } = await import('./smtp');
       
       const campaign = await storage.getCampaign(campaignId);
       if (!campaign) {
         return res.status(404).json({ message: "캠페인을 찾을 수 없습니다" });
       }
+      
+      // Get email account for signature
+      const emailAccount = await storage.getEmailAccountById(emailAccountId);
+      const shouldUseSignature = useSignatureOverride !== undefined ? useSignatureOverride : (emailAccount?.useSignature ?? true);
+      const signatureHtml = shouldUseSignature && emailAccount?.signature ? `<br><br>--<br>${emailAccount.signature}` : '';
       
       const job = await storage.createBulkEmailJob({
         workspaceId: campaign.workspaceId,
@@ -2412,7 +2472,7 @@ export async function registerRoutes(
         influencerId: item.influencerId,
         email: item.email,
         renderedSubject: renderTemplate(subject, item.variables),
-        renderedBody: renderTemplate(body, item.variables),
+        renderedBody: renderTemplate(body, item.variables) + signatureHtml,
         variables: item.variables,
         status: 'queued' as const,
       }));

@@ -264,6 +264,8 @@ export const emailAccounts = pgTable("email_accounts", {
   smtpPort: integer("smtp_port"),
   imapPassword: text("imap_password"),
   lastSyncedAt: timestamp("last_synced_at"),
+  signature: text("signature"), // Rich text email signature (HTML)
+  useSignature: boolean("use_signature").default(true), // Whether to append signature to emails
 });
 
 // Campaign-LineItem based Conversations (for messenger-style threads)

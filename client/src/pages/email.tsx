@@ -10,7 +10,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { RefreshCw, Send, Mail, User, Clock, Plus, ExternalLink, Loader2, Trash2 } from "lucide-react";
+import { RefreshCw, Send, Mail, User, Clock, Plus, ExternalLink, Loader2, Trash2, Settings, Save } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import ReactQuill from 'react-quill-new';
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -44,6 +47,9 @@ export default function EmailCenter() {
   const [emailPreset, setEmailPreset] = useState<string>("");
   const [imapData, setImapData] = useState({ email: "", password: "", imapServer: "", imapPort: "993", smtpServer: "", smtpPort: "587" });
   const [deleteAccountId, setDeleteAccountId] = useState<number | null>(null);
+  const [signatureAccountId, setSignatureAccountId] = useState<number | null>(null);
+  const [signatureContent, setSignatureContent] = useState<string>("");
+  const [useSignature, setUseSignature] = useState<boolean>(true);
 
   const handlePresetChange = (preset: string) => {
     setEmailPreset(preset);
@@ -103,6 +109,36 @@ export default function EmailCenter() {
       toast({ variant: "destructive", title: KO.pages.email.deleteAccountFailed, description: err.message });
     }
   });
+
+  const updateSignature = useMutation({
+    mutationFn: async ({ accountId, signature, useSignature }: { accountId: number; signature: string | null; useSignature: boolean }) => {
+      const res = await apiRequest('PATCH', `/api/email/accounts/${accountId}/signature`, { signature, useSignature });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/workspaces/:workspaceId/email-accounts', workspaceId] });
+      setSignatureAccountId(null);
+      toast({ title: "서명이 저장되었습니다" });
+    },
+    onError: (err: any) => {
+      toast({ variant: "destructive", title: "서명 저장 실패", description: err.message });
+    }
+  });
+
+  const handleOpenSignatureSettings = (account: any) => {
+    setSignatureAccountId(account.id);
+    setSignatureContent(account.signature || "");
+    setUseSignature(account.useSignature ?? true);
+  };
+
+  const handleSaveSignature = () => {
+    if (!signatureAccountId) return;
+    updateSignature.mutate({
+      accountId: signatureAccountId,
+      signature: signatureContent || null,
+      useSignature
+    });
+  };
 
   const handleSync = () => {
     if (!selectedAccountId) return;
@@ -331,6 +367,15 @@ export default function EmailCenter() {
                      <div className={`text-xs truncate ${selectedAccountId === acc.id ? 'text-white/80' : 'text-muted-foreground'}`}>{acc.provider}</div>
                   </div>
                 </button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`shrink-0 opacity-0 group-hover:opacity-100 transition-opacity ${selectedAccountId === acc.id ? 'text-white' : ''}`}
+                  onClick={(e) => { e.stopPropagation(); handleOpenSignatureSettings(acc); }}
+                  data-testid={`button-settings-account-${acc.id}`}
+                >
+                  <Settings className="w-4 h-4" />
+                </Button>
                 <AlertDialog open={deleteAccountId === acc.id} onOpenChange={(open) => !open && setDeleteAccountId(null)}>
                   <AlertDialogTrigger asChild>
                     <Button
@@ -458,6 +503,73 @@ export default function EmailCenter() {
           </div>
         </div>
       </div>
+
+      {/* Signature Settings Dialog */}
+      <Dialog open={!!signatureAccountId} onOpenChange={(open) => !open && setSignatureAccountId(null)}>
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>이메일 서명 설정</DialogTitle>
+            <DialogDescription>
+              이메일 발송 시 자동으로 추가될 서명을 설정합니다. 이미지를 포함한 리치 텍스트 형식을 지원합니다.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="use-signature">서명 사용</Label>
+                <p className="text-xs text-muted-foreground">이메일 발송 시 서명을 자동으로 추가합니다</p>
+              </div>
+              <Switch
+                id="use-signature"
+                checked={useSignature}
+                onCheckedChange={setUseSignature}
+                data-testid="switch-use-signature"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label>서명 내용</Label>
+              <div className="border rounded-md overflow-hidden">
+                <ReactQuill
+                  theme="snow"
+                  value={signatureContent}
+                  onChange={setSignatureContent}
+                  modules={{
+                    toolbar: [
+                      [{ 'header': [1, 2, 3, false] }],
+                      ['bold', 'italic', 'underline', 'strike'],
+                      [{ 'color': [] }, { 'background': [] }],
+                      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                      ['link', 'image'],
+                      ['clean']
+                    ]
+                  }}
+                  className="bg-background min-h-[200px]"
+                  placeholder="서명을 입력하세요..."
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                이미지는 URL 링크로 삽입하거나 직접 붙여넣기 할 수 있습니다.
+              </p>
+            </div>
+          </div>
+          
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setSignatureAccountId(null)}>
+              취소
+            </Button>
+            <Button onClick={handleSaveSignature} disabled={updateSignature.isPending} data-testid="button-save-signature">
+              {updateSignature.isPending ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Save className="w-4 h-4 mr-2" />
+              )}
+              저장
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }

@@ -81,6 +81,7 @@ export interface IStorage {
   getEmailAccountById(accountId: number): Promise<EmailAccount | null>;
   createEmailAccount(userId: number, workspaceId: number, account: any): Promise<EmailAccount>;
   deleteEmailAccount(accountId: number): Promise<void>;
+  updateEmailAccountSignature(accountId: number, data: { signature?: string | null; useSignature?: boolean }): Promise<EmailAccount>;
   getEmailThreads(accountId: number): Promise<EmailThread[]>;
   createEmailThread(thread: any): Promise<EmailThread>;
   
@@ -557,6 +558,14 @@ export class DatabaseStorage implements IStorage {
   async deleteEmailAccount(accountId: number): Promise<void> {
     await db.delete(emailThreads).where(eq(emailThreads.accountId, accountId));
     await db.delete(emailAccounts).where(eq(emailAccounts.id, accountId));
+  }
+
+  async updateEmailAccountSignature(accountId: number, data: { signature?: string | null; useSignature?: boolean }): Promise<EmailAccount> {
+    const [updated] = await db.update(emailAccounts)
+      .set(data)
+      .where(eq(emailAccounts.id, accountId))
+      .returning();
+    return updated;
   }
 
   async getEmailThreads(accountId: number): Promise<EmailThread[]> {
