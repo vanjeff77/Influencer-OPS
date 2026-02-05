@@ -236,7 +236,7 @@ export default function Campaigns() {
                 <Card className="hover:border-primary/50 transition-all hover:shadow-md cursor-pointer group h-full" data-testid={`card-campaign-${campaign.id}`}>
                   <CardHeader className="flex flex-row items-start justify-between space-y-0 p-3 md:p-4 pb-1 md:pb-2 gap-2">
                     <div className="space-y-0.5 min-w-0 flex-1">
-                      <CardTitle className="text-sm md:text-base group-hover:text-primary transition-colors truncate">{campaign.name}</CardTitle>
+                      <CardTitle className="font-semibold tracking-tight md:text-base group-hover:text-primary transition-colors truncate text-[21px]">{campaign.name}</CardTitle>
                       <CardDescription className="text-[10px] md:text-xs">{campaign.client} • {format(new Date(campaign.createdAt || new Date()), 'yyyy.MM.dd')}</CardDescription>
                     </div>
                     <div className="flex items-center gap-1">

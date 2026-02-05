@@ -66,12 +66,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const DEFAULT_WIDTH = 256;
   const MAX_WIDTH = 320;
   
-  const [sidebarWidth, setSidebarWidth] = useState(() => {
-    const saved = localStorage.getItem('sidebarWidth');
-    return saved ? parseInt(saved) : DEFAULT_WIDTH;
-  });
+  const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_WIDTH);
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLElement>(null);
+  
+  // Load saved width from localStorage after mount (SSR-safe)
+  useEffect(() => {
+    const saved = localStorage.getItem('sidebarWidth');
+    if (saved) {
+      const parsed = parseInt(saved);
+      if (parsed >= MIN_WIDTH && parsed <= MAX_WIDTH) {
+        setSidebarWidth(parsed);
+      }
+    }
+  }, []);
   
   const isCollapsed = sidebarWidth <= COLLAPSE_THRESHOLD;
   
@@ -85,12 +93,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }, []);
   
   const resize = useCallback((e: MouseEvent) => {
-    if (!isResizing) return;
-    const newWidth = e.clientX;
-    if (newWidth >= MIN_WIDTH && newWidth <= MAX_WIDTH) {
-      setSidebarWidth(newWidth);
-      localStorage.setItem('sidebarWidth', newWidth.toString());
-    }
+    if (!isResizing || !sidebarRef.current) return;
+    const rect = sidebarRef.current.getBoundingClientRect();
+    const newWidth = e.clientX - rect.left;
+    const clampedWidth = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, newWidth));
+    setSidebarWidth(clampedWidth);
+    localStorage.setItem('sidebarWidth', clampedWidth.toString());
   }, [isResizing]);
   
   useEffect(() => {
@@ -153,13 +161,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         href={href} 
         onClick={onClick}
         title={collapsed ? label : undefined}
-        className={`flex items-center ${collapsed ? 'justify-center' : 'gap-2 md:gap-3'} px-3 md:px-4 py-2 md:py-2.5 rounded-lg transition-all duration-200 group ${
+        className={`flex items-center ${collapsed ? 'justify-center' : 'gap-2 md:gap-3'} px-3 md:px-4 py-2 md:py-2.5 rounded-lg transition-all duration-200 group hover-elevate ${
           isActive 
             ? 'bg-primary/10 text-primary font-semibold shadow-sm border border-primary/20' 
-            : 'text-muted-foreground hover:bg-muted/80 hover:text-foreground hover:shadow-sm'
+            : 'text-muted-foreground'
         }`}
       >
-        <Icon className={`w-4 h-4 md:w-5 md:h-5 transition-colors shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'}`} />
+        <Icon className={`w-4 h-4 md:w-5 md:h-5 transition-colors shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
         {!collapsed && <span className="text-sm md:text-base truncate">{label}</span>}
       </Link>
     );
@@ -172,7 +180,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <DropdownMenuTrigger asChild>
             <Button 
               variant="outline" 
-              className={`w-full border-border/60 hover:border-primary/20 hover:bg-muted/50 transition-all ${collapsed ? 'justify-center px-2 h-10' : 'justify-between px-2 md:px-3 h-10 md:h-12'}`}
+              className={`w-full transition-all ${collapsed ? 'justify-center' : 'justify-between'}`}
               title={collapsed ? currentWorkspace?.name : undefined}
             >
               <div className={`flex items-center ${collapsed ? '' : 'gap-2 md:gap-3'} overflow-hidden`}>
@@ -257,10 +265,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <Button 
               variant="ghost" 
               size="sm"
-              className="w-full justify-start text-muted-foreground hover:text-destructive hover:bg-destructive/10 text-xs md:text-sm"
+              className="w-full justify-start text-muted-foreground"
               onClick={() => logout.mutate()}
             >
-              <LogOut className="w-3 h-3 md:w-4 md:h-4 mr-2" />
+              <LogOut className="w-4 h-4 mr-2" />
               {KO.nav.signOut}
             </Button>
           </>
@@ -272,7 +280,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <Button 
               variant="ghost" 
               size="icon"
-              className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+              className="text-muted-foreground"
               onClick={() => logout.mutate()}
               title={KO.nav.signOut}
             >
@@ -295,22 +303,22 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <SidebarContent collapsed={isCollapsed} />
         
         {/* Collapse toggle button */}
-        <button
+        <Button
+          variant="outline"
+          size="icon"
           onClick={toggleCollapse}
-          className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-background border border-border rounded-full flex items-center justify-center hover:bg-muted transition-colors shadow-sm z-20"
+          className="absolute -right-3 top-1/2 -translate-y-1/2 rounded-full z-20"
           data-testid="button-toggle-sidebar"
           title={isCollapsed ? "사이드바 펼치기" : "사이드바 접기"}
         >
           {isCollapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
-        </button>
+        </Button>
         
         {/* Resize handle */}
         <div
           onMouseDown={startResizing}
-          className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/30 transition-colors group"
-        >
-          <div className="absolute top-1/2 -translate-y-1/2 right-0 w-1 h-12 bg-transparent group-hover:bg-primary/50 rounded-full transition-colors" />
-        </div>
+          className="absolute top-0 right-0 w-1 h-full cursor-col-resize bg-border/50"
+        />
       </aside>
       {/* Mobile Header & Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -318,7 +326,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <header className="md:hidden flex items-center justify-between px-3 py-2 border-b border-border bg-card">
           <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8" data-testid="button-mobile-menu">
+              <Button variant="ghost" size="icon" data-testid="button-mobile-menu">
                 <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>
