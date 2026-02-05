@@ -81,7 +81,15 @@ export default function Discover() {
   const queryClient = useQueryClient();
   const [newInfluencer, setNewInfluencer] = useState({ 
     name: "", 
-    accounts: [{ platform: "IG", handle: "" }] 
+    client: "",
+    tag1: "",
+    tag2: "",
+    tag3: "",
+    contactPoint: "",
+    phone: "",
+    memo: "",
+    priceMemo: "",
+    accounts: [{ platform: "IG", handle: "", followers: 0 }] 
   });
 
   const TEMPLATE_HEADERS = '닉네임\t플랫폼\t플랫폼 계정\t채널 URL\t팔로워\t컨택포인트\t메모\t클라이언트\t세부유형\t컨택여부\t회신 여부\t협업 여부\t콘텐츠 완성본 링크\t단가 메모';
@@ -312,15 +320,35 @@ export default function Discover() {
         platform: acc.platform,
         handle: acc.handle,
         url: `https://${platformUrlMap[acc.platform] || 'example.com'}/${acc.handle}`,
+        followers: acc.followers || 0,
         verified: false
       }));
     createInfluencer.mutate({
       name: newInfluencer.name,
+      client: newInfluencer.client || undefined,
+      tag1: newInfluencer.tag1 || undefined,
+      tag2: newInfluencer.tag2 || undefined,
+      tag3: newInfluencer.tag3 || undefined,
+      contactPoint: newInfluencer.contactPoint || undefined,
+      phone: newInfluencer.phone || undefined,
+      memo: newInfluencer.memo || undefined,
+      priceMemo: newInfluencer.priceMemo || undefined,
       accounts: validAccounts
     }, {
       onSuccess: () => {
         setIsAddOpen(false);
-        setNewInfluencer({ name: "", accounts: [{ platform: "IG", handle: "" }] });
+        setNewInfluencer({ 
+          name: "", 
+          client: "",
+          tag1: "",
+          tag2: "",
+          tag3: "",
+          contactPoint: "",
+          phone: "",
+          memo: "",
+          priceMemo: "",
+          accounts: [{ platform: "IG", handle: "", followers: 0 }] 
+        });
         toast({ title: KO.pages.discover.influencerAddedToast });
       }
     });
@@ -384,46 +412,145 @@ export default function Discover() {
               <ClipboardPaste className="w-3 h-3 mr-1" />
               대량 추가
             </Button>
-            <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm" data-testid="button-add-influencer">
-                  <Plus className="w-3 h-3 mr-1" />
-                  {KO.pages.discover.addInfluencer}
-                </Button>
-              </DialogTrigger>
-            <DialogContent className="max-w-[90vw] md:max-w-md">
-              <DialogHeader>
-                <DialogTitle className="text-base md:text-lg">{KO.pages.discover.addNewInfluencer}</DialogTitle>
-                <DialogDescription className="text-xs md:text-sm">새로운 인플루언서 정보를 입력하세요.</DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-3 md:gap-4 py-3 md:py-4">
-                <div className="grid gap-1.5 md:gap-2">
-                  <label className="text-xs md:text-sm">{KO.pages.discover.name}</label>
-                  <Input className="h-8 md:h-10 text-sm" value={newInfluencer.name} onChange={e => setNewInfluencer({...newInfluencer, name: e.target.value})} placeholder="홍길동" data-testid="input-influencer-name" />
-                </div>
+            <Button size="sm" onClick={() => setIsAddOpen(true)} data-testid="button-add-influencer">
+              <Plus className="w-3 h-3 mr-1" />
+              {KO.pages.discover.addInfluencer}
+            </Button>
+            <Sheet open={isAddOpen} onOpenChange={setIsAddOpen}>
+              <SheetContent className="w-[500px] sm:max-w-[500px] overflow-y-auto">
+                <SheetHeader>
+                  <SheetTitle className="text-xl">{KO.pages.discover.addNewInfluencer}</SheetTitle>
+                </SheetHeader>
                 
-                <div className="grid gap-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs md:text-sm font-medium">플랫폼 계정</label>
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      size="sm" 
-                      className="h-6 text-xs"
-                      onClick={() => setNewInfluencer({
-                        ...newInfluencer, 
-                        accounts: [...newInfluencer.accounts, { platform: "IG", handle: "" }]
-                      })}
-                      data-testid="button-add-platform"
-                    >
-                      <Plus className="w-3 h-3 mr-1" />
-                      플랫폼 추가
-                    </Button>
+                <div className="space-y-4 mt-6">
+                  {/* 닉네임 */}
+                  <div>
+                    <label className="text-sm font-medium">{KO.pages.discover.nickname}</label>
+                    <Input 
+                      value={newInfluencer.name} 
+                      onChange={e => setNewInfluencer({...newInfluencer, name: e.target.value})} 
+                      placeholder="홍길동" 
+                      data-testid="input-new-influencer-name" 
+                    />
                   </div>
                   
-                  {newInfluencer.accounts.map((account, index) => (
-                    <div key={index} className="grid grid-cols-12 gap-2 items-center">
-                      <div className="col-span-4">
+                  {/* 클라이언트 */}
+                  <div>
+                    <label className="text-sm font-medium">{KO.pages.discover.client}</label>
+                    <Select 
+                      value={newInfluencer.client || "__none__"} 
+                      onValueChange={(v) => setNewInfluencer({...newInfluencer, client: v === "__none__" ? "" : v})}
+                    >
+                      <SelectTrigger data-testid="select-new-influencer-client">
+                        <SelectValue placeholder="클라이언트 선택" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">없음</SelectItem>
+                        {clientsForImport?.map((c) => (
+                          <SelectItem key={c.id} value={c.name}>
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  {/* 태그 */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-sm font-medium">{KO.pages.discover.tag1}</label>
+                      <Input 
+                        value={newInfluencer.tag1} 
+                        onChange={e => setNewInfluencer({...newInfluencer, tag1: e.target.value})} 
+                        placeholder="태그1" 
+                        data-testid="input-new-influencer-tag1" 
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">{KO.pages.discover.tag2}</label>
+                      <Input 
+                        value={newInfluencer.tag2} 
+                        onChange={e => setNewInfluencer({...newInfluencer, tag2: e.target.value})} 
+                        placeholder="태그2" 
+                        data-testid="input-new-influencer-tag2" 
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">{KO.pages.discover.tag3}</label>
+                      <Input 
+                        value={newInfluencer.tag3} 
+                        onChange={e => setNewInfluencer({...newInfluencer, tag3: e.target.value})} 
+                        placeholder="태그3" 
+                        data-testid="input-new-influencer-tag3" 
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* 연락처 */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-sm font-medium">{KO.pages.discover.email}</label>
+                      <Input 
+                        value={newInfluencer.contactPoint} 
+                        onChange={e => setNewInfluencer({...newInfluencer, contactPoint: e.target.value})} 
+                        placeholder="influencer@example.com" 
+                        data-testid="input-new-influencer-email" 
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">{KO.pages.discover.phone}</label>
+                      <Input 
+                        value={newInfluencer.phone} 
+                        onChange={e => setNewInfluencer({...newInfluencer, phone: e.target.value})} 
+                        placeholder="010-0000-0000"
+                        data-testid="input-new-influencer-phone" 
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* 메모 */}
+                  <div>
+                    <label className="text-sm font-medium">{KO.pages.discover.memo}</label>
+                    <Textarea 
+                      value={newInfluencer.memo} 
+                      onChange={e => setNewInfluencer({...newInfluencer, memo: e.target.value})} 
+                      placeholder={KO.pages.discover.memo} 
+                      className="min-h-[80px]" 
+                      data-testid="input-new-influencer-memo" 
+                    />
+                  </div>
+                  
+                  {/* 단가 메모 */}
+                  <div>
+                    <label className="text-sm font-medium">{KO.pages.discover.priceMemo}</label>
+                    <Textarea 
+                      value={newInfluencer.priceMemo} 
+                      onChange={e => setNewInfluencer({...newInfluencer, priceMemo: e.target.value})} 
+                      placeholder={KO.pages.discover.priceMemoPlaceholder}
+                      className="min-h-[80px]" 
+                      data-testid="input-new-influencer-price-memo" 
+                    />
+                  </div>
+                  
+                  {/* 플랫폼 계정 */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-medium">{KO.pages.discover.platformAccounts}</label>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => setNewInfluencer({
+                          ...newInfluencer, 
+                          accounts: [...newInfluencer.accounts, { platform: "IG", handle: "", followers: 0 }]
+                        })}
+                        data-testid="button-add-new-platform"
+                      >
+                        <Plus className="w-3 h-3 mr-1" />
+                        {KO.pages.discover.addAccount}
+                      </Button>
+                    </div>
+                    {newInfluencer.accounts.map((account, index) => (
+                      <div key={index} className="flex gap-2 items-center flex-wrap">
                         <Select 
                           value={account.platform} 
                           onValueChange={v => {
@@ -432,57 +559,68 @@ export default function Discover() {
                             setNewInfluencer({ ...newInfluencer, accounts: newAccounts });
                           }}
                         >
-                          <SelectTrigger className="h-8 text-sm" data-testid={`select-platform-${index}`}>
+                          <SelectTrigger className="w-24" data-testid={`select-new-platform-${index}`}>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="IG">Instagram</SelectItem>
                             <SelectItem value="YT">YouTube</SelectItem>
                             <SelectItem value="TikTok">TikTok</SelectItem>
-                            <SelectItem value="X">X (Twitter)</SelectItem>
-                            <SelectItem value="Blog">네이버 블로그</SelectItem>
+                            <SelectItem value="X">X</SelectItem>
+                            <SelectItem value="Blog">Blog</SelectItem>
                           </SelectContent>
                         </Select>
-                      </div>
-                      <div className="col-span-7">
                         <Input 
-                          className="h-8 text-sm" 
                           value={account.handle} 
                           onChange={e => {
                             const newAccounts = [...newInfluencer.accounts];
                             newAccounts[index] = { ...newAccounts[index], handle: e.target.value };
                             setNewInfluencer({ ...newInfluencer, accounts: newAccounts });
                           }}
-                          placeholder="https://..." 
-                          data-testid={`input-handle-${index}`}
+                          placeholder="https://..."
+                          className="flex-1 min-w-[100px]"
+                          data-testid={`input-new-handle-${index}`}
                         />
-                      </div>
-                      {newInfluencer.accounts.length > 1 && (
-                        <div className="col-span-1">
+                        <Input 
+                          type="number"
+                          value={account.followers || ''} 
+                          onChange={e => {
+                            const newAccounts = [...newInfluencer.accounts];
+                            newAccounts[index] = { ...newAccounts[index], followers: parseInt(e.target.value) || 0 };
+                            setNewInfluencer({ ...newInfluencer, accounts: newAccounts });
+                          }}
+                          placeholder={KO.pages.discover.followers}
+                          className="w-24"
+                          data-testid={`input-new-followers-${index}`}
+                        />
+                        {newInfluencer.accounts.length > 1 && (
                           <Button 
-                            type="button" 
                             variant="ghost" 
-                            size="sm" 
-                            className="h-8 w-8 p-0"
+                            size="icon" 
                             onClick={() => {
                               const newAccounts = newInfluencer.accounts.filter((_, i) => i !== index);
                               setNewInfluencer({ ...newInfluencer, accounts: newAccounts });
                             }}
-                            data-testid={`button-remove-platform-${index}`}
+                            data-testid={`button-remove-new-platform-${index}`}
                           >
-                            <X className="w-3 h-3" />
+                            <X className="w-4 h-4 text-destructive" />
                           </Button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                        )}
+                      </div>
+                    ))}
+                    {newInfluencer.accounts.length === 0 && (
+                      <div className="text-sm text-muted-foreground text-center py-2">{KO.pages.discover.noAccounts}</div>
+                    )}
+                  </div>
+                  
+                  {/* 저장 버튼 */}
+                  <Button onClick={handleCreate} disabled={createInfluencer.isPending || !newInfluencer.name} className="w-full" data-testid="button-submit-influencer">
+                    <Save className="w-4 h-4 mr-2" />
+                    {createInfluencer.isPending ? "추가 중..." : "인플루언서 추가"}
+                  </Button>
                 </div>
-              </div>
-              <Button size="sm" onClick={handleCreate} disabled={createInfluencer.isPending} data-testid="button-submit-influencer">
-                {createInfluencer.isPending ? "추가 중..." : "추가"}
-              </Button>
-            </DialogContent>
-          </Dialog>
+              </SheetContent>
+            </Sheet>
           </div>
         </div>
 
