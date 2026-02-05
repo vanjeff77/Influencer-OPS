@@ -65,8 +65,8 @@ export default function CampaignDetail() {
   const [selectedLineItem, setSelectedLineItem] = useState<CampaignLineItem | null>(null);
   const [isEditingClient, setIsEditingClient] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState<string>("");
-  const [isEditingStatus, setIsEditingStatus] = useState(false);
   const [isDeleteCampaignOpen, setIsDeleteCampaignOpen] = useState(false);
+  const [editingCampaignName, setEditingCampaignName] = useState("");
   const [isDeleteInfluencerOpen, setIsDeleteInfluencerOpen] = useState(false);
   const [selectedInfluencerIds, setSelectedInfluencerIds] = useState<Set<number>>(new Set());
 
@@ -98,7 +98,6 @@ export default function CampaignDetail() {
     }, {
       onSuccess: () => {
         toast({ title: "캠페인 상태가 변경되었습니다." });
-        setIsEditingStatus(false);
       },
       onError: () => {
         toast({ variant: "destructive", title: "변경 실패" });
@@ -340,21 +339,11 @@ export default function CampaignDetail() {
               <Upload className="w-3 h-3 mr-1" />
               제출 링크
             </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="text-destructive border-destructive/50 h-8"
-              onClick={() => setIsDeleteCampaignOpen(true)}
-              data-testid="button-delete-campaign"
-            >
-              <Trash2 className="w-3 h-3 mr-1" />
-              삭제
-            </Button>
           </div>
         </div>
 
         <Tabs defaultValue="influencers" className="w-full">
-          <TabsList className="mb-4 flex-wrap">
+          <TabsList className="mb-4 flex-wrap gap-1 w-full justify-start">
             <TabsTrigger value="influencers">선정</TabsTrigger>
             <TabsTrigger value="communication" className="flex items-center gap-1">
               <MessageCircle className="w-4 h-4" />
@@ -366,6 +355,11 @@ export default function CampaignDetail() {
             </TabsTrigger>
             <TabsTrigger value="content">콘텐츠</TabsTrigger>
             <TabsTrigger value="finance">정산</TabsTrigger>
+            <div className="flex-1" />
+            <TabsTrigger value="settings" className="flex items-center gap-1">
+              <Settings className="w-4 h-4" />
+              설정
+            </TabsTrigger>
           </TabsList>
           
           <TabsContent value="influencers">
@@ -695,6 +689,87 @@ export default function CampaignDetail() {
                     )}
                   </TableBody>
                 </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="settings">
+            <Card>
+              <CardHeader>
+                <CardTitle>캠페인 설정</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">캠페인 이름</label>
+                    <div className="flex items-center gap-2">
+                      <Input 
+                        value={editingCampaignName || campaign.name}
+                        onChange={(e) => setEditingCampaignName(e.target.value)}
+                        className="max-w-md"
+                        data-testid="input-campaign-name"
+                      />
+                      <Button 
+                        size="sm"
+                        onClick={() => {
+                          const newName = editingCampaignName || campaign.name;
+                          if (newName && newName !== campaign.name) {
+                            updateCampaign.mutate({
+                              id,
+                              data: { name: newName }
+                            }, {
+                              onSuccess: () => {
+                                toast({ title: "캠페인 이름이 변경되었습니다." });
+                                setEditingCampaignName("");
+                              },
+                              onError: () => {
+                                toast({ variant: "destructive", title: "변경 실패" });
+                              }
+                            });
+                          }
+                        }}
+                        disabled={updateCampaign.isPending || !editingCampaignName || editingCampaignName === campaign.name}
+                        data-testid="button-save-campaign-name"
+                      >
+                        <Save className="w-3 h-3 mr-1" />
+                        저장
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">캠페인 상태</label>
+                    <Select 
+                      value={campaign.status || "대기중"} 
+                      onValueChange={(v) => handleStatusChange(v)}
+                    >
+                      <SelectTrigger className="w-[200px]" data-testid="select-campaign-status">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="대기중">대기중</SelectItem>
+                        <SelectItem value="진행중">진행중</SelectItem>
+                        <SelectItem value="완료">완료</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="border-t pt-6">
+                  <h3 className="text-sm font-medium text-destructive mb-2">위험 구역</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    캠페인을 삭제하면 포함된 모든 인플루언서 정보도 함께 삭제됩니다. 이 작업은 되돌릴 수 없습니다.
+                  </p>
+                  <Button 
+                    variant="destructive" 
+                    size="sm"
+                    onClick={() => setIsDeleteCampaignOpen(true)}
+                    data-testid="button-delete-campaign"
+                  >
+                    <Trash2 className="w-3 h-3 mr-1" />
+                    캠페인 삭제
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

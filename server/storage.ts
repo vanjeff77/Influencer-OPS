@@ -421,7 +421,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createCampaign(workspaceId: number, campaign: any): Promise<Campaign> {
-    const [c] = await db.insert(campaigns).values({ ...campaign, workspaceId }).returning();
+    const [c] = await db.insert(campaigns).values({ 
+      ...campaign, 
+      workspaceId,
+      status: campaign.status || "대기중"
+    }).returning();
     return c;
   }
 
