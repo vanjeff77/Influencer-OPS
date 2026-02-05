@@ -424,7 +424,7 @@ export default function EmailCenter() {
             )}
           </div>
 
-          <div className="col-span-4 bg-card rounded-xl border border-border flex flex-col overflow-hidden">
+          <div className="col-span-9 bg-card rounded-xl border border-border flex flex-col overflow-hidden">
              <div className="p-4 border-b border-border bg-muted/10">
                <Tabs defaultValue="inbox">
                  <TabsList className="grid w-full grid-cols-3">
@@ -463,51 +463,51 @@ export default function EmailCenter() {
              </ScrollArea>
           </div>
 
-          <div className="col-span-5 bg-card rounded-xl border border-border flex flex-col overflow-hidden">
-            {selectedThread ? (
-              <div className="flex flex-col h-full">
-                <div className="p-4 border-b border-border">
-                  <h2 className="text-lg font-bold leading-tight mb-1">{selectedThread.subject || KO.pages.email.noSubject}</h2>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Clock className="w-4 h-4" />
-                    {selectedThread.lastMessageDate ? format(new Date(selectedThread.lastMessageDate), 'PPP p') : ''}
-                  </div>
-                </div>
-                <ScrollArea className="flex-1 p-6">
-                  <div className="space-y-6">
-                     <div className="flex gap-4">
-                       <Avatar>
-                         <AvatarFallback>JD</AvatarFallback>
-                       </Avatar>
-                       <div className="flex-1 space-y-2">
-                         <div className="flex justify-between">
-                            <span className="font-semibold">Jane Doe</span>
-                            <span className="text-xs text-muted-foreground">{KO.pages.email.yesterday}</span>
-                         </div>
-                         <div className="text-sm leading-relaxed">
-                            {selectedThread.snippet}
-                            <br/><br/>
-                            감사합니다.
-                         </div>
-                       </div>
-                     </div>
-                  </div>
-                </ScrollArea>
-                <div className="p-4 border-t border-border bg-muted/10">
-                  <Button className="w-full">{KO.common.reply}</Button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex-1 flex items-center justify-center text-muted-foreground">
-                <div className="text-center">
-                  <Mail className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                  {KO.pages.email.selectThread}
-                </div>
-              </div>
-            )}
-          </div>
         </div>
       </div>
+
+      {/* Email Thread Detail Dialog */}
+      <Dialog open={!!selectedThread} onOpenChange={(open) => !open && setSelectedThread(null)}>
+        <DialogContent className="sm:max-w-[700px] max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold leading-tight pr-8">
+              {selectedThread?.subject || KO.pages.email.noSubject}
+            </DialogTitle>
+            <DialogDescription className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Clock className="w-4 h-4" />
+              {selectedThread?.lastMessageDate ? format(new Date(selectedThread.lastMessageDate), 'PPP p') : ''}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <ScrollArea className="flex-1 min-h-[300px] max-h-[50vh]">
+            <div className="space-y-6 p-2">
+              <div className="flex gap-4">
+                <Avatar>
+                  <AvatarFallback>JD</AvatarFallback>
+                </Avatar>
+                <div className="flex-1 space-y-2">
+                  <div className="flex justify-between">
+                    <span className="font-semibold">Jane Doe</span>
+                    <span className="text-xs text-muted-foreground">{KO.pages.email.yesterday}</span>
+                  </div>
+                  <div className="text-sm leading-relaxed">
+                    {selectedThread?.snippet}
+                    <br/><br/>
+                    감사합니다.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </ScrollArea>
+          
+          <div className="pt-4 border-t border-border flex gap-2">
+            <Button className="flex-1">{KO.common.reply}</Button>
+            <Button variant="outline" onClick={() => setSelectedThread(null)}>
+              닫기
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Signature Settings Dialog */}
       <Dialog open={!!signatureAccountId} onOpenChange={(open) => !open && setSignatureAccountId(null)}>

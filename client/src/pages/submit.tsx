@@ -97,6 +97,7 @@ export default function SubmitPage() {
       // 2. OneDrive에 직접 업로드 (청크 단위)
       const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB chunks
       const totalChunks = Math.ceil(selectedFile.size / CHUNK_SIZE);
+      let uploadedFileId: string | null = null;
       
       for (let i = 0; i < totalChunks; i++) {
         const start = i * CHUNK_SIZE;
@@ -116,10 +117,20 @@ export default function SubmitPage() {
           throw new Error('파일 업로드 실패');
         }
 
+        // 마지막 청크 업로드 완료 시 파일 ID 추출
+        if (uploadRes.status === 200 || uploadRes.status === 201) {
+          try {
+            const uploadedFile = await uploadRes.json();
+            uploadedFileId = uploadedFile.id;
+          } catch (e) {
+            console.error('Failed to parse upload response:', e);
+          }
+        }
+
         setUploadProgress(Math.round(((i + 1) / totalChunks) * 100));
       }
 
-      // 3. 제출 완료 기록 (이메일로 재검증)
+      // 3. 제출 완료 기록 (이메일로 재검증) - 파일 ID 포함하여 초안/완성본 링크 자동 업데이트
       const completeRes = await fetch(`/api/submit/${campaignId}/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -129,6 +140,7 @@ export default function SubmitPage() {
           fileName: session.finalFileName,
           fileSize: selectedFile.size,
           folderId: session.folderId,
+          fileId: uploadedFileId,
           memo
         })
       });

@@ -3549,7 +3549,7 @@ export async function registerRoutes(
   app.post('/api/submit/:campaignId/complete', async (req, res) => {
     try {
       const campaignId = parseInt(req.params.campaignId);
-      const { email, submissionType, fileName, fileSize, folderId, memo } = req.body;
+      const { email, submissionType, fileName, fileSize, folderId, fileId, memo } = req.body;
       
       if (!email) {
         return res.status(400).json({ message: "이메일이 필요합니다" });
@@ -3576,6 +3576,28 @@ export async function registerRoutes(
       
       const { lineItem, influencer } = verifyResult[0];
       
+      // OneDrive 파일 링크 생성 및 초안/완성본 링크 자동 업데이트
+      let oneDriveLink: string | null = null;
+      if (fileId) {
+        try {
+          const { getFileLink } = await import('./onedrive');
+          oneDriveLink = await getFileLink(fileId);
+          
+          // 초안이면 draftUrl, 완성본이면 finalUrl 업데이트
+          if (submissionType === 'draft') {
+            await db.update(campaignInfluencers)
+              .set({ draftUrl: oneDriveLink, draftFileId: fileId })
+              .where(eq(campaignInfluencers.id, lineItem.id));
+          } else {
+            await db.update(campaignInfluencers)
+              .set({ finalUrl: oneDriveLink, finalFileId: fileId })
+              .where(eq(campaignInfluencers.id, lineItem.id));
+          }
+        } catch (linkErr) {
+          console.error('Failed to generate OneDrive link:', linkErr);
+        }
+      }
+      
       const submission = await storage.createContentSubmission({
         campaignId,
         lineItemId: lineItem.id,
@@ -3584,6 +3606,8 @@ export async function registerRoutes(
         fileName,
         fileSize,
         oneDriveFolderId: folderId,
+        oneDriveFileId: fileId,
+        oneDriveLink,
         memo
       });
       
@@ -3601,7 +3625,7 @@ export async function registerRoutes(
             eventType: 'content_submitted',
             title: `${submissionType === 'draft' ? '초안' : '완성본'} 제출`,
             description: `${influencer.name}님이 ${fileName}을 제출했습니다`,
-            metadata: { submissionId: submission.id, fileName, fileSize }
+            metadata: { submissionId: submission.id, fileName, fileSize, oneDriveLink }
           });
         }
         
@@ -3610,7 +3634,7 @@ export async function registerRoutes(
         console.error('Failed to send notification:', notifyErr);
       }
       
-      res.json({ success: true, submissionId: submission.id });
+      res.json({ success: true, submissionId: submission.id, oneDriveLink });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }

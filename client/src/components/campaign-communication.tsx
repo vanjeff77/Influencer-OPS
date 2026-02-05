@@ -730,7 +730,9 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
   const updateInfluencer = useMutation({
     mutationFn: (data: any) => apiRequest('PATCH', `/api/influencers/${influencer?.id}`, data),
     onSuccess: () => {
+      // Sync with discover tab - invalidate all influencer-related caches
       queryClient.invalidateQueries({ queryKey: ['/api/influencers'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/workspaces'] }); // Discover tab uses this pattern
       queryClient.invalidateQueries({ queryKey: ['/api/campaigns'] });
       queryClient.invalidateQueries({ queryKey: ['/api/conversations'] });
       toast({ title: KO.pages.communication.saved });
