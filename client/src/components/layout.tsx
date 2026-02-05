@@ -211,10 +211,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen bg-background overflow-hidden">
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex w-56 lg:w-64 border-r border-border/60 bg-card flex-col shadow-md z-10">
+      <aside className="hidden md:flex w-56 lg:w-64 border-r border-border/60 flex-col shadow-md z-10 bg-[#f6f9fa]">
         <SidebarContent />
       </aside>
-
       {/* Mobile Header & Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Mobile Header */}

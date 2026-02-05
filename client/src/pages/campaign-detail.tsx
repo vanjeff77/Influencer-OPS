@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ArrowLeft, CheckCircle2, CircleDollarSign, FileText, Plus, Search, Users, Instagram, Youtube, Twitter, Save, MessageCircle, ExternalLink, Eye, Heart, MessageSquare, Share2, Trash2, Edit3, Image, Pencil, Calendar, Copy, Upload } from "lucide-react";
+import { ArrowLeft, CheckCircle2, CircleDollarSign, FileText, Plus, Search, Users, Instagram, Youtube, Twitter, Save, MessageCircle, ExternalLink, Eye, Heart, MessageSquare, Share2, Trash2, Edit3, Image, Pencil, Calendar, Copy, Upload, Settings } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Link } from "wouter";
@@ -250,32 +250,17 @@ export default function CampaignDetail() {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-2xl font-bold tracking-tight">{campaign.name}</h1>
-              {isEditingStatus ? (
-                <Select value={campaign.status || "대기중"} onValueChange={(v) => handleStatusChange(v)}>
-                  <SelectTrigger className="w-[120px] h-8" data-testid="select-campaign-status">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="대기중">대기중</SelectItem>
-                    <SelectItem value="진행중">진행중</SelectItem>
-                    <SelectItem value="완료">완료</SelectItem>
-                  </SelectContent>
-                </Select>
-              ) : (
-                <Badge 
-                  variant="outline" 
-                  className={`text-sm cursor-pointer ${
-                    campaign.status === '진행중' ? 'bg-green-50 text-green-700 border-green-200' :
-                    campaign.status === '완료' ? 'bg-gray-100 text-gray-600 border-gray-300' :
-                    'bg-yellow-50 text-yellow-700 border-yellow-200'
-                  }`}
-                  onClick={() => setIsEditingStatus(true)}
-                  data-testid="badge-campaign-status"
-                >
-                  {campaign.status || '대기중'}
-                  <Pencil className="w-3 h-3 ml-1" />
-                </Badge>
-              )}
+              <Badge 
+                variant="outline" 
+                className={`text-sm ${
+                  campaign.status === '진행중' ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800' :
+                  campaign.status === '완료' ? 'bg-gray-100 text-gray-600 border-gray-300 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700' :
+                  'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-800'
+                }`}
+                data-testid="badge-campaign-status"
+              >
+                {campaign.status || '대기중'}
+              </Badge>
             </div>
             <div className="flex items-center gap-2 mt-1">
               {isEditingClient ? (
