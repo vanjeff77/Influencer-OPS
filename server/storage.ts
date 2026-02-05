@@ -293,7 +293,7 @@ export class DatabaseStorage implements IStorage {
     return { ...inf, accounts: createdAccounts };
   }
 
-  async updateInfluencer(id: number, data: Partial<Influencer> & { accounts?: Array<{ platform: string; handle: string; url?: string }> }): Promise<Influencer & { accounts?: InfluencerAccount[] }> {
+  async updateInfluencer(id: number, data: Partial<Influencer> & { accounts?: Array<{ platform: string; handle: string; url?: string; followers?: number | null }> }): Promise<Influencer & { accounts?: InfluencerAccount[] }> {
     const { accounts: newAccounts, ...influencerData } = data as any;
     const [inf] = await db.update(influencers).set(influencerData).where(eq(influencers.id, id)).returning();
     
@@ -305,7 +305,8 @@ export class DatabaseStorage implements IStorage {
           influencerId: id,
           platform: acc.platform,
           handle: acc.handle,
-          url: acc.url || null
+          url: acc.url || null,
+          followers: acc.followers || null
         }).returning();
         createdAccounts.push(account);
       }

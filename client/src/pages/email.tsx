@@ -349,14 +349,12 @@ export default function EmailCenter() {
               </Dialog>
             </div>
             
-            {accounts?.map(acc => (
-              <div
-                key={acc.id}
-                className={`flex items-center gap-3 p-3 rounded-lg text-left transition-all group ${selectedAccountId === acc.id ? 'bg-primary text-primary-foreground shadow-md' : 'hover:bg-muted'}`}
-              >
+            <div className="flex-1 overflow-y-auto">
+              {accounts?.map(acc => (
                 <button
+                  key={acc.id}
                   onClick={() => { setSelectedAccountId(acc.id); setSelectedThread(null); }}
-                  className="flex items-center gap-3 flex-1 min-w-0"
+                  className={`w-full flex items-center gap-3 p-3 rounded-lg text-left transition-all ${selectedAccountId === acc.id ? 'bg-primary text-primary-foreground shadow-md' : 'hover:bg-muted'}`}
                   data-testid={`button-account-${acc.id}`}
                 >
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${selectedAccountId === acc.id ? 'bg-white/20' : 'bg-primary/10 text-primary'}`}>
@@ -367,23 +365,36 @@ export default function EmailCenter() {
                      <div className={`text-xs truncate ${selectedAccountId === acc.id ? 'text-white/80' : 'text-muted-foreground'}`}>{acc.provider}</div>
                   </div>
                 </button>
+              ))}
+              {!accounts?.length && (
+                <div className="text-sm text-muted-foreground p-2 text-center py-8">
+                  <Mail className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                  {KO.pages.email.noAccounts}
+                </div>
+              )}
+            </div>
+            
+            {/* Account Actions - Bottom Section */}
+            {selectedAccountId && accounts?.find(a => a.id === selectedAccountId) && (
+              <div className="border-t border-border pt-3 mt-2 flex gap-2">
                 <Button
-                  variant="ghost"
-                  size="icon"
-                  className={`shrink-0 opacity-0 group-hover:opacity-100 transition-opacity ${selectedAccountId === acc.id ? 'text-white' : ''}`}
-                  onClick={(e) => { e.stopPropagation(); handleOpenSignatureSettings(acc); }}
-                  data-testid={`button-settings-account-${acc.id}`}
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 gap-2"
+                  onClick={() => handleOpenSignatureSettings(accounts.find(a => a.id === selectedAccountId)!)}
+                  data-testid="button-account-settings"
                 >
                   <Settings className="w-4 h-4" />
+                  서명 설정
                 </Button>
-                <AlertDialog open={deleteAccountId === acc.id} onOpenChange={(open) => !open && setDeleteAccountId(null)}>
+                <AlertDialog open={deleteAccountId === selectedAccountId} onOpenChange={(open) => !open && setDeleteAccountId(null)}>
                   <AlertDialogTrigger asChild>
                     <Button
-                      variant="ghost"
-                      size="icon"
-                      className={`shrink-0 opacity-0 group-hover:opacity-100 transition-opacity ${selectedAccountId === acc.id ? 'text-white' : ''}`}
-                      onClick={(e) => { e.stopPropagation(); setDeleteAccountId(acc.id); }}
-                      data-testid={`button-delete-account-${acc.id}`}
+                      variant="outline"
+                      size="sm"
+                      className="gap-2 text-destructive"
+                      onClick={() => setDeleteAccountId(selectedAccountId)}
+                      data-testid="button-delete-account"
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
@@ -399,7 +410,7 @@ export default function EmailCenter() {
                       <AlertDialogCancel data-testid="button-cancel-delete-account">{KO.common.cancel}</AlertDialogCancel>
                       <AlertDialogAction
                         className="bg-destructive text-destructive-foreground"
-                        onClick={() => deleteAccount.mutate(acc.id)}
+                        onClick={() => deleteAccount.mutate(selectedAccountId)}
                         disabled={deleteAccount.isPending}
                         data-testid="button-confirm-delete-account"
                       >
@@ -409,12 +420,6 @@ export default function EmailCenter() {
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
-              </div>
-            ))}
-            {!accounts?.length && (
-              <div className="text-sm text-muted-foreground p-2 text-center py-8">
-                <Mail className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                {KO.pages.email.noAccounts}
               </div>
             )}
           </div>
