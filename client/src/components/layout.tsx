@@ -29,11 +29,9 @@ import {
   ChevronsUpDown,
   Search,
   Menu,
-  X,
   Settings
 } from "lucide-react";
-import { useState, useEffect, useRef, useCallback } from "react";
-import { GripVertical, ChevronLeft, ChevronRight } from "lucide-react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -60,62 +58,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
-  // Sidebar resize state
-  const MIN_WIDTH = 64;
-  const COLLAPSE_THRESHOLD = 120;
-  const DEFAULT_WIDTH = 256;
-  const MAX_WIDTH = 320;
-  
-  const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_WIDTH);
-  const [isResizing, setIsResizing] = useState(false);
-  const sidebarRef = useRef<HTMLElement>(null);
-  
-  // Load saved width from localStorage after mount (SSR-safe)
-  useEffect(() => {
-    const saved = localStorage.getItem('sidebarWidth');
-    if (saved) {
-      const parsed = parseInt(saved);
-      if (parsed >= MIN_WIDTH && parsed <= MAX_WIDTH) {
-        setSidebarWidth(parsed);
-      }
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('sidebarCollapsed') === 'true';
     }
-  }, []);
-  
-  const isCollapsed = sidebarWidth <= COLLAPSE_THRESHOLD;
-  
-  const startResizing = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsResizing(true);
-  }, []);
-  
-  const stopResizing = useCallback(() => {
-    setIsResizing(false);
-  }, []);
-  
-  const resize = useCallback((e: MouseEvent) => {
-    if (!isResizing || !sidebarRef.current) return;
-    const rect = sidebarRef.current.getBoundingClientRect();
-    const newWidth = e.clientX - rect.left;
-    const clampedWidth = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, newWidth));
-    setSidebarWidth(clampedWidth);
-    localStorage.setItem('sidebarWidth', clampedWidth.toString());
-  }, [isResizing]);
-  
-  useEffect(() => {
-    if (isResizing) {
-      window.addEventListener('mousemove', resize);
-      window.addEventListener('mouseup', stopResizing);
-    }
-    return () => {
-      window.removeEventListener('mousemove', resize);
-      window.removeEventListener('mouseup', stopResizing);
-    };
-  }, [isResizing, resize, stopResizing]);
+    return false;
+  });
   
   const toggleCollapse = () => {
-    const newWidth = isCollapsed ? DEFAULT_WIDTH : MIN_WIDTH;
-    setSidebarWidth(newWidth);
-    localStorage.setItem('sidebarWidth', newWidth.toString());
+    setIsCollapsed(prev => {
+      const next = !prev;
+      localStorage.setItem('sidebarCollapsed', String(next));
+      return next;
+    });
   };
 
   const { data: myRoleData } = useQuery<{ userId: number; role: string; assignedClientIds: number[] }>({
@@ -161,7 +116,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         href={href} 
         onClick={onClick}
         title={collapsed ? label : undefined}
-        className={`flex items-center ${collapsed ? 'justify-center' : 'gap-2 md:gap-3'} px-3 md:px-4 py-2 md:py-2.5 rounded-lg transition-all duration-200 group hover-elevate ${
+        className={`flex items-center ${collapsed ? 'justify-center' : 'gap-2 md:gap-3'} px-3 md:px-4 py-2 md:py-2.5 rounded-lg transition-colors duration-200 group hover-elevate ${
           isActive 
             ? 'bg-primary/10 text-primary font-semibold shadow-sm border border-primary/20' 
             : 'text-muted-foreground'
@@ -173,14 +128,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     );
   };
 
-  const SidebarContent = ({ onNavClick, collapsed = false }: { onNavClick?: () => void; collapsed?: boolean }) => (
+  const SidebarContent = ({ onNavClick, collapsed = false, onToggleCollapse }: { onNavClick?: () => void; collapsed?: boolean; onToggleCollapse?: () => void }) => (
     <>
       <div className={`border-b border-border ${collapsed ? 'p-2' : 'p-3 md:p-4'}`}>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button 
               variant="outline" 
-              className={`w-full transition-all ${collapsed ? 'justify-center' : 'justify-between'}`}
+              className={`w-full ${collapsed ? 'justify-center' : 'justify-between'}`}
               title={collapsed ? currentWorkspace?.name : undefined}
             >
               <div className={`flex items-center ${collapsed ? '' : 'gap-2 md:gap-3'} overflow-hidden`}>
@@ -262,15 +217,29 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 <span className="text-[10px] md:text-xs text-muted-foreground truncate">{user.email}</span>
               </div>
             </div>
-            <Button 
-              variant="ghost" 
-              size="sm"
-              className="w-full justify-start text-muted-foreground"
-              onClick={() => logout.mutate()}
-            >
-              <LogOut className="w-4 h-4 mr-2" />
-              {KO.nav.signOut}
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button 
+                variant="ghost" 
+                size="sm"
+                className="flex-1 justify-start text-muted-foreground"
+                onClick={() => logout.mutate()}
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                {KO.nav.signOut}
+              </Button>
+              {onToggleCollapse && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={onToggleCollapse}
+                  className="text-muted-foreground shrink-0"
+                  data-testid="button-toggle-sidebar"
+                  title="사이드바 접기"
+                >
+                  <Menu className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
           </>
         ) : (
           <div className="flex flex-col items-center gap-2">
@@ -286,6 +255,18 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             >
               <LogOut className="w-4 h-4" />
             </Button>
+            {onToggleCollapse && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onToggleCollapse}
+                className="text-muted-foreground"
+                data-testid="button-toggle-sidebar"
+                title="사이드바 펼치기"
+              >
+                <Menu className="w-4 h-4" />
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -295,30 +276,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen bg-background overflow-hidden">
       {/* Desktop Sidebar */}
-      <aside 
-        ref={sidebarRef}
-        style={{ width: sidebarWidth }}
-        className={`hidden md:flex border-r border-border/60 flex-col shadow-md z-10 bg-[#f6f9fa] relative transition-all ${isResizing ? 'select-none' : ''}`}
+      <aside
+        className={`hidden md:flex border-r border-border/60 flex-col shadow-md z-10 bg-[#f6f9fa] overflow-hidden transition-[width] duration-200 ${isCollapsed ? 'w-16' : 'w-64'}`}
       >
-        <SidebarContent collapsed={isCollapsed} />
-        
-        {/* Collapse toggle button */}
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={toggleCollapse}
-          className="absolute -right-3 top-1/2 -translate-y-1/2 rounded-full z-20"
-          data-testid="button-toggle-sidebar"
-          title={isCollapsed ? "사이드바 펼치기" : "사이드바 접기"}
-        >
-          {isCollapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
-        </Button>
-        
-        {/* Resize handle */}
-        <div
-          onMouseDown={startResizing}
-          className="absolute top-0 right-0 w-1 h-full cursor-col-resize bg-border/50"
-        />
+        <SidebarContent collapsed={isCollapsed} onToggleCollapse={toggleCollapse} />
       </aside>
       {/* Mobile Header & Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
