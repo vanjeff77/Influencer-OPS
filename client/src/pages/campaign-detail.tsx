@@ -63,10 +63,10 @@ export default function CampaignDetail() {
   const deleteItem = useDeleteCampaignItem(id);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedLineItem, setSelectedLineItem] = useState<CampaignLineItem | null>(null);
-  const [isEditingClient, setIsEditingClient] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [isDeleteCampaignOpen, setIsDeleteCampaignOpen] = useState(false);
   const [editingCampaignName, setEditingCampaignName] = useState("");
+  const [editingBudget, setEditingBudget] = useState<string | null>(null);
   const [isDeleteInfluencerOpen, setIsDeleteInfluencerOpen] = useState(false);
   const [selectedInfluencerIds, setSelectedInfluencerIds] = useState<Set<number>>(new Set());
 
@@ -82,7 +82,6 @@ export default function CampaignDetail() {
     }, {
       onSuccess: () => {
         toast({ title: "클라이언트가 변경되었습니다." });
-        setIsEditingClient(false);
         setSelectedClientId("");
       },
       onError: () => {
@@ -262,37 +261,7 @@ export default function CampaignDetail() {
               </Badge>
             </div>
             <div className="flex items-center gap-2 mt-1">
-              {isEditingClient ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground text-sm">클라이언트:</span>
-                  <Select value={selectedClientId} onValueChange={setSelectedClientId}>
-                    <SelectTrigger className="w-[160px] h-7 text-sm" data-testid="select-edit-client">
-                      <SelectValue placeholder="클라이언트 선택" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {clients?.map((client) => (
-                        <SelectItem key={client.id} value={client.id.toString()}>
-                          {client.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button size="sm" className="h-7" onClick={handleClientChange} disabled={!selectedClientId || updateCampaign.isPending} data-testid="button-save-client">
-                    <Save className="w-3 h-3 mr-1" />
-                    저장
-                  </Button>
-                  <Button size="sm" variant="ghost" className="h-7" onClick={() => { setIsEditingClient(false); setSelectedClientId(""); }} data-testid="button-cancel-client">
-                    취소
-                  </Button>
-                </div>
-              ) : (
-                <>
-                  <p className="text-muted-foreground text-sm">클라이언트: {campaign.client || "미설정"}</p>
-                  <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setIsEditingClient(true)} data-testid="button-edit-client">
-                    <Pencil className="w-3 h-3" />
-                  </Button>
-                </>
-              )}
+              <p className="text-muted-foreground text-sm">클라이언트: {campaign.client || "미설정"}</p>
             </div>
           </div>
           
@@ -752,6 +721,78 @@ export default function CampaignDetail() {
                         <SelectItem value="완료">완료</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">클라이언트</label>
+                    <div className="flex items-center gap-2">
+                      <Select value={selectedClientId || (campaign.clientId ? campaign.clientId.toString() : "")} onValueChange={setSelectedClientId}>
+                        <SelectTrigger className="w-[200px]" data-testid="select-settings-client">
+                          <SelectValue placeholder="클라이언트 선택" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {clients?.map((client) => (
+                            <SelectItem key={client.id} value={client.id.toString()}>
+                              {client.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button 
+                        size="sm"
+                        onClick={handleClientChange}
+                        disabled={!selectedClientId || selectedClientId === (campaign.clientId?.toString() || "") || updateCampaign.isPending}
+                        data-testid="button-save-client"
+                      >
+                        <Save className="w-3 h-3 mr-1" />
+                        저장
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">캠페인 예산</label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        value={editingBudget !== null ? editingBudget : (campaign.budget != null ? campaign.budget.toString() : "")}
+                        onChange={(e) => setEditingBudget(e.target.value)}
+                        onFocus={() => {
+                          if (editingBudget === null) {
+                            setEditingBudget(campaign.budget != null ? campaign.budget.toString() : "");
+                          }
+                        }}
+                        placeholder="예산을 입력하세요"
+                        className="max-w-[200px]"
+                        data-testid="input-campaign-budget"
+                      />
+                      <span className="text-sm text-muted-foreground">원</span>
+                      <Button 
+                        size="sm"
+                        onClick={() => {
+                          if (!editingBudget || isNaN(parseInt(editingBudget))) return;
+                          const newBudget = parseInt(editingBudget);
+                          if (newBudget === campaign.budget) return;
+                          updateCampaign.mutate({
+                            id,
+                            data: { budget: newBudget }
+                          }, {
+                            onSuccess: () => {
+                              toast({ title: "캠페인 예산이 변경되었습니다." });
+                              setEditingBudget(null);
+                            },
+                            onError: () => {
+                              toast({ variant: "destructive", title: "변경 실패" });
+                            }
+                          });
+                        }}
+                        disabled={updateCampaign.isPending || !editingBudget || isNaN(parseInt(editingBudget)) || parseInt(editingBudget) === campaign.budget}
+                        data-testid="button-save-campaign-budget"
+                      >
+                        <Save className="w-3 h-3 mr-1" />
+                        저장
+                      </Button>
+                    </div>
                   </div>
                 </div>
 
