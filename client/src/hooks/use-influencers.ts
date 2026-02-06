@@ -71,8 +71,8 @@ export function useUpdateInfluencer() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/influencers', variables.id] });
       queryClient.invalidateQueries({ queryKey: [api.influencers.list.path] });
-      // Sync with campaign communication tab
-      queryClient.invalidateQueries({ queryKey: ['/api/campaigns'] });
+      queryClient.invalidateQueries({ queryKey: [api.campaigns.get.path] });
+      queryClient.invalidateQueries({ queryKey: [api.campaigns.list.path] });
       queryClient.invalidateQueries({ queryKey: ['/api/conversations'] });
     },
   });
@@ -184,7 +184,7 @@ export function useAssignToCampaign() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/campaigns'] });
+      queryClient.invalidateQueries({ queryKey: [api.campaigns.get.path] });
       queryClient.invalidateQueries({ queryKey: [api.campaigns.list.path] });
     },
   });

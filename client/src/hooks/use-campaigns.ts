@@ -342,7 +342,8 @@ export function useMarkUploadCompleted() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/settlement/queue'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/campaigns'] });
+      queryClient.invalidateQueries({ queryKey: [api.campaigns.get.path] });
+      queryClient.invalidateQueries({ queryKey: [api.campaigns.list.path] });
     },
   });
 }

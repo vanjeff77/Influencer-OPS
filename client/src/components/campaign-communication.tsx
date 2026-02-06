@@ -37,6 +37,7 @@ import { ko } from "date-fns/locale";
 import { BulkEmailDialog } from "./bulk-email-dialog";
 import { BulkEmailLogDialog } from "./bulk-email-log-dialog";
 import { AttachEmailThreadDialog } from "./attach-email-thread-dialog";
+import { api } from "@shared/routes";
 
 interface CampaignLineItem {
   id: number;
@@ -174,15 +175,15 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
       return res.json();
     },
     onMutate: async ({ lineItemId, completed }) => {
-      await queryClient.cancelQueries({ queryKey: ['/api/campaigns', campaignId.toString()] });
+      await queryClient.cancelQueries({ queryKey: [api.campaigns.get.path, campaignId] });
       
-      const previousCampaign = queryClient.getQueryData(['/api/campaigns', campaignId.toString()]);
+      const previousCampaign = queryClient.getQueryData([api.campaigns.get.path, campaignId]);
       
-      queryClient.setQueryData(['/api/campaigns', campaignId.toString()], (old: any) => {
+      queryClient.setQueryData([api.campaigns.get.path, campaignId], (old: any) => {
         if (!old) return old;
         return {
           ...old,
-          lineItems: old.lineItems?.map((item: any) => 
+          items: old.items?.map((item: any) => 
             item.id === lineItemId 
               ? { ...item, firstContactCompleted: completed, firstContactAt: completed ? new Date().toISOString() : null } 
               : item
@@ -194,7 +195,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
     },
     onError: (err, vars, context) => {
       if (context?.previousCampaign) {
-        queryClient.setQueryData(['/api/campaigns', campaignId.toString()], context.previousCampaign);
+        queryClient.setQueryData([api.campaigns.get.path, campaignId], context.previousCampaign);
       }
       toast({ title: "저장 실패", variant: "destructive" });
     },
@@ -202,8 +203,8 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
       toast({ title: KO.pages.bulkEmail.toggleFirstContact });
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/campaigns'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/campaigns', campaignId.toString()] });
+      queryClient.invalidateQueries({ queryKey: [api.campaigns.get.path, campaignId] });
+      queryClient.invalidateQueries({ queryKey: [api.campaigns.list.path] });
     },
   });
 
@@ -731,10 +732,10 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
   const updateInfluencer = useMutation({
     mutationFn: (data: any) => apiRequest('PATCH', `/api/influencers/${influencer?.id}`, data),
     onSuccess: () => {
-      // Sync with discover tab - invalidate all influencer-related caches
       queryClient.invalidateQueries({ queryKey: ['/api/influencers'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/workspaces'] }); // Discover tab uses this pattern
-      queryClient.invalidateQueries({ queryKey: ['/api/campaigns'] });
+      queryClient.invalidateQueries({ queryKey: [api.influencers.list.path] });
+      queryClient.invalidateQueries({ queryKey: [api.campaigns.get.path, lineItem.campaignId] });
+      queryClient.invalidateQueries({ queryKey: [api.campaigns.list.path] });
       queryClient.invalidateQueries({ queryKey: ['/api/conversations'] });
       toast({ title: KO.pages.communication.saved });
     }

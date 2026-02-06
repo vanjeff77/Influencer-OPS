@@ -17,6 +17,7 @@ import {
   Instagram, Youtube, Twitter, Copy, Upload, Download
 } from "lucide-react";
 import type { CampaignInfluencer, Influencer, InfluencerAccount, FeedbackNote, User } from "@shared/schema";
+import { api } from "@shared/routes";
 import { KO } from "@/i18n/ko";
 
 interface LineItemWithDetails extends CampaignInfluencer {
@@ -98,15 +99,15 @@ export function CampaignContents({ campaignId, lineItems }: CampaignContentsProp
       return apiRequest('PATCH', `/api/line-items/${data.id}/operations`, data.updates);
     },
     onMutate: async (data) => {
-      await queryClient.cancelQueries({ queryKey: ['/api/campaigns', campaignId] });
+      await queryClient.cancelQueries({ queryKey: [api.campaigns.get.path, campaignId] });
       
-      const previousCampaign = queryClient.getQueryData(['/api/campaigns', campaignId]);
+      const previousCampaign = queryClient.getQueryData([api.campaigns.get.path, campaignId]);
       
-      queryClient.setQueryData(['/api/campaigns', campaignId], (old: any) => {
+      queryClient.setQueryData([api.campaigns.get.path, campaignId], (old: any) => {
         if (!old) return old;
         return {
           ...old,
-          lineItems: old.lineItems?.map((item: any) => 
+          items: old.items?.map((item: any) => 
             item.id === data.id ? { ...item, ...data.updates } : item
           )
         };
@@ -116,7 +117,7 @@ export function CampaignContents({ campaignId, lineItems }: CampaignContentsProp
     },
     onError: (err, data, context) => {
       if (context?.previousCampaign) {
-        queryClient.setQueryData(['/api/campaigns', campaignId], context.previousCampaign);
+        queryClient.setQueryData([api.campaigns.get.path, campaignId], context.previousCampaign);
       }
       toast({ title: "저장 실패", variant: "destructive" });
     },
@@ -124,7 +125,7 @@ export function CampaignContents({ campaignId, lineItems }: CampaignContentsProp
       toast({ title: "저장되었습니다" });
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/campaigns', campaignId] });
+      queryClient.invalidateQueries({ queryKey: [api.campaigns.get.path, campaignId] });
     }
   });
 
