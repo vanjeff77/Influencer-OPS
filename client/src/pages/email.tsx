@@ -541,6 +541,7 @@ export default function EmailCenter() {
                   value={signatureContent}
                   onChange={setSignatureContent}
                   modules={{
+                    table: true,
                     toolbar: [
                       [{ 'header': [1, 2, 3, false] }],
                       ['bold', 'italic', 'underline', 'strike'],
@@ -548,7 +549,27 @@ export default function EmailCenter() {
                       [{ 'list': 'ordered'}, { 'list': 'bullet' }],
                       ['link', 'image'],
                       ['clean']
-                    ]
+                    ],
+                    clipboard: {
+                      matchers: [
+                        ['td', (_node: any, delta: any) => {
+                          if (!delta || !delta.ops) return delta;
+                          let text = '';
+                          const embedOps: any[] = [];
+                          delta.ops.forEach((op: any) => {
+                            if (typeof op.insert === 'string') text += op.insert;
+                            else embedOps.push(op);
+                          });
+                          if (text.endsWith('\n')) {
+                            text = text.slice(0, -1).replace(/\n/g, ' ') + '\n';
+                          } else {
+                            text = text.replace(/\n/g, ' ');
+                          }
+                          delta.ops = text ? [{ insert: text }, ...embedOps] : embedOps;
+                          return delta;
+                        }]
+                      ]
+                    }
                   }}
                   className="bg-background min-h-[200px]"
                   placeholder="서명을 입력하세요..."

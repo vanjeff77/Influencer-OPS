@@ -139,3 +139,14 @@
     @apply focus:ring-2 focus:ring-primary/20 focus:ring-offset-1 focus:outline-none;
   }
 }
+
+/* Quill Editor - Table support with transparent borders */
+.ql-editor table {
+  border-collapse: collapse;
+}
+
+.ql-editor td {
+  border: none !important;
+  padding: 2px 5px;
+  vertical-align: top;
+}

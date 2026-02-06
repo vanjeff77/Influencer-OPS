@@ -176,6 +176,7 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
   };
   
   const quillModules = {
+    table: true,
     toolbar: [
       [{ 'header': [1, 2, 3, false] }],
       ['bold', 'italic', 'underline'],
@@ -184,6 +185,26 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
       ['link'],
       ['clean'],
     ],
+    clipboard: {
+      matchers: [
+        ['td', (_node: any, delta: any) => {
+          if (!delta || !delta.ops) return delta;
+          let text = '';
+          const embedOps: any[] = [];
+          delta.ops.forEach((op: any) => {
+            if (typeof op.insert === 'string') text += op.insert;
+            else embedOps.push(op);
+          });
+          if (text.endsWith('\n')) {
+            text = text.slice(0, -1).replace(/\n/g, ' ') + '\n';
+          } else {
+            text = text.replace(/\n/g, ' ');
+          }
+          delta.ops = text ? [{ insert: text }, ...embedOps] : embedOps;
+          return delta;
+        }]
+      ]
+    }
   };
   
   return (
