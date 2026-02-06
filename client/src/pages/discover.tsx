@@ -92,7 +92,7 @@ export default function Discover() {
     accounts: [{ platform: "IG", handle: "", followers: 0 }] 
   });
 
-  const TEMPLATE_HEADERS = '닉네임\t플랫폼\t플랫폼 계정\t채널 URL\t팔로워\t컨택포인트\t메모\t클라이언트\t세부유형\t컨택여부\t회신 여부\t협업 여부\t콘텐츠 완성본 링크\t단가 메모';
+  const TEMPLATE_HEADERS = '닉네임\t채널 URL\t플랫폼\t팔로워\t이메일\t태그1\t태그2\t태그3\t메모\t단가 메모\t클라이언트\t컨택여부\t회신 여부\t협업 여부\t콘텐츠 완성본 링크';
   const [isCopying, setIsCopying] = useState(false);
 
   const handleCopyTemplate = async () => {
@@ -532,7 +532,7 @@ export default function Discover() {
                     />
                   </div>
                   
-                  {/* 플랫폼 계정 */}
+                  {/* 채널 URL */}
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <label className="text-sm font-medium">{KO.pages.discover.platformAccounts}</label>
@@ -1109,9 +1109,34 @@ export default function Discover() {
                         </TableCell>
                         <TableCell className="px-2 py-1">
                           <div className="flex items-center gap-0.5">
-                            {inf.accounts?.map((acc, idx) => (
-                              <PlatformIcon key={idx} p={acc.platform} />
-                            ))}
+                            {inf.accounts?.map((acc, idx) => {
+                              let channelUrl = acc.url;
+                              if (!channelUrl || (!channelUrl.startsWith('http') && !channelUrl.startsWith('www'))) {
+                                const handle = acc.handle?.replace(/^@/, '') || '';
+                                if (handle) {
+                                  if (acc.platform === 'IG') channelUrl = `https://instagram.com/${handle}`;
+                                  else if (acc.platform === 'YT') channelUrl = `https://youtube.com/@${handle}`;
+                                  else if (acc.platform === 'TikTok') channelUrl = `https://tiktok.com/@${handle}`;
+                                  else if (acc.platform === 'X') channelUrl = `https://x.com/${handle}`;
+                                }
+                              }
+                              if (channelUrl && (channelUrl.startsWith('http') || channelUrl.startsWith('www'))) {
+                                return (
+                                  <a
+                                    key={idx}
+                                    href={channelUrl.startsWith('http') ? channelUrl : `https://${channelUrl}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="hover:opacity-70 transition-opacity cursor-pointer"
+                                    data-testid={`link-platform-${inf.id}-${idx}`}
+                                  >
+                                    <PlatformIcon p={acc.platform} />
+                                  </a>
+                                );
+                              }
+                              return <PlatformIcon key={idx} p={acc.platform} />;
+                            })}
                           </div>
                         </TableCell>
                         <TableCell className="px-2 py-1 text-right">

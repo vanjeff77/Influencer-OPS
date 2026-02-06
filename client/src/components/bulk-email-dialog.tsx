@@ -85,8 +85,8 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
     enabled: open,
   });
   
-  const imapAccounts = useMemo(() => {
-    return (emailAccounts || []).filter(acc => acc.provider === 'imap');
+  const availableAccounts = useMemo(() => {
+    return emailAccounts || [];
   }, [emailAccounts]);
   
   const previewMutation = useMutation({
@@ -247,7 +247,7 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
                   <Label>{KO.pages.bulkEmail.selectAccount}</Label>
                   {isLoadingAccounts ? (
                     <Skeleton className="h-10 w-full" />
-                  ) : imapAccounts.length === 0 ? (
+                  ) : availableAccounts.length === 0 ? (
                     <p className="text-sm text-muted-foreground mt-1">{KO.pages.bulkEmail.noImapAccount}</p>
                   ) : (
                     <Select value={selectedEmailAccountId} onValueChange={setSelectedEmailAccountId}>
@@ -255,7 +255,7 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
                         <SelectValue placeholder={KO.pages.bulkEmail.selectAccountPlaceholder} />
                       </SelectTrigger>
                       <SelectContent>
-                        {imapAccounts.map((acc: any) => (
+                        {availableAccounts.map((acc: any) => (
                           <SelectItem key={acc.id} value={acc.id.toString()}>{acc.email}</SelectItem>
                         ))}
                       </SelectContent>

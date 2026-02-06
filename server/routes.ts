@@ -758,7 +758,7 @@ export async function registerRoutes(
 
         // Validate: need at least nickname OR (platform + handle) OR (platform + url)
         if (!nickname && !handle && !url) {
-          results.errors.push({ row: rowIdx + 1, reason: '필수 키(닉네임, 플랫폼 계정, 채널 URL) 없음' });
+          results.errors.push({ row: rowIdx + 1, reason: '필수 키(닉네임, 채널 URL) 없음' });
           continue;
         }
 

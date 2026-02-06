@@ -14,7 +14,7 @@ import type { Influencer, InfluencerAccount } from "@shared/schema";
 const EDIT_COLUMNS = [
   { key: 'name', label: '닉네임', required: true, width: 'w-28' },
   { key: 'platform', label: '플랫폼', required: false, width: 'w-24' },
-  { key: 'handle', label: '플랫폼 계정', required: false, width: 'w-28' },
+  { key: 'handle', label: '채널 URL', required: false, width: 'w-28' },
   { key: 'followers', label: '팔로워', required: false, width: 'w-20' },
   { key: 'email', label: '이메일', required: false, width: 'w-36' },
   { key: 'contactPoint', label: '컨택포인트', required: false, width: 'w-32' },

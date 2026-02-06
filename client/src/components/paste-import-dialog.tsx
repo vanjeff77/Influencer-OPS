@@ -12,7 +12,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 
 const FIXED_COLUMNS = [
   { key: 'nickname', label: '닉네임', required: true },
-  { key: 'handle', label: '플랫폼 계정', required: false },
+  { key: 'handle', label: '채널 URL', required: false },
   { key: 'platform', label: '플랫폼', required: false },
   { key: 'followers', label: '팔로워', required: false },
   { key: 'contactPoint', label: '이메일', required: false },
@@ -97,6 +97,7 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
   const [isCopying, setIsCopying] = useState(false);
   const gridRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [focusedCell, setFocusedCell] = useState<{ row: number; col: number } | null>(null);
 
   const handleCopyTemplate = async () => {
     if (isCopying) return;
@@ -369,8 +370,49 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
     if (!text.trim()) return;
 
     const parsedData = parseTsvWithQuotes(text);
-    const parsedRows: RowData[] = [];
+    const columnKeys = FIXED_COLUMNS.map(c => c.key) as (keyof RowData)[];
 
+    const isMultiRowOrMultiCol = parsedData.length > 1 || (parsedData.length === 1 && parsedData[0].length > 1);
+
+    if (!isMultiRowOrMultiCol && focusedCell) {
+      const singleValue = (parsedData[0]?.[0] || '').trim();
+      if (singleValue) {
+        const newRows = [...rows];
+        const targetRow = focusedCell.row;
+        const targetCol = focusedCell.col;
+        if (targetRow < newRows.length && targetCol < columnKeys.length) {
+          newRows[targetRow] = { ...newRows[targetRow], [columnKeys[targetCol]]: singleValue };
+          setRows(newRows);
+          setIsValidated(false);
+          setErrors(new Map());
+        }
+      }
+      return;
+    }
+
+    if (focusedCell && parsedData.length === 1 && parsedData[0].length > 1) {
+      const newRows = [...rows];
+      const targetRow = focusedCell.row;
+      const startCol = focusedCell.col;
+      const cells = parsedData[0];
+      if (targetRow < newRows.length) {
+        const updatedRow = { ...newRows[targetRow] };
+        cells.forEach((val, i) => {
+          const colIdx = startCol + i;
+          if (colIdx < columnKeys.length) {
+            updatedRow[columnKeys[colIdx]] = val.trim();
+          }
+        });
+        newRows[targetRow] = updatedRow;
+        setRows(newRows);
+        setIsValidated(false);
+        setErrors(new Map());
+        toast({ title: `데이터가 붙여넣기 되었습니다.` });
+      }
+      return;
+    }
+
+    const parsedRows: RowData[] = [];
     for (const cells of parsedData) {
       const row: RowData = {
         nickname: (cells[0] || '').trim(),
@@ -401,7 +443,7 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
       setResults(null);
       toast({ title: `${parsedRows.length}개 행이 붙여넣기 되었습니다.` });
     }
-  }, [toast]);
+  }, [toast, focusedCell, rows]);
 
   const validate = useCallback(async () => {
     const newErrors = new Map<number, RowError>();
@@ -565,7 +607,7 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
             />
           </div>
           <div className="ml-6 text-xs text-blue-600 dark:text-blue-400">
-            열 순서: 닉네임, 플랫폼 계정, 플랫폼, 팔로워, 이메일, 태그1~3, 메모, 단가 메모, 클라이언트...
+            열 순서: 닉네임, 채널 URL, 플랫폼, 팔로워, 이메일, 태그1~3, 메모, 단가 메모, 클라이언트...
           </div>
         </div>
 
@@ -680,8 +722,8 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
                                 <Input
                                   value={value}
                                   onChange={(e) => updateCell(rowIndex, col.key as keyof RowData, e.target.value)}
+                                  onFocus={() => setFocusedCell({ row: rowIndex, col: FIXED_COLUMNS.findIndex(c => c.key === col.key) })}
                                   className={`h-8 text-xs ${cellError ? 'border-red-500 bg-red-50 dark:bg-red-950' : ''}`}
-                                  placeholder={col.label}
                                   data-testid={`input-${col.key}-${rowIndex}`}
                                 />
                               </TooltipTrigger>
