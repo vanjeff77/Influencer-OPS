@@ -439,6 +439,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
       <div className="lg:col-span-4 border rounded-lg overflow-hidden" data-testid="panel-influencer-details">
         {selectedLineItem ? (
           <InfluencerDetailPanel 
+            key={selectedLineItem.influencer?.id ?? selectedLineItem.id}
             influencer={selectedLineItem.influencer} 
             lineItem={selectedLineItem}
           />
