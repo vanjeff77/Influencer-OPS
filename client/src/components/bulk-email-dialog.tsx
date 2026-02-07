@@ -35,6 +35,7 @@ interface BulkEmailDialogProps {
   campaignId: number;
   campaignName: string;
   lineItems: CampaignLineItem[];
+  workspaceId: number;
 }
 
 interface EligibleItem {
@@ -63,7 +64,7 @@ interface ValidationResult {
 
 type Step = 'template' | 'preview' | 'test' | 'confirm';
 
-export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, lineItems }: BulkEmailDialogProps) {
+export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, lineItems, workspaceId }: BulkEmailDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
@@ -80,9 +81,9 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   
   const { data: emailAccounts, isLoading: isLoadingAccounts } = useQuery<any[]>({
-    queryKey: ['/api/workspaces', '1', 'email-accounts'],
-    queryFn: () => fetch('/api/workspaces/1/email-accounts').then(r => r.json()),
-    enabled: open,
+    queryKey: ['/api/workspaces', workspaceId.toString(), 'email-accounts'],
+    queryFn: () => fetch(`/api/workspaces/${workspaceId}/email-accounts`).then(r => r.json()),
+    enabled: open && !!workspaceId,
   });
   
   const availableAccounts = useMemo(() => {
