@@ -1,4 +1,4 @@
-import { useState, useMemo, lazy, Suspense } from 'react';
+import { useState, useMemo, useRef, useCallback, lazy, Suspense } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -79,6 +79,33 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
   const [previewInfluencerId, setPreviewInfluencerId] = useState<number | null>(null);
   const [testEmail, setTestEmail] = useState('');
   const [validation, setValidation] = useState<ValidationResult | null>(null);
+  const bodyRef = useRef(body);
+  const isComposing = useRef(false);
+  const quillRef = useRef<any>(null);
+  const compositionSetup = useRef(false);
+
+  const handleBodyChange = useCallback((value: string) => {
+    bodyRef.current = value;
+    if (!isComposing.current) {
+      setBody(value);
+    }
+  }, []);
+
+  const setupCompositionHandlers = useCallback((ref: any) => {
+    quillRef.current = ref;
+    if (ref && !compositionSetup.current) {
+      const editor = ref.getEditor?.();
+      if (editor?.root) {
+        editor.root.addEventListener('compositionstart', () => { isComposing.current = true; });
+        editor.root.addEventListener('compositionend', () => {
+          isComposing.current = false;
+          setTimeout(() => setBody(bodyRef.current), 0);
+        });
+        compositionSetup.current = true;
+      }
+    }
+  }, []);
+  
   
   const { data: emailAccounts, isLoading: isLoadingAccounts } = useQuery<any[]>({
     queryKey: ['/api/workspaces', workspaceId.toString(), 'email-accounts'],
@@ -164,6 +191,7 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
     setValidation(null);
     setPreviewInfluencerId(null);
     setTestEmail('');
+    compositionSetup.current = false;
   };
   
   const handlePreview = (influencerId: number) => {
@@ -186,25 +214,10 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
       ['link'],
       ['clean'],
     ],
-    clipboard: {
-      matchers: [
-        ['td', (_node: any, delta: any) => {
-          if (!delta || !delta.ops) return delta;
-          let text = '';
-          const embedOps: any[] = [];
-          delta.ops.forEach((op: any) => {
-            if (typeof op.insert === 'string') text += op.insert;
-            else embedOps.push(op);
-          });
-          if (text.endsWith('\n')) {
-            text = text.slice(0, -1).replace(/\n/g, ' ') + '\n';
-          } else {
-            text = text.replace(/\n/g, ' ');
-          }
-          delta.ops = text ? [{ insert: text }, ...embedOps] : embedOps;
-          return delta;
-        }]
-      ]
+    history: {
+      delay: 500,
+      maxStack: 100,
+      userOnly: true
     }
   };
   
@@ -291,9 +304,10 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
                   <div className="border rounded-md">
                     <Suspense fallback={<Skeleton className="h-64" />}>
                       <ReactQuill
+                        ref={setupCompositionHandlers}
                         theme="snow"
-                        value={body}
-                        onChange={setBody}
+                        defaultValue={body}
+                        onChange={handleBodyChange}
                         modules={quillModules}
                         className="h-64"
                         data-testid="editor-body"

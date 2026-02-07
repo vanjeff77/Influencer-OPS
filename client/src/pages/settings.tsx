@@ -19,6 +19,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { KO } from "@/i18n/ko";
 import { Plus, Pencil, Trash2, Building2, Users, Shield, FileText, Star, Settings, RotateCcw } from "lucide-react";
 import { useResetOnboarding } from "@/hooks/use-auth";
+import { TableStyleToolbar } from "@/components/table-style-toolbar";
 
 const ReactQuill = lazy(() => import('react-quill-new'));
 import 'react-quill-new/dist/quill.snow.css';
@@ -33,27 +34,13 @@ const quillModules = {
     [{ 'color': [] }, { 'background': [] }],
     ['clean']
   ],
-  clipboard: {
-    matchers: [
-      ['td', (_node: any, delta: any) => {
-        if (!delta || !delta.ops) return delta;
-        let text = '';
-        const embedOps: any[] = [];
-        delta.ops.forEach((op: any) => {
-          if (typeof op.insert === 'string') text += op.insert;
-          else embedOps.push(op);
-        });
-        if (text.endsWith('\n')) {
-          text = text.slice(0, -1).replace(/\n/g, ' ') + '\n';
-        } else {
-          text = text.replace(/\n/g, ' ');
-        }
-        delta.ops = text ? [{ insert: text }, ...embedOps] : embedOps;
-        return delta;
-      }]
-    ]
+  history: {
+    delay: 500,
+    maxStack: 100,
+    userOnly: true
   }
 };
+
 
 interface Client {
   id: number;
@@ -939,6 +926,7 @@ function ContractTemplatesSection({ workspaceId }: { workspaceId: number }) {
                     />
                   </Suspense>
                 </div>
+                <TableStyleToolbar content={content} onChange={setContent} />
               </div>
               <div className="flex items-center gap-2 pt-10">
                 <Checkbox id="is-default" checked={isDefault} onCheckedChange={(v) => setIsDefault(!!v)} data-testid="checkbox-template-default" />
@@ -1033,6 +1021,7 @@ function ContractTemplatesSection({ workspaceId }: { workspaceId: number }) {
                     />
                   </Suspense>
                 </div>
+                <TableStyleToolbar content={content} onChange={setContent} />
               </div>
               <div className="flex items-center gap-2 pt-10">
                 <Checkbox id="edit-is-default" checked={isDefault} onCheckedChange={(v) => setIsDefault(!!v)} data-testid="checkbox-edit-template-default" />

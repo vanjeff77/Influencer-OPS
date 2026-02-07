@@ -22,6 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SiGmail } from "react-icons/si";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FeatureHint } from "@/components/onboarding";
+import { TableStyleToolbar } from "@/components/table-style-toolbar";
 
 const EMAIL_PRESETS: Record<string, { imapServer: string; imapPort: string; smtpServer: string; smtpPort: string }> = {
   naver: { imapServer: "imap.naver.com", imapPort: "993", smtpServer: "smtp.naver.com", smtpPort: "587" },
@@ -550,31 +551,17 @@ export default function EmailCenter() {
                       ['link', 'image'],
                       ['clean']
                     ],
-                    clipboard: {
-                      matchers: [
-                        ['td', (_node: any, delta: any) => {
-                          if (!delta || !delta.ops) return delta;
-                          let text = '';
-                          const embedOps: any[] = [];
-                          delta.ops.forEach((op: any) => {
-                            if (typeof op.insert === 'string') text += op.insert;
-                            else embedOps.push(op);
-                          });
-                          if (text.endsWith('\n')) {
-                            text = text.slice(0, -1).replace(/\n/g, ' ') + '\n';
-                          } else {
-                            text = text.replace(/\n/g, ' ');
-                          }
-                          delta.ops = text ? [{ insert: text }, ...embedOps] : embedOps;
-                          return delta;
-                        }]
-                      ]
+                    history: {
+                      delay: 500,
+                      maxStack: 100,
+                      userOnly: true
                     }
                   }}
                   className="bg-background min-h-[200px]"
                   placeholder="서명을 입력하세요..."
                 />
               </div>
+              <TableStyleToolbar content={signatureContent} onChange={setSignatureContent} />
               <p className="text-xs text-muted-foreground">
                 이미지는 URL 링크로 삽입하거나 직접 붙여넣기 할 수 있습니다.
               </p>
