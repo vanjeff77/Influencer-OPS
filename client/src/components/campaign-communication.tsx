@@ -476,6 +476,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
         campaignId={campaignId}
         campaignName={campaignName || ''}
         lineItems={lineItems}
+        workspaceId={workspaceId}
       />
       {/* Bulk Email Log Dialog */}
       <BulkEmailLogDialog
