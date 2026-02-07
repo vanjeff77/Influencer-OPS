@@ -50,6 +50,10 @@ Preferred communication style: Simple, everyday language.
 - **Database**: PostgreSQL with Drizzle ORM
 - **Schema Management**: Drizzle Kit for migrations, schema defined in `shared/schema.ts`
 - **Key Data Models**: Users, Workspaces, Influencers (with multi-platform accounts), Groups, Campaigns (with line items), Email accounts, Threads, Messages, Tracking jobs, Feedback Notes, Bulk Email Jobs, Clients, ClientUserAssignments.
+- **Influencer Contact Fields**:
+    - `email`: Used by all system features (email sending, communication, contracts, CSV export). UI label: "이메일".
+    - `contactPoint`: For non-email contacts (KakaoID, etc.). UI label: "컨택포인트". Kept separate from email.
+    - Both fields are editable in Discover detail panel, bulk edit, and new influencer form. Batch import maps the "이메일" column to `email`.
 
 ### Project Structure
 - `client/`: React frontend

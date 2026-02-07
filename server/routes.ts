@@ -357,6 +357,7 @@ export async function registerRoutes(
       handle: string;
       platform: string;
       followers?: number | null;
+      email?: string | null;
       contactPoint?: string | null;
       tag1?: string | null;
       tag2?: string | null;
@@ -468,7 +469,7 @@ export async function registerRoutes(
         // Create influencer
         const inf = await storage.createInfluencer(wId, {
           name: item.nickname.trim(),
-          email: item.contactPoint?.includes('@') ? item.contactPoint : undefined,
+          email: (item.email && item.email.includes('@')) ? item.email : (item.contactPoint?.includes('@') ? item.contactPoint : undefined),
           phone: item.contactPoint && !item.contactPoint.includes('@') ? item.contactPoint : undefined,
           contactPoint: item.contactPoint || undefined,
           memo: item.memo || undefined,

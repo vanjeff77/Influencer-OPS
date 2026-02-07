@@ -15,7 +15,7 @@ const FIXED_COLUMNS = [
   { key: 'handle', label: '채널 URL', required: false },
   { key: 'platform', label: '플랫폼', required: false },
   { key: 'followers', label: '팔로워', required: false },
-  { key: 'contactPoint', label: '이메일', required: false },
+  { key: 'email', label: '이메일', required: false },
   { key: 'tag1', label: '태그1', required: false },
   { key: 'tag2', label: '태그2', required: false },
   { key: 'tag3', label: '태그3', required: false },
@@ -37,7 +37,7 @@ interface RowData {
   handle: string;
   platform: string;
   followers: string;
-  contactPoint: string;
+  email: string;
   tag1: string;
   tag2: string;
   tag3: string;
@@ -74,7 +74,7 @@ const createEmptyRow = (): RowData => ({
   handle: '',
   platform: '',
   followers: '',
-  contactPoint: '',
+  email: '',
   tag1: '',
   tag2: '',
   tag3: '',
@@ -332,7 +332,7 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
           handle: (cells[1] || '').trim(),
           platform: (cells[2] || '').trim(),
           followers: (cells[3] || '').trim(),
-          contactPoint: (cells[4] || '').trim(),
+          email: (cells[4] || '').trim(),
           tag1: (cells[5] || '').trim(),
           tag2: (cells[6] || '').trim(),
           tag3: (cells[7] || '').trim(),
@@ -419,7 +419,7 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
         handle: (cells[1] || '').trim(),
         platform: (cells[2] || '').trim(),
         followers: (cells[3] || '').trim(),
-        contactPoint: (cells[4] || '').trim(),
+        email: (cells[4] || '').trim(),
         tag1: (cells[5] || '').trim(),
         tag2: (cells[6] || '').trim(),
         tag3: (cells[7] || '').trim(),
@@ -506,7 +506,7 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
         handle: row.handle.trim(),
         platform: normalizePlatform(row.platform) || row.platform,
         followers: parseFollowers(row.followers),
-        contactPoint: row.contactPoint.trim() || null,
+        email: row.email.trim() || null,
         tag1: row.tag1.trim() || null,
         tag2: row.tag2.trim() || null,
         tag3: row.tag3.trim() || null,

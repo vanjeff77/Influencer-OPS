@@ -85,6 +85,7 @@ export default function Discover() {
     tag1: "",
     tag2: "",
     tag3: "",
+    email: "",
     contactPoint: "",
     phone: "",
     memo: "",
@@ -329,6 +330,7 @@ export default function Discover() {
       tag1: newInfluencer.tag1 || undefined,
       tag2: newInfluencer.tag2 || undefined,
       tag3: newInfluencer.tag3 || undefined,
+      email: newInfluencer.email || undefined,
       contactPoint: newInfluencer.contactPoint || undefined,
       phone: newInfluencer.phone || undefined,
       memo: newInfluencer.memo || undefined,
@@ -343,6 +345,7 @@ export default function Discover() {
           tag1: "",
           tag2: "",
           tag3: "",
+          email: "",
           contactPoint: "",
           phone: "",
           memo: "",
@@ -491,8 +494,8 @@ export default function Discover() {
                     <div>
                       <label className="text-sm font-medium">{KO.pages.discover.email}</label>
                       <Input 
-                        value={newInfluencer.contactPoint} 
-                        onChange={e => setNewInfluencer({...newInfluencer, contactPoint: e.target.value})} 
+                        value={newInfluencer.email} 
+                        onChange={e => setNewInfluencer({...newInfluencer, email: e.target.value})} 
                         placeholder="influencer@example.com" 
                         data-testid="input-new-influencer-email" 
                       />
@@ -506,6 +509,15 @@ export default function Discover() {
                         data-testid="input-new-influencer-phone" 
                       />
                     </div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">{KO.pages.discover.contactPoint}</label>
+                    <Input 
+                      value={newInfluencer.contactPoint} 
+                      onChange={e => setNewInfluencer({...newInfluencer, contactPoint: e.target.value})} 
+                      placeholder="카카오ID, 기타 연락처 등"
+                      data-testid="input-new-influencer-contactpoint" 
+                    />
                   </div>
                   
                   {/* 메모 */}
@@ -1531,12 +1543,16 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-sm font-medium">{KO.pages.discover.email}</label>
-                      <Input value={contactPoint} onChange={e => setContactPoint(e.target.value)} placeholder="influencer@example.com" data-testid="input-influencer-contactpoint" />
+                      <Input value={email} onChange={e => setEmail(e.target.value)} placeholder="influencer@example.com" data-testid="input-influencer-email" />
                     </div>
                     <div>
                       <label className="text-sm font-medium">{KO.pages.discover.phone}</label>
                       <Input value={phone} onChange={e => setPhone(e.target.value)} data-testid="input-influencer-phone" />
                     </div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">{KO.pages.discover.contactPoint}</label>
+                    <Input value={contactPoint} onChange={e => setContactPoint(e.target.value)} placeholder="카카오ID, 기타 연락처 등" data-testid="input-influencer-contactpoint" />
                   </div>
                   
                   <div>
