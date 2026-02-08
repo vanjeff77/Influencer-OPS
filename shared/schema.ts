@@ -207,6 +207,8 @@ export const campaignInfluencers = pgTable("campaign_influencers", {
   // Contract details (계약)
   contractUrl: text("contract_url"),
   contractFileId: text("contract_file_id"),
+  contractContent: text("contract_content"),
+  contractTemplateId: integer("contract_template_id"),
   
   // Schedule (일정)
   draftDueAt: timestamp("draft_due_at"), // 초안 수신 예정일

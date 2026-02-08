@@ -510,7 +510,7 @@ export default function CampaignDetail() {
           </TabsContent>
           
           <TabsContent value="operations">
-            <CampaignOperations campaignId={id} lineItems={campaign.items || []} />
+            <CampaignOperations campaignId={id} workspaceId={workspaceId || 1} lineItems={campaign.items || []} />
           </TabsContent>
 
           <TabsContent value="content">

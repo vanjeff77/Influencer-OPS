@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, lazy, Suspense } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useDeleteCampaignItem } from "@/hooks/use-campaigns";
@@ -17,16 +17,22 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { 
   Search, Filter, AlertCircle, Clock, FileText, Calendar, MessageSquare, 
   CheckCircle2, Instagram, Youtube, Twitter,
-  ExternalLink, Save, AlertTriangle, CalendarIcon, Trash2
+  ExternalLink, Save, AlertTriangle, CalendarIcon, Trash2, Send, Download, Mail, Loader2, ArrowLeft, Pencil
 } from "lucide-react";
 import type { CampaignInfluencer, Influencer, InfluencerAccount, FeedbackNote, User } from "@shared/schema";
 import { KO } from "@/i18n/ko";
+import { TableStyleToolbar } from "@/components/table-style-toolbar";
+
+const ReactQuill = lazy(() => import('react-quill-new'));
+import 'react-quill-new/dist/quill.snow.css';
 
 interface LineItemWithDetails extends CampaignInfluencer {
   influencer?: Influencer & { accounts: InfluencerAccount[] };
@@ -35,6 +41,7 @@ interface LineItemWithDetails extends CampaignInfluencer {
 
 interface CampaignOperationsProps {
   campaignId: number;
+  workspaceId?: number;
   lineItems: LineItemWithDetails[];
 }
 
@@ -108,7 +115,7 @@ const PlatformIcon = ({ p }: { p: string }) => {
   }
 };
 
-export function CampaignOperations({ campaignId, lineItems }: CampaignOperationsProps) {
+export function CampaignOperations({ campaignId, workspaceId = 1, lineItems }: CampaignOperationsProps) {
   const { toast } = useToast();
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
@@ -302,7 +309,7 @@ export function CampaignOperations({ campaignId, lineItems }: CampaignOperations
                 ) : (
                   filteredItems.map((item) => {
                     const dueBadges = getDueBadges(item);
-                    const hasContract = item.contractUrl || item.contractFileId;
+                    const hasContract = item.contractUrl || item.contractFileId || item.contractContent;
                     return (
                       <TableRow 
                         key={item.id} 
@@ -396,12 +403,12 @@ export function CampaignOperations({ campaignId, lineItems }: CampaignOperations
                         </TableCell>
                         <TableCell>
                           {hasContract ? (
-                            <Badge variant="outline" className="bg-green-50 text-green-700">
+                            <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400">
                               <FileText className="w-3 h-3 mr-1" />
-                              {item.contractUrl && item.contractFileId ? '둘다' : item.contractUrl ? '링크' : '파일'}
+                              {item.contractContent ? '작성완료' : item.contractUrl ? '링크' : '파일'}
                             </Badge>
                           ) : (
-                            <Badge variant="outline" className="text-muted-foreground">미첨부</Badge>
+                            <Badge variant="outline" className="text-muted-foreground">미작성</Badge>
                           )}
                         </TableCell>
                         <TableCell className="text-xs" onClick={(e) => e.stopPropagation()}>
@@ -516,6 +523,7 @@ export function CampaignOperations({ campaignId, lineItems }: CampaignOperations
       <ContractGenerateDialog 
         item={contractDialogItem}
         campaignId={campaignId}
+        workspaceId={workspaceId}
         onClose={() => setContractDialogItem(null)}
       />
 
@@ -799,6 +807,7 @@ function OperationsPanel({ item, onUpdate, isSaving }: OperationsPanelProps) {
 interface ContractGenerateDialogProps {
   item: LineItemWithDetails | null;
   campaignId: number;
+  workspaceId: number;
   onClose: () => void;
 }
 
@@ -812,12 +821,35 @@ interface ContractTemplate {
   isDefault: boolean | null;
 }
 
-function ContractGenerateDialog({ item, campaignId, onClose }: ContractGenerateDialogProps) {
+const contractQuillModules = {
+  table: true,
+  toolbar: [
+    [{ 'header': [1, 2, 3, false] }],
+    ['bold', 'italic', 'underline', 'strike'],
+    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+    [{ 'align': [] }],
+    [{ 'color': [] }, { 'background': [] }],
+    ['clean']
+  ],
+  history: {
+    delay: 500,
+    maxStack: 100,
+    userOnly: true
+  }
+};
+
+function ContractGenerateDialog({ item, campaignId, workspaceId, onClose }: ContractGenerateDialogProps) {
   const { toast } = useToast();
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
+  const [contractContent, setContractContent] = useState<string>('');
+  const [isEditing, setIsEditing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  
-  const workspaceId = 1; // TODO: Get from context
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [showEmailDialog, setShowEmailDialog] = useState(false);
+  const [emailBody, setEmailBody] = useState('');
+  const [hasSavedContent, setHasSavedContent] = useState(false);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
 
   const { data: templates = [], isLoading: isLoadingTemplates } = useQuery<ContractTemplate[]>({
     queryKey: ['/api/workspaces', workspaceId, 'contract-templates'],
@@ -825,69 +857,81 @@ function ContractGenerateDialog({ item, campaignId, onClose }: ContractGenerateD
     enabled: !!item,
   });
 
-  const handleGenerateDocx = async () => {
+  const { data: savedContract, isLoading: isLoadingSaved } = useQuery<{ contractContent: string | null; contractTemplateId: number | null }>({
+    queryKey: ['/api/line-items', item?.id, 'contract-content'],
+    queryFn: () => fetch(`/api/line-items/${item!.id}/contract-content`).then(r => r.json()),
+    enabled: !!item,
+  });
+
+  const handleLoadSavedContent = () => {
+    if (savedContract?.contractContent) {
+      setContractContent(savedContract.contractContent);
+      setSelectedTemplateId(savedContract.contractTemplateId || null);
+      setIsEditing(true);
+      setHasSavedContent(true);
+    }
+  };
+
+  const handleLoadTemplate = async () => {
     if (!selectedTemplateId || !item) return;
-    setIsGenerating(true);
+    setIsLoadingPreview(true);
     try {
-      const response = await fetch(`/api/workspaces/${workspaceId}/contract-templates/${selectedTemplateId}/generate-docx`, {
+      const response = await fetch(`/api/workspaces/${workspaceId}/contract-templates/${selectedTemplateId}/render-preview`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ lineItemId: item.id }),
       });
-      
-      if (!response.ok) throw new Error('Failed to generate DOCX');
-      
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `계약서_${item.influencer?.name || 'contract'}.docx`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      
-      toast({ title: 'DOCX 파일이 다운로드되었습니다.' });
+      if (!response.ok) throw new Error('Failed to load template preview');
+      const data = await response.json();
+      setContractContent(data.content);
+      setIsEditing(true);
+      setHasSavedContent(false);
     } catch (err) {
-      toast({ title: '계약서 생성 실패', variant: 'destructive' });
+      toast({ title: '템플릿 로딩 실패', variant: 'destructive' });
     } finally {
-      setIsGenerating(false);
+      setIsLoadingPreview(false);
     }
   };
 
-  const handleGeneratePdf = async () => {
-    if (!selectedTemplateId || !item) return;
+  const handleSave = async () => {
+    if (!item) return;
+    setIsSaving(true);
+    try {
+      await apiRequest('PATCH', `/api/line-items/${item.id}/contract-content`, {
+        contractContent,
+        contractTemplateId: selectedTemplateId,
+      });
+      setHasSavedContent(true);
+      queryClient.invalidateQueries({ queryKey: ['/api/line-items', item.id, 'contract-content'] });
+      toast({ title: '계약서가 저장되었습니다.' });
+    } catch (err) {
+      toast({ title: '계약서 저장 실패', variant: 'destructive' });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDownload = async (format: 'pdf' | 'docx') => {
+    if (!item) return;
     setIsGenerating(true);
     try {
-      const response = await fetch(`/api/workspaces/${workspaceId}/contract-templates/${selectedTemplateId}/generate-pdf`, {
+      const templateId = selectedTemplateId || savedContract?.contractTemplateId || 0;
+      const endpoint = format === 'pdf' 
+        ? `/api/workspaces/${workspaceId}/contract-templates/${templateId}/generate-pdf`
+        : `/api/workspaces/${workspaceId}/contract-templates/${templateId}/generate-docx`;
+      
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lineItemId: item.id }),
+        body: JSON.stringify({ 
+          lineItemId: item.id,
+          useCustomContent: true,
+        }),
       });
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.message || 'PDF 생성에 실패했습니다.';
-        const errorDetails = errorData.details || '';
-        const suggestions = errorData.suggestions || [];
-        
-        console.error('[PDF Generation Error]', {
-          status: response.status,
-          message: errorMessage,
-          details: errorDetails,
-          suggestions
-        });
-        
-        let toastDescription = errorDetails;
-        if (suggestions.length > 0) {
-          toastDescription += '\n' + suggestions.join('\n');
-        }
-        
-        toast({ 
-          title: errorMessage, 
-          description: toastDescription,
-          variant: 'destructive' 
-        });
+        toast({ title: errorData.message || `${format.toUpperCase()} 생성 실패`, variant: 'destructive' });
         return;
       }
       
@@ -895,99 +939,261 @@ function ContractGenerateDialog({ item, campaignId, onClose }: ContractGenerateD
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `계약서_${item.influencer?.name || 'contract'}.pdf`;
+      a.download = `계약서_${item.influencer?.name || 'contract'}.${format}`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
       
-      toast({ title: 'PDF 파일이 다운로드되었습니다.' });
+      toast({ title: `${format.toUpperCase()} 파일이 다운로드되었습니다.` });
     } catch (err: any) {
-      console.error('[PDF Generation Error]', err);
-      toast({ 
-        title: 'PDF 생성 실패', 
-        description: err?.message || '알 수 없는 오류가 발생했습니다.',
-        variant: 'destructive' 
-      });
+      toast({ title: `${format.toUpperCase()} 생성 실패`, description: err?.message, variant: 'destructive' });
     } finally {
       setIsGenerating(false);
     }
   };
 
+  const handleSendEmail = async () => {
+    if (!item) return;
+    setIsSendingEmail(true);
+    try {
+      const response = await apiRequest('POST', `/api/line-items/${item.id}/send-contract-email`, {
+        emailBody: emailBody || undefined,
+      });
+      const data = await response.json();
+      toast({ title: data.message || '계약서가 이메일로 발송되었습니다.' });
+      setShowEmailDialog(false);
+      setEmailBody('');
+      queryClient.invalidateQueries({ queryKey: ['/api/campaigns', campaignId, 'conversations'] });
+    } catch (err: any) {
+      toast({ title: '이메일 발송 실패', description: err?.message, variant: 'destructive' });
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+
+  const handleClose = () => {
+    setIsEditing(false);
+    setContractContent('');
+    setSelectedTemplateId(null);
+    setHasSavedContent(false);
+    setShowEmailDialog(false);
+    setEmailBody('');
+    onClose();
+  };
+
   if (!item) return null;
 
+  const hasSaved = savedContract?.contractContent;
+
   return (
-    <Dialog open={!!item} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{KO.contractTemplates.generate}</DialogTitle>
-          <DialogDescription>
-            {item.influencer?.name}님의 계약서를 생성합니다.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4 py-4">
-          <div>
-            <Label>{KO.contractTemplates.selectTemplate}</Label>
-            {isLoadingTemplates ? (
-              <Skeleton className="h-10 w-full" />
-            ) : templates.length === 0 ? (
-              <div className="text-sm text-muted-foreground p-4 text-center border rounded-md">
-                {KO.contractTemplates.noTemplates}
-                <br />
-                <span className="text-xs">설정에서 템플릿을 먼저 등록해주세요.</span>
-              </div>
-            ) : (
-              <Select
-                value={selectedTemplateId?.toString() || ""}
-                onValueChange={(val) => setSelectedTemplateId(parseInt(val))}
-              >
-                <SelectTrigger data-testid="select-contract-template">
-                  <SelectValue placeholder="템플릿 선택" />
-                </SelectTrigger>
-                <SelectContent>
-                  {templates.map((t) => (
-                    <SelectItem key={t.id} value={t.id.toString()}>
-                      {t.name}
-                      {t.isDefault && <Badge variant="secondary" className="ml-2 text-xs">기본</Badge>}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+    <>
+      <Dialog open={!!item && !showEmailDialog} onOpenChange={(open) => !open && handleClose()}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {isEditing ? (
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="icon" onClick={() => setIsEditing(false)} data-testid="button-back-to-template">
+                    <ArrowLeft className="w-4 h-4" />
+                  </Button>
+                  계약서 편집 - {item.influencer?.name}
+                </div>
+              ) : (
+                `계약서 작성 - ${item.influencer?.name}`
+              )}
+            </DialogTitle>
+            {!isEditing && (
+              <DialogDescription>
+                템플릿을 선택하여 초안을 작성하거나, 기존 저장된 계약서를 편집할 수 있습니다.
+              </DialogDescription>
             )}
-          </div>
+          </DialogHeader>
 
-          {selectedTemplateId && (
-            <div className="text-xs text-muted-foreground p-3 bg-muted rounded-md">
-              <strong>사용 가능 변수:</strong><br />
-              {KO.contractTemplates.variableHint}
+          {!isEditing ? (
+            <div className="space-y-4 py-4">
+              {(isLoadingSaved) ? (
+                <Skeleton className="h-20 w-full" />
+              ) : hasSaved ? (
+                <div className="p-4 border rounded-md bg-muted/30 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-green-600" />
+                    <span className="text-sm font-medium">저장된 계약서가 있습니다</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    이전에 저장한 개별 계약서를 이어서 편집하거나, 새 템플릿으로 다시 작성할 수 있습니다.
+                  </p>
+                  <div className="flex gap-2">
+                    <Button variant="default" size="sm" onClick={handleLoadSavedContent} data-testid="button-load-saved-contract">
+                      <Pencil className="w-3 h-3 mr-1" />
+                      저장된 계약서 편집
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="space-y-2">
+                <Label>{hasSaved ? '새 템플릿으로 다시 작성' : KO.contractTemplates.selectTemplate}</Label>
+                {isLoadingTemplates ? (
+                  <Skeleton className="h-10 w-full" />
+                ) : templates.length === 0 ? (
+                  <div className="text-sm text-muted-foreground p-4 text-center border rounded-md">
+                    {KO.contractTemplates.noTemplates}
+                    <br />
+                    <span className="text-xs">설정에서 템플릿을 먼저 등록해주세요.</span>
+                  </div>
+                ) : (
+                  <div className="flex gap-2 items-end">
+                    <div className="flex-1">
+                      <Select
+                        value={selectedTemplateId?.toString() || ""}
+                        onValueChange={(val) => setSelectedTemplateId(parseInt(val))}
+                      >
+                        <SelectTrigger data-testid="select-contract-template">
+                          <SelectValue placeholder="템플릿 선택" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {templates.map((t) => (
+                            <SelectItem key={t.id} value={t.id.toString()}>
+                              {t.name}
+                              {t.isDefault && <Badge variant="secondary" className="ml-2 text-xs">기본</Badge>}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button 
+                      onClick={handleLoadTemplate} 
+                      disabled={!selectedTemplateId || isLoadingPreview}
+                      data-testid="button-load-template"
+                    >
+                      {isLoadingPreview ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <FileText className="w-4 h-4 mr-1" />}
+                      초안 작성
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {selectedTemplateId && (
+                <div className="text-xs text-muted-foreground p-3 bg-muted rounded-md">
+                  <strong>사용 가능 변수:</strong> {KO.contractTemplates.variableHint}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3 py-2">
+              <div className="border rounded-md">
+                <Suspense fallback={<Skeleton className="h-96" />}>
+                  <ReactQuill
+                    theme="snow"
+                    value={contractContent}
+                    onChange={setContractContent}
+                    modules={contractQuillModules}
+                    className="h-96"
+                    data-testid="editor-contract-content"
+                  />
+                </Suspense>
+              </div>
+              <TableStyleToolbar content={contractContent} onChange={setContractContent} />
+
+              <div className="flex items-center justify-between gap-2 flex-wrap pt-8">
+                <div className="flex gap-2">
+                  <Button onClick={handleSave} disabled={isSaving} data-testid="button-save-contract">
+                    {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-4 h-4 mr-1" />}
+                    저장
+                  </Button>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => handleDownload('pdf')} 
+                    disabled={isGenerating || !hasSavedContent}
+                    data-testid="button-download-pdf"
+                  >
+                    <Download className="w-4 h-4 mr-1" />
+                    {isGenerating ? '생성 중...' : 'PDF'}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => handleDownload('docx')} 
+                    disabled={isGenerating || !hasSavedContent}
+                    data-testid="button-download-docx"
+                  >
+                    <Download className="w-4 h-4 mr-1" />
+                    {isGenerating ? '생성 중...' : 'DOCX'}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setEmailBody(`안녕하세요, ${item.influencer?.name}님.\n\n계약서를 첨부하여 보내드립니다.\n확인 부탁드립니다.`);
+                      setShowEmailDialog(true);
+                    }}
+                    disabled={!hasSavedContent}
+                    data-testid="button-email-contract"
+                  >
+                    <Mail className="w-4 h-4 mr-1" />
+                    이메일 발송
+                  </Button>
+                </div>
+              </div>
+              {!hasSavedContent && isEditing && (
+                <p className="text-xs text-muted-foreground">
+                  다운로드 및 이메일 발송은 계약서를 먼저 저장한 후 사용할 수 있습니다.
+                </p>
+              )}
             </div>
           )}
-        </div>
 
-        <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={onClose} data-testid="button-cancel-contract">
-            취소
-          </Button>
-          <Button 
-            variant="outline"
-            onClick={handleGeneratePdf}
-            disabled={!selectedTemplateId || isGenerating}
-            data-testid="button-generate-pdf"
-          >
-            <FileText className="w-4 h-4 mr-1" />
-            {isGenerating ? KO.contractTemplates.generating : KO.contractTemplates.downloadPdf}
-          </Button>
-          <Button 
-            onClick={handleGenerateDocx}
-            disabled={!selectedTemplateId || isGenerating}
-            data-testid="button-generate-docx"
-          >
-            <FileText className="w-4 h-4 mr-1" />
-            {isGenerating ? KO.contractTemplates.generating : KO.contractTemplates.downloadDocx}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          {!isEditing && (
+            <DialogFooter>
+              <Button variant="outline" onClick={handleClose} data-testid="button-cancel-contract">
+                닫기
+              </Button>
+            </DialogFooter>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showEmailDialog} onOpenChange={(open) => !open && setShowEmailDialog(false)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>계약서 이메일 발송</DialogTitle>
+            <DialogDescription>
+              {item.influencer?.name}님에게 계약서 PDF를 첨부하여 이메일을 보냅니다.
+              기존 이메일 스레드의 답장으로 발송됩니다.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label>이메일 본문</Label>
+              <Textarea
+                value={emailBody}
+                onChange={(e) => setEmailBody(e.target.value)}
+                className="min-h-[120px]"
+                placeholder="이메일 본문을 입력하세요..."
+                data-testid="textarea-email-body"
+              />
+            </div>
+            <div className="text-xs text-muted-foreground p-3 bg-muted rounded-md space-y-1">
+              <p>수신: {item.influencer?.email || '이메일 없음'}</p>
+              <p>첨부: 계약서_{item.influencer?.name}_{new Date().toISOString().split('T')[0]}.pdf</p>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setShowEmailDialog(false)}>
+              취소
+            </Button>
+            <Button 
+              onClick={handleSendEmail} 
+              disabled={isSendingEmail}
+              data-testid="button-confirm-send-email"
+            >
+              {isSendingEmail ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Send className="w-4 h-4 mr-1" />}
+              발송
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

@@ -58,31 +58,73 @@ export async function getGmailProfile() {
 }
 
 // Send email with optional CC support
-export async function sendEmail(to: string, subject: string, body: string, threadId?: string, cc?: string[]) {
+export interface EmailAttachment {
+  filename: string;
+  content: Buffer;
+  mimeType: string;
+}
+
+export async function sendEmail(to: string, subject: string, body: string, threadId?: string, cc?: string[], attachments?: EmailAttachment[]) {
   const gmail = await getUncachableGmailClient();
   
   const profile = await gmail.users.getProfile({ userId: 'me' });
   const from = profile.data.emailAddress;
   
-  const messageParts = [
-    `From: ${from}`,
-    `To: ${to}`,
-  ];
+  let rawMessage: string;
   
-  // Add CC header if provided
-  if (cc && cc.length > 0) {
-    messageParts.push(`Cc: ${cc.join(', ')}`);
+  if (attachments && attachments.length > 0) {
+    const boundary = `boundary_${Date.now()}_${Math.random().toString(36).substr(2)}`;
+    
+    const headerParts = [
+      `From: ${from}`,
+      `To: ${to}`,
+    ];
+    if (cc && cc.length > 0) {
+      headerParts.push(`Cc: ${cc.join(', ')}`);
+    }
+    headerParts.push(
+      `Subject: =?UTF-8?B?${Buffer.from(subject).toString('base64')}?=`,
+      'MIME-Version: 1.0',
+      `Content-Type: multipart/mixed; boundary="${boundary}"`,
+      '',
+      `--${boundary}`,
+      'Content-Type: text/html; charset=utf-8',
+      'Content-Transfer-Encoding: base64',
+      '',
+      Buffer.from(body).toString('base64'),
+    );
+    
+    for (const att of attachments) {
+      headerParts.push(
+        `--${boundary}`,
+        `Content-Type: ${att.mimeType}; name="=?UTF-8?B?${Buffer.from(att.filename).toString('base64')}?="`,
+        'Content-Transfer-Encoding: base64',
+        `Content-Disposition: attachment; filename="=?UTF-8?B?${Buffer.from(att.filename).toString('base64')}?="`,
+        '',
+        att.content.toString('base64'),
+      );
+    }
+    
+    headerParts.push(`--${boundary}--`);
+    rawMessage = headerParts.join('\r\n');
+  } else {
+    const messageParts = [
+      `From: ${from}`,
+      `To: ${to}`,
+    ];
+    if (cc && cc.length > 0) {
+      messageParts.push(`Cc: ${cc.join(', ')}`);
+    }
+    messageParts.push(
+      `Subject: ${subject}`,
+      'Content-Type: text/html; charset=utf-8',
+      '',
+      body
+    );
+    rawMessage = messageParts.join('\n');
   }
   
-  messageParts.push(
-    `Subject: ${subject}`,
-    'Content-Type: text/html; charset=utf-8',
-    '',
-    body
-  );
-  
-  const message = messageParts.join('\n');
-  const encodedMessage = Buffer.from(message)
+  const encodedMessage = Buffer.from(rawMessage)
     .toString('base64')
     .replace(/\+/g, '-')
     .replace(/\//g, '_')

@@ -2797,12 +2797,41 @@ export async function registerRoutes(
     }
   });
 
-  // Generate DOCX contract
-  app.post(api.contractTemplates.generateDocx.path, async (req, res) => {
+  // === Contract Content Helper ===
+  async function renderContractContent(templateContent: string, lineItem: any, campaign: any, extraVariables?: Record<string, string>): Promise<string> {
+    const defaultVariables: Record<string, string> = {
+      '인플루언서명': lineItem.influencer?.name || '',
+      '캠페인명': campaign?.name || '',
+      '금액': (lineItem.offerFee || lineItem.payAmount || 0).toLocaleString() + '원',
+      '날짜': new Date().toLocaleDateString('ko-KR'),
+      '초안예정일': lineItem.draftDueAt ? new Date(lineItem.draftDueAt).toLocaleDateString('ko-KR') : '',
+      '업로드예정일': lineItem.uploadDueAt ? new Date(lineItem.uploadDueAt).toLocaleDateString('ko-KR') : '',
+      '클라이언트명': campaign?.client || '',
+      '이메일': lineItem.influencer?.email || '',
+      '연락처': lineItem.influencer?.phone || lineItem.influencer?.contactPoint || '',
+    };
+    const allVariables = { ...defaultVariables, ...extraVariables };
+    let content = templateContent;
+    for (const [key, value] of Object.entries(allVariables)) {
+      content = content.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value);
+    }
+    const hasHtmlTags = /<\s*[a-zA-Z][^>]*>/.test(content);
+    if (!hasHtmlTags) {
+      const escapeHtml = (text: string) => text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+      content = content.split('\n').map((line: string) => `<p>${escapeHtml(line)}</p>`).join('');
+    }
+    return content;
+  }
+
+  // Render template preview (returns HTML with variables substituted)
+  app.post('/api/workspaces/:workspaceId/contract-templates/:id/render-preview', async (req, res) => {
     try {
       if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
       const templateId = parseInt(req.params.id);
-      const { lineItemId, variables } = req.body;
+      const { lineItemId } = req.body;
 
       const template = await storage.getContractTemplate(templateId);
       if (!template) return res.status(404).json({ message: "Template not found" });
@@ -2811,38 +2840,67 @@ export async function registerRoutes(
       if (!lineItem) return res.status(404).json({ message: "Line item not found" });
 
       const campaign = await storage.getCampaign(lineItem.campaignId);
-      
-      // Build variables for replacement
-      const defaultVariables: Record<string, string> = {
-        '인플루언서명': lineItem.influencer?.name || '',
-        '캠페인명': campaign?.name || '',
-        '금액': (lineItem.offerFee || lineItem.payAmount || 0).toLocaleString() + '원',
-        '날짜': new Date().toLocaleDateString('ko-KR'),
-        '초안예정일': lineItem.draftDueAt ? new Date(lineItem.draftDueAt).toLocaleDateString('ko-KR') : '',
-        '업로드예정일': lineItem.uploadDueAt ? new Date(lineItem.uploadDueAt).toLocaleDateString('ko-KR') : '',
-        '클라이언트명': campaign?.client || '',
-        '이메일': lineItem.influencer?.email || '',
-        '연락처': lineItem.influencer?.phone || lineItem.influencer?.contactPoint || '',
-      };
+      const renderedContent = await renderContractContent(template.content, lineItem, campaign);
 
-      const allVariables = { ...defaultVariables, ...variables };
+      res.json({ content: renderedContent });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
 
-      // Replace variables in template content
-      let content = template.content;
-      for (const [key, value] of Object.entries(allVariables)) {
-        content = content.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value);
-      }
-      
-      // Handle legacy plain-text templates (convert to HTML)
-      // Use regex to detect actual HTML tags, not just < or > characters
-      const hasHtmlTags = /<\s*[a-zA-Z][^>]*>/.test(content);
-      if (!hasHtmlTags) {
-        // Escape HTML entities in plain text and wrap each line in <p>
-        const escapeHtml = (text: string) => text
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;');
-        content = content.split('\n').map((line: string) => `<p>${escapeHtml(line)}</p>`).join('');
+  // Save individual contract content for a line item
+  app.patch('/api/line-items/:id/contract-content', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const lineItemId = parseInt(req.params.id);
+      const { contractContent, contractTemplateId } = req.body;
+
+      const updated = await storage.updateCampaignItem(lineItemId, {
+        contractContent,
+        contractTemplateId,
+      });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Get line item contract content
+  app.get('/api/line-items/:id/contract-content', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const lineItemId = parseInt(req.params.id);
+      const lineItem = await storage.getLineItemWithDetails(lineItemId);
+      if (!lineItem) return res.status(404).json({ message: "Line item not found" });
+
+      res.json({ 
+        contractContent: lineItem.contractContent || null,
+        contractTemplateId: lineItem.contractTemplateId || null,
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Generate DOCX contract (from saved content or template)
+  app.post(api.contractTemplates.generateDocx.path, async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const templateId = parseInt(req.params.id);
+      const { lineItemId, variables, useCustomContent } = req.body;
+
+      const lineItem = await storage.getLineItemWithDetails(lineItemId);
+      if (!lineItem) return res.status(404).json({ message: "Line item not found" });
+
+      let content: string;
+
+      if (useCustomContent && lineItem.contractContent) {
+        content = lineItem.contractContent;
+      } else {
+        const template = await storage.getContractTemplate(templateId);
+        if (!template) return res.status(404).json({ message: "Template not found" });
+        const campaign = await storage.getCampaign(lineItem.campaignId);
+        content = await renderContractContent(template.content, lineItem, campaign, variables);
       }
 
       // Generate DOCX using html-to-docx library
@@ -2903,52 +2961,25 @@ export async function registerRoutes(
     }
   });
 
-  // Generate PDF contract
+  // Generate PDF contract (from saved content or template)
   app.post(api.contractTemplates.generatePdf.path, async (req, res) => {
     try {
       if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
       const templateId = parseInt(req.params.id);
-      const { lineItemId, variables } = req.body;
-
-      const template = await storage.getContractTemplate(templateId);
-      if (!template) return res.status(404).json({ message: "Template not found" });
+      const { lineItemId, variables, useCustomContent } = req.body;
 
       const lineItem = await storage.getLineItemWithDetails(lineItemId);
       if (!lineItem) return res.status(404).json({ message: "Line item not found" });
 
-      const campaign = await storage.getCampaign(lineItem.campaignId);
-      
-      // Build variables for replacement
-      const defaultVariables: Record<string, string> = {
-        '인플루언서명': lineItem.influencer?.name || '',
-        '캠페인명': campaign?.name || '',
-        '금액': (lineItem.offerFee || lineItem.payAmount || 0).toLocaleString() + '원',
-        '날짜': new Date().toLocaleDateString('ko-KR'),
-        '초안예정일': lineItem.draftDueAt ? new Date(lineItem.draftDueAt).toLocaleDateString('ko-KR') : '',
-        '업로드예정일': lineItem.uploadDueAt ? new Date(lineItem.uploadDueAt).toLocaleDateString('ko-KR') : '',
-        '클라이언트명': campaign?.client || '',
-        '이메일': lineItem.influencer?.email || '',
-        '연락처': lineItem.influencer?.phone || lineItem.influencer?.contactPoint || '',
-      };
+      let content: string;
 
-      const allVariables = { ...defaultVariables, ...variables };
-
-      // Replace variables in template content
-      let content = template.content;
-      for (const [key, value] of Object.entries(allVariables)) {
-        content = content.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value);
-      }
-      
-      // Handle legacy plain-text templates (convert to HTML)
-      // Use regex to detect actual HTML tags, not just < or > characters
-      const hasHtmlTags = /<\s*[a-zA-Z][^>]*>/.test(content);
-      if (!hasHtmlTags) {
-        // Escape HTML entities in plain text and wrap each line in <p>
-        const escapeHtml = (text: string) => text
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;');
-        content = content.split('\n').map((line: string) => `<p>${escapeHtml(line)}</p>`).join('');
+      if (useCustomContent && lineItem.contractContent) {
+        content = lineItem.contractContent;
+      } else {
+        const template = await storage.getContractTemplate(templateId);
+        if (!template) return res.status(404).json({ message: "Template not found" });
+        const campaign = await storage.getCampaign(lineItem.campaignId);
+        content = await renderContractContent(template.content, lineItem, campaign, variables);
       }
 
       // Generate PDF using Puppeteer for full HTML/CSS support with rich text formatting
@@ -3106,6 +3137,140 @@ export async function registerRoutes(
             ]
       };
       res.status(statusCode).json(errorDetails);
+    }
+  });
+
+  // Send contract PDF via email (through existing conversation thread)
+  app.post('/api/line-items/:id/send-contract-email', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const lineItemId = parseInt(req.params.id);
+      const { emailBody } = req.body;
+
+      const lineItem = await storage.getLineItemWithDetails(lineItemId);
+      if (!lineItem) return res.status(404).json({ message: "Line item not found" });
+
+      if (!lineItem.contractContent) {
+        return res.status(400).json({ message: "저장된 계약서 내용이 없습니다. 먼저 계약서를 저장해주세요." });
+      }
+
+      const conversation = await storage.getConversationByLineItem(lineItemId);
+      if (!conversation) {
+        return res.status(400).json({ message: "연결된 이메일 스레드가 없습니다. 커뮤니케이션 탭에서 먼저 이메일을 연결해주세요." });
+      }
+
+      const toEmail = lineItem.influencer?.email;
+      if (!toEmail) {
+        return res.status(400).json({ message: "인플루언서 이메일이 없습니다." });
+      }
+
+      const campaign = await storage.getCampaign(lineItem.campaignId);
+      const pdfContent = lineItem.contractContent;
+
+      const fs = await import('fs');
+      const path = await import('path');
+      
+      const fontPathRegular = path.join(process.cwd(), 'server', 'fonts', 'NotoSansKR-Regular.ttf');
+      const fontPathBold = path.join(process.cwd(), 'server', 'fonts', 'NotoSansKR-Bold.ttf');
+      let fontBase64Regular = '';
+      let fontBase64Bold = '';
+      try {
+        if (fs.existsSync(fontPathRegular)) fontBase64Regular = fs.readFileSync(fontPathRegular).toString('base64');
+        if (fs.existsSync(fontPathBold)) fontBase64Bold = fs.readFileSync(fontPathBold).toString('base64');
+      } catch (e) {
+        console.warn('Could not load local fonts for PDF email');
+      }
+
+      const hasLocalFonts = fontBase64Regular && fontBase64Bold;
+      const fontFaceRule = hasLocalFonts 
+        ? `@font-face { font-family: 'Noto Sans KR'; src: url('data:font/truetype;base64,${fontBase64Regular}') format('truetype'); font-weight: 400; }
+           @font-face { font-family: 'Noto Sans KR'; src: url('data:font/truetype;base64,${fontBase64Bold}') format('truetype'); font-weight: 700; }`
+        : '';
+
+      const htmlDocument = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+        ${fontFaceRule}
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Noto Sans KR', '맑은 고딕', sans-serif; font-size: 12pt; line-height: 1.6; padding: 40px; color: #333; }
+        h1 { font-size: 20pt; font-weight: 700; margin-bottom: 16px; }
+        h2 { font-size: 16pt; font-weight: 700; margin-bottom: 12px; }
+        h3 { font-size: 14pt; font-weight: 700; margin-bottom: 10px; }
+        p { margin-bottom: 10px; }
+        ul, ol { margin-left: 24px; margin-bottom: 10px; }
+        li { margin-bottom: 6px; }
+        strong, b { font-weight: 700; }
+        em, i { font-style: italic; }
+        u { text-decoration: underline; }
+        table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background-color: #f5f5f5; font-weight: 700; }
+      </style></head><body>${pdfContent}</body></html>`;
+
+      const browser = await getSharedBrowser();
+      const page = await browser.newPage();
+      let pdfBuffer: Buffer;
+      
+      try {
+        page.setDefaultTimeout(30000);
+        await page.setContent(htmlDocument, { waitUntil: 'networkidle0', timeout: 30000 });
+        await page.evaluateHandle('document.fonts.ready');
+        pdfBuffer = Buffer.from(await page.pdf({
+          format: 'A4',
+          printBackground: true,
+          margin: { top: '20mm', right: '20mm', bottom: '20mm', left: '20mm' }
+        }));
+      } finally {
+        await page.close();
+      }
+
+      const filename = `계약서_${lineItem.influencer?.name || 'contract'}_${new Date().toISOString().split('T')[0]}.pdf`;
+      const body = emailBody || `안녕하세요, ${lineItem.influencer?.name}님.\n\n${campaign?.name || ''} 캠페인 계약서를 첨부하여 보내드립니다.\n\n확인 부탁드립니다.`;
+
+      const account = conversation.emailAccountId ? await storage.getEmailAccountById(conversation.emailAccountId) : null;
+      let finalBody = body;
+      if (account?.useSignature && account?.signature) {
+        finalBody = body + `<br><br>--<br>${account.signature}`;
+      }
+
+      const { sendEmail, generateSnippet } = await import('./gmail');
+      const subject = conversation.subjectPrefix ? `${conversation.subjectPrefix} 계약서 송부`.trim() : '계약서 송부';
+      
+      const result = await sendEmail(
+        toEmail, 
+        subject, 
+        finalBody, 
+        conversation.gmailThreadId || undefined,
+        undefined,
+        [{
+          filename,
+          content: pdfBuffer,
+          mimeType: 'application/pdf',
+        }]
+      );
+
+      if (!conversation.gmailThreadId && result.threadId) {
+        await storage.updateConversation(conversation.id, { gmailThreadId: result.threadId });
+      }
+
+      const snippet = generateSnippet(finalBody);
+      await storage.createConversationMessage({
+        conversationId: conversation.id,
+        direction: 'outbound',
+        senderEmail: account?.email || null,
+        senderName: null,
+        recipientEmail: toEmail,
+        ccEmails: null,
+        snippet,
+        bodyHtml: finalBody,
+        bodyText: finalBody.replace(/<[^>]*>/g, ''),
+        gmailMessageId: result.id || null,
+        gmailThreadId: result.threadId || null,
+        sendStatus: 'sent',
+      });
+
+      res.json({ success: true, message: '계약서가 이메일로 발송되었습니다.' });
+    } catch (err: any) {
+      console.error('Send contract email error:', err);
+      res.status(500).json({ message: err.message || '계약서 이메일 발송 실패' });
     }
   });
 
