@@ -1280,7 +1280,7 @@ interface CampaignParticipation {
   campaignName: string;
   clientName: string | null;
   status: string | null;
-  payAmount: number | null;
+  offerFee: number | null;
   createdAt: string | null;
 }
 
@@ -1725,9 +1725,9 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
                               </div>
                               <div className="flex flex-col items-end shrink-0">
                                 <Badge variant="outline" className="text-xs">{participation.status || '등록됨'}</Badge>
-                                {participation.payAmount && participation.payAmount > 0 && (
+                                {participation.offerFee && participation.offerFee > 0 && (
                                   <span className="text-xs text-muted-foreground mt-1">
-                                    {participation.payAmount.toLocaleString()}원
+                                    {participation.offerFee.toLocaleString()}원
                                   </span>
                                 )}
                               </div>

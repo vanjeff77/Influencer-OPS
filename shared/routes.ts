@@ -137,6 +137,7 @@ export const api = {
         contractStatus: z.string().optional(),
         paymentStatus: z.string().optional(),
         payAmount: z.number().optional(),
+        offerFee: z.number().nullable().optional(),
       }),
       responses: { 200: z.custom<typeof campaignInfluencers.$inferSelect>() },
     },

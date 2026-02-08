@@ -69,7 +69,7 @@ export interface IStorage {
     campaignName: string;
     clientName: string | null;
     status: string | null;
-    payAmount: number | null;
+    offerFee: number | null;
     createdAt: Date | null;
   }[]>;
 
@@ -481,7 +481,7 @@ export class DatabaseStorage implements IStorage {
         status: 'contacted',
         contractStatus: 'pending',
         paymentStatus: 'pending',
-        payAmount: 0
+        offerFee: 0
       }))
     ).returning();
     
@@ -510,7 +510,7 @@ export class DatabaseStorage implements IStorage {
     campaignName: string;
     clientName: string | null;
     status: string | null;
-    payAmount: number | null;
+    offerFee: number | null;
     createdAt: Date | null;
   }[]> {
     const results = await db.select({
@@ -519,7 +519,7 @@ export class DatabaseStorage implements IStorage {
       campaignName: campaigns.name,
       clientName: clients.name,
       status: campaignInfluencers.status,
-      payAmount: campaignInfluencers.payAmount,
+      offerFee: campaignInfluencers.offerFee,
       createdAt: campaigns.createdAt
     })
       .from(campaignInfluencers)
@@ -642,8 +642,8 @@ export class DatabaseStorage implements IStorage {
     const paidItems = enrichedItems.filter(i => i.paymentStatus === 'paid');
     
     return {
-      pendingTotal: pendingItems.reduce((sum, i) => sum + (i.payAmount || 0), 0),
-      paidThisMonth: paidItems.reduce((sum, i) => sum + (i.payAmount || 0), 0),
+      pendingTotal: pendingItems.reduce((sum, i) => sum + (i.offerFee || 0), 0),
+      paidThisMonth: paidItems.reduce((sum, i) => sum + (i.offerFee || 0), 0),
       pendingCount: pendingItems.length,
       items: enrichedItems
     };
@@ -776,7 +776,7 @@ export class DatabaseStorage implements IStorage {
     return {
       kpi: {
         pendingCount: pendingItems.length,
-        pendingTotal: pendingItems.reduce((sum, i) => sum + (i.payoutTotal || i.payAmount || 0), 0),
+        pendingTotal: pendingItems.reduce((sum, i) => sum + (i.payoutTotal || i.offerFee || 0), 0),
         incompleteInfoCount: incompleteInfoItems.length,
         holdCount: holdItems.length,
         settlementRequestCount: settlementRequestItems.length,

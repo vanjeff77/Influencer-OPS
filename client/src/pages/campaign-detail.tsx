@@ -180,7 +180,7 @@ export default function CampaignDetail() {
   if (isLoading) return <Layout><div className="flex items-center justify-center h-64">{KO.common.loading}</div></Layout>;
   if (!campaign) return <Layout><div className="flex items-center justify-center h-64">캠페인을 찾을 수 없습니다</div></Layout>;
 
-  const totalSpend = campaign.items?.reduce((acc, item) => acc + (item.payAmount || 0), 0) || 0;
+  const totalSpend = campaign.items?.reduce((acc, item) => acc + (item.offerFee || 0), 0) || 0;
   const budgetUtilization = campaign.budget ? Math.round((totalSpend / campaign.budget) * 100) : 0;
   const contractedCount = campaign.items?.filter(i => i.contractStatus === 'signed').length || 0;
   const paidCount = campaign.items?.filter(i => i.paymentStatus === 'paid').length || 0;
@@ -372,7 +372,7 @@ export default function CampaignDetail() {
                       <TableHead>진행 상태</TableHead>
                       <TableHead>계약</TableHead>
                       <TableHead>지급</TableHead>
-                      <TableHead className="text-right">금액</TableHead>
+                      <TableHead className="text-right">광고료</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -476,7 +476,7 @@ export default function CampaignDetail() {
                           </Select>
                         </TableCell>
                         <TableCell className="text-right font-mono">
-                          {item.payAmount?.toLocaleString()}원
+                          {item.offerFee?.toLocaleString() || '-'}원
                         </TableCell>
                       </TableRow>
                     ))}
@@ -532,7 +532,7 @@ export default function CampaignDetail() {
               <CardContent>
                 <div className="grid grid-cols-3 gap-4 mb-6">
                   <div className="p-4 bg-muted/30 rounded-lg">
-                    <div className="text-sm text-muted-foreground">총 진행비</div>
+                    <div className="text-sm text-muted-foreground">총 광고료</div>
                     <div className="text-2xl font-bold">{(campaign.items?.reduce((a, b) => a + (b.offerFee || 0), 0) || 0).toLocaleString()}원</div>
                   </div>
                   <div className="p-4 bg-muted/30 rounded-lg">
@@ -557,7 +557,7 @@ export default function CampaignDetail() {
                       <TableHead>은행명</TableHead>
                       <TableHead>예금주</TableHead>
                       <TableHead>계좌번호</TableHead>
-                      <TableHead className="text-right">진행비</TableHead>
+                      <TableHead className="text-right">광고료</TableHead>
                       <TableHead>정산상태</TableHead>
                       <TableHead>지급예정일</TableHead>
                       <TableHead>메모</TableHead>
@@ -983,13 +983,13 @@ function LineItemDetailDrawer({ item, onClose, onUpdate }: {
   const updateItem = useUpdateCampaignItem();
   const { toast } = useToast();
   
-  const [payAmount, setPayAmount] = useState("");
+  const [adFee, setAdFee] = useState("");
 
   if (!item) return null;
 
   const handleSaveAmount = () => {
-    updateItem.mutate({ id: item.id, updates: { payAmount: parseInt(payAmount) } }, {
-      onSuccess: () => toast({ title: "금액이 저장되었습니다." })
+    updateItem.mutate({ id: item.id, updates: { offerFee: parseInt(adFee) || null } }, {
+      onSuccess: () => toast({ title: "광고료가 저장되었습니다." })
     });
   };
 
@@ -1077,12 +1077,12 @@ function LineItemDetailDrawer({ item, onClose, onUpdate }: {
               </Select>
             </div>
             <div>
-              <label className="text-sm font-medium">금액 (원)</label>
+              <label className="text-sm font-medium">광고료 (원)</label>
               <div className="flex gap-2">
                 <Input 
                   type="number" 
-                  value={payAmount || item.payAmount?.toString() || ''} 
-                  onChange={e => setPayAmount(e.target.value)}
+                  value={adFee || item.offerFee?.toString() || ''} 
+                  onChange={e => setAdFee(e.target.value)}
                   placeholder="500000"
                 />
                 <Button onClick={handleSaveAmount} disabled={updateItem.isPending}>

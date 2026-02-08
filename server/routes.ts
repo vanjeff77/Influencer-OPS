@@ -1199,8 +1199,8 @@ export async function registerRoutes(
           summary = {
             ...summary,
             items: filteredItems,
-            pendingTotal: filteredItems.filter(i => i.paymentStatus !== 'paid').reduce((sum, i) => sum + (i.payAmount || 0), 0),
-            paidThisMonth: filteredItems.filter(i => i.paymentStatus === 'paid').reduce((sum, i) => sum + (i.payAmount || 0), 0),
+            pendingTotal: filteredItems.filter(i => i.paymentStatus !== 'paid').reduce((sum, i) => sum + (i.offerFee || 0), 0),
+            paidThisMonth: filteredItems.filter(i => i.paymentStatus === 'paid').reduce((sum, i) => sum + (i.offerFee || 0), 0),
             pendingCount: filteredItems.filter(i => i.paymentStatus !== 'paid').length,
           };
         }
@@ -1415,7 +1415,7 @@ export async function registerRoutes(
         }
         
         // Payment pending tasks
-        if (item.paymentStatus === 'pending' && item.payAmount && item.payAmount > 0 && item.stage === '완료') {
+        if (item.paymentStatus === 'pending' && item.offerFee && item.offerFee > 0 && item.stage === '완료') {
           tasks.push({
             id: `payment-${item.id}`,
             type: 'payment',
@@ -2842,7 +2842,7 @@ export async function registerRoutes(
     const defaultVariables: Record<string, string> = {
       '인플루언서명': lineItem.influencer?.name || '',
       '캠페인명': campaign?.name || '',
-      '금액': (lineItem.offerFee || lineItem.payAmount || 0).toLocaleString() + '원',
+      '금액': (lineItem.offerFee || 0).toLocaleString() + '원',
       '날짜': new Date().toLocaleDateString('ko-KR'),
       '초안예정일': lineItem.draftDueAt ? new Date(lineItem.draftDueAt).toLocaleDateString('ko-KR') : '',
       '업로드예정일': lineItem.uploadDueAt ? new Date(lineItem.uploadDueAt).toLocaleDateString('ko-KR') : '',
@@ -3969,9 +3969,9 @@ async function seedDatabase() {
     const items = await storage.addInfluencersToCampaign(camp.id, [influencerIds[0], influencerIds[1], influencerIds[2]]);
     
     // Update items with different statuses
-    if (items[0]) await storage.updateCampaignItem(items[0].id, { status: 'contracted', contractStatus: 'signed', paymentStatus: 'pending', payAmount: 500000 });
-    if (items[1]) await storage.updateCampaignItem(items[1].id, { status: 'posted', contractStatus: 'signed', paymentStatus: 'paid', payAmount: 750000 });
-    if (items[2]) await storage.updateCampaignItem(items[2].id, { status: 'negotiated', contractStatus: 'pending', paymentStatus: 'pending', payAmount: 300000 });
+    if (items[0]) await storage.updateCampaignItem(items[0].id, { status: 'contracted', contractStatus: 'signed', paymentStatus: 'pending', offerFee: 500000 });
+    if (items[1]) await storage.updateCampaignItem(items[1].id, { status: 'posted', contractStatus: 'signed', paymentStatus: 'paid', offerFee: 750000 });
+    if (items[2]) await storage.updateCampaignItem(items[2].id, { status: 'negotiated', contractStatus: 'pending', paymentStatus: 'pending', offerFee: 300000 });
 
     // Create tracking job
     await storage.createTrackingJob(ws.id, {

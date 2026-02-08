@@ -141,7 +141,7 @@ export default function Finance() {
   const exportToCSV = () => {
     if (!items.length) return;
     
-    const headers = ['광고주', '캠페인', '인플루언서', '사업자유형', '은행명', '예금주', '계좌번호', '금액', '상태', '지급예정일'];
+    const headers = ['광고주', '캠페인', '인플루언서', '사업자유형', '은행명', '예금주', '계좌번호', '광고료', '상태', '지급예정일'];
     const rows = items.map(item => [
       item.client?.name || '',
       item.campaign?.name || '',
@@ -176,7 +176,7 @@ export default function Finance() {
       inf.bankName || '',
       inf.accountNumber || '',
       inf.accountHolder || '',
-      (item.payoutTotal || item.payAmount || 0).toString(),
+      (item.payoutTotal || item.offerFee || 0).toString(),
     ];
     
     navigator.clipboard.writeText(lines.join('\t'));
@@ -343,7 +343,7 @@ export default function Finance() {
                       <TableHead className="text-xs md:text-sm">광고주</TableHead>
                       <TableHead className="text-xs md:text-sm">캠페인</TableHead>
                       <TableHead className="text-xs md:text-sm text-center">건수</TableHead>
-                      <TableHead className="text-xs md:text-sm text-right">정산 금액</TableHead>
+                      <TableHead className="text-xs md:text-sm text-right">광고료</TableHead>
                       <TableHead className="text-xs md:text-sm">정산 기한</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -513,7 +513,7 @@ function SettlementDetailSheet({ item, workspaceId, onClose, onMarkPaid, isMarki
       inf.bankName || '',
       inf.accountNumber || '',
       inf.accountHolder || '',
-      (item.payoutTotal || item.payAmount || 0).toString(),
+      (item.payoutTotal || item.offerFee || 0).toString(),
     ];
     
     navigator.clipboard.writeText(lines.join('\t'));
@@ -596,7 +596,7 @@ function SettlementDetailSheet({ item, workspaceId, onClose, onMarkPaid, isMarki
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">{KO.pages.settlement.supplyAmount}</span>
-                  <span className="font-mono">{(item.payoutAmountSupply || item.payAmount || 0).toLocaleString()}원</span>
+                  <span className="font-mono">{(item.payoutAmountSupply || item.offerFee || 0).toLocaleString()}원</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">{KO.pages.settlement.vat}</span>
@@ -604,7 +604,7 @@ function SettlementDetailSheet({ item, workspaceId, onClose, onMarkPaid, isMarki
                 </div>
                 <div className="flex justify-between font-medium pt-2 border-t">
                   <span>{KO.pages.settlement.totalAmount}</span>
-                  <span className="font-mono text-lg">{(item.payoutTotal || item.payAmount || 0).toLocaleString()}원</span>
+                  <span className="font-mono text-lg">{(item.payoutTotal || item.offerFee || 0).toLocaleString()}원</span>
                 </div>
               </div>
             </div>
