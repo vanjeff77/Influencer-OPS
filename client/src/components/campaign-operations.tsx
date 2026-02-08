@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 import type { CampaignInfluencer, Influencer, InfluencerAccount, FeedbackNote, User } from "@shared/schema";
 import { KO } from "@/i18n/ko";
-import { TableStyleToolbar } from "@/components/table-style-toolbar";
+
 
 const ReactQuill = lazy(() => import('react-quill-new'));
 import 'react-quill-new/dist/quill.snow.css';
@@ -1094,7 +1094,7 @@ function ContractGenerateDialog({ item, campaignId, workspaceId, onClose }: Cont
                   />
                 </Suspense>
               </div>
-              <TableStyleToolbar content={contractContent} onChange={setContractContent} />
+
 
               <div className="flex items-center justify-between gap-2 flex-wrap pt-8">
                 <div className="flex gap-2">

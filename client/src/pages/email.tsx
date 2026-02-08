@@ -21,7 +21,7 @@ import { KO } from "@/i18n/ko";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FeatureHint } from "@/components/onboarding";
-import { TableStyleToolbar } from "@/components/table-style-toolbar";
+
 
 const EMAIL_PRESETS: Record<string, { imapServer: string; imapPort: string; smtpServer: string; smtpPort: string }> = {
   naver: { imapServer: "imap.naver.com", imapPort: "993", smtpServer: "smtp.naver.com", smtpPort: "587" },
@@ -499,7 +499,7 @@ export default function EmailCenter() {
                   placeholder="서명을 입력하세요..."
                 />
               </div>
-              <TableStyleToolbar content={signatureContent} onChange={setSignatureContent} />
+
               <p className="text-xs text-muted-foreground">
                 이미지는 URL 링크로 삽입하거나 직접 붙여넣기 할 수 있습니다.
               </p>

@@ -2830,6 +2830,13 @@ export async function registerRoutes(
     }
   });
 
+  function convertQuillAlignToInline(html: string): string {
+    return html
+      .replace(/class="ql-align-center"/g, 'style="text-align: center;"')
+      .replace(/class="ql-align-right"/g, 'style="text-align: right;"')
+      .replace(/class="ql-align-justify"/g, 'style="text-align: justify;"');
+  }
+
   // === Contract Content Helper ===
   async function renderContractContent(templateContent: string, lineItem: any, campaign: any, extraVariables?: Record<string, string>): Promise<string> {
     const defaultVariables: Record<string, string> = {
@@ -2936,6 +2943,9 @@ export async function registerRoutes(
         content = await renderContractContent(template.content, lineItem, campaign, variables);
       }
 
+      // Convert Quill alignment classes to inline styles for reliable rendering
+      const processedContent = convertQuillAlignToInline(content);
+      
       // Generate DOCX using html-to-docx library
       const HTMLtoDOCX = (await import('html-to-docx')).default;
       
@@ -2962,7 +2972,7 @@ export async function registerRoutes(
             u { text-decoration: underline; }
           </style>
         </head>
-        <body>${content}</body>
+        <body>${processedContent}</body>
         </html>
       `;
       
@@ -3014,6 +3024,9 @@ export async function registerRoutes(
         const campaign = await storage.getCampaign(lineItem.campaignId);
         content = await renderContractContent(template.content, lineItem, campaign, variables);
       }
+
+      // Convert Quill alignment classes to inline styles for reliable rendering
+      const processedContent = convertQuillAlignToInline(content);
 
       // Generate PDF using Puppeteer for full HTML/CSS support with rich text formatting
       const fs = await import('fs');
@@ -3104,7 +3117,7 @@ export async function registerRoutes(
   </style>
 </head>
 <body>
-  ${content}
+  ${processedContent}
 </body>
 </html>`;
 
@@ -3198,7 +3211,7 @@ export async function registerRoutes(
       }
 
       const campaign = await storage.getCampaign(lineItem.campaignId);
-      const pdfContent = lineItem.contractContent;
+      const pdfContent = convertQuillAlignToInline(lineItem.contractContent);
 
       const fs = await import('fs');
       const path = await import('path');

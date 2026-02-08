@@ -19,7 +19,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { KO } from "@/i18n/ko";
 import { Plus, Pencil, Trash2, Building2, Users, Shield, FileText, Star, Settings, RotateCcw } from "lucide-react";
 import { useResetOnboarding } from "@/hooks/use-auth";
-import { TableStyleToolbar } from "@/components/table-style-toolbar";
+
 
 const ReactQuill = lazy(() => import('react-quill-new'));
 import 'react-quill-new/dist/quill.snow.css';
@@ -926,7 +926,6 @@ function ContractTemplatesSection({ workspaceId }: { workspaceId: number }) {
                     />
                   </Suspense>
                 </div>
-                <TableStyleToolbar content={content} onChange={setContent} />
               </div>
               <div className="flex items-center gap-2 pt-10">
                 <Checkbox id="is-default" checked={isDefault} onCheckedChange={(v) => setIsDefault(!!v)} data-testid="checkbox-template-default" />
@@ -1021,7 +1020,6 @@ function ContractTemplatesSection({ workspaceId }: { workspaceId: number }) {
                     />
                   </Suspense>
                 </div>
-                <TableStyleToolbar content={content} onChange={setContent} />
               </div>
               <div className="flex items-center gap-2 pt-10">
                 <Checkbox id="edit-is-default" checked={isDefault} onCheckedChange={(v) => setIsDefault(!!v)} data-testid="checkbox-edit-template-default" />
