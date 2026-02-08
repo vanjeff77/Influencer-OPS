@@ -143,36 +143,15 @@
 /* Quill Editor - Table support */
 .ql-editor table {
   border-collapse: collapse;
-  width: 100%;
 }
 
 .ql-editor td {
-  border: 1px solid #e2e8f0;
   padding: 4px 8px;
   vertical-align: top;
   min-height: 1.5em;
 }
 
-.ql-editor table.no-border td {
-  border: none !important;
-}
-
-.ql-editor table.border-thick td {
-  border-width: 2px;
-}
-
-.ql-editor table[data-width="auto"] {
-  width: auto;
-}
-
-.ql-editor table[data-width="100"] {
-  width: 100%;
-}
-
-.ql-editor table[data-width="75"] {
-  width: 75%;
-}
-
-.ql-editor table[data-width="50"] {
-  width: 50%;
+.ql-editor img {
+  max-width: 100%;
+  height: auto;
 }

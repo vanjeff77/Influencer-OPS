@@ -32,6 +32,7 @@ const quillModules = {
     [{ 'list': 'ordered'}, { 'list': 'bullet' }],
     [{ 'align': [] }],
     [{ 'color': [] }, { 'background': [] }],
+    ['image'],
     ['clean']
   ],
   history: {

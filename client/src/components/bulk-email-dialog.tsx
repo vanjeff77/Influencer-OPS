@@ -211,7 +211,7 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
       ['bold', 'italic', 'underline'],
       [{ 'color': [] }, { 'background': [] }],
       [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-      ['link'],
+      ['link', 'image'],
       ['clean'],
     ],
     history: {
@@ -255,8 +255,8 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
           </TabsList>
           
           <div className="flex-1 overflow-hidden">
-            <TabsContent value="template" className="h-full overflow-auto p-1">
-              <div className="space-y-4">
+            <TabsContent value="template" className="h-full flex flex-col overflow-hidden p-1">
+              <div className="flex-1 overflow-auto space-y-4">
                 <div>
                   <Label>{KO.pages.bulkEmail.selectAccount}</Label>
                   {isLoadingAccounts ? (
@@ -301,77 +301,77 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
                 
                 <div>
                   <Label>{KO.pages.bulkEmail.body}</Label>
-                  <div className="border rounded-md">
-                    <Suspense fallback={<Skeleton className="h-64" />}>
-                      <ReactQuill
-                        ref={setupCompositionHandlers}
-                        theme="snow"
-                        defaultValue={body}
-                        onChange={handleBodyChange}
-                        modules={quillModules}
-                        className="h-64"
-                        data-testid="editor-body"
-                      />
-                    </Suspense>
-                  </div>
-                </div>
-                
-                <div className="flex justify-end pt-4">
-                  <Button onClick={() => setStep('preview')} disabled={!selectedEmailAccountId} data-testid="button-next-preview">
-                    {KO.pages.bulkEmail.next}
-                  </Button>
-                </div>
-              </div>
-            </TabsContent>
-            
-            <TabsContent value="preview" className="h-full overflow-auto p-1">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full">
-                <div>
-                  <Label className="mb-2 block">{KO.pages.bulkEmail.selectInfluencer}</Label>
-                  <ScrollArea className="h-64 border rounded-md">
-                    <div className="divide-y">
-                      {lineItems.filter(li => li.influencer?.email).map(li => (
-                        <div
-                          key={li.id}
-                          className={`p-2 cursor-pointer hover:bg-muted/50 ${previewInfluencerId === li.influencer?.id ? 'bg-primary/10' : ''}`}
-                          onClick={() => handlePreview(li.influencer!.id)}
-                          data-testid={`preview-influencer-${li.id}`}
-                        >
-                          <div className="font-medium text-sm">{li.influencer?.name}</div>
-                          <div className="text-xs text-muted-foreground">{li.influencer?.email}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                </div>
-                
-                <div>
-                  <Label className="mb-2 block">{KO.pages.bulkEmail.previewResult}</Label>
-                  {previewMutation.isPending ? (
-                    <div className="flex items-center justify-center h-64 border rounded-md">
-                      <Loader2 className="w-6 h-6 animate-spin" />
-                    </div>
-                  ) : previewMutation.data ? (
-                    <Card className="h-64 overflow-auto">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm">{previewMutation.data.renderedSubject}</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div 
-                          className="prose prose-sm max-w-none dark:prose-invert"
-                          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(previewMutation.data.renderedBody) }}
-                        />
-                      </CardContent>
-                    </Card>
-                  ) : (
-                    <div className="flex items-center justify-center h-64 border rounded-md text-muted-foreground">
-                      {KO.pages.bulkEmail.selectToPreview}
-                    </div>
-                  )}
+                  <Suspense fallback={<Skeleton className="h-64" />}>
+                    <ReactQuill
+                      ref={setupCompositionHandlers}
+                      theme="snow"
+                      defaultValue={body}
+                      onChange={handleBodyChange}
+                      modules={quillModules}
+                      className="h-64"
+                      data-testid="editor-body"
+                    />
+                  </Suspense>
                 </div>
               </div>
               
-              <div className="flex justify-between pt-4">
+              <div className="flex justify-end pt-4 border-t mt-2 shrink-0">
+                <Button onClick={() => setStep('preview')} disabled={!selectedEmailAccountId} data-testid="button-next-preview">
+                  {KO.pages.bulkEmail.next}
+                </Button>
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="preview" className="h-full flex flex-col overflow-hidden p-1">
+              <div className="flex-1 overflow-auto">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label className="mb-2 block">{KO.pages.bulkEmail.selectInfluencer}</Label>
+                    <ScrollArea className="h-64 border rounded-md">
+                      <div className="divide-y">
+                        {lineItems.filter(li => li.influencer?.email).map(li => (
+                          <div
+                            key={li.id}
+                            className={`p-2 cursor-pointer hover:bg-muted/50 ${previewInfluencerId === li.influencer?.id ? 'bg-primary/10' : ''}`}
+                            onClick={() => handlePreview(li.influencer!.id)}
+                            data-testid={`preview-influencer-${li.id}`}
+                          >
+                            <div className="font-medium text-sm">{li.influencer?.name}</div>
+                            <div className="text-xs text-muted-foreground">{li.influencer?.email}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </div>
+                  
+                  <div>
+                    <Label className="mb-2 block">{KO.pages.bulkEmail.previewResult}</Label>
+                    {previewMutation.isPending ? (
+                      <div className="flex items-center justify-center h-64 border rounded-md">
+                        <Loader2 className="w-6 h-6 animate-spin" />
+                      </div>
+                    ) : previewMutation.data ? (
+                      <Card className="h-64 overflow-auto">
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm">{previewMutation.data.renderedSubject}</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div 
+                            className="prose prose-sm max-w-none dark:prose-invert"
+                            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(previewMutation.data.renderedBody) }}
+                          />
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <div className="flex items-center justify-center h-64 border rounded-md text-muted-foreground">
+                        {KO.pages.bulkEmail.selectToPreview}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex justify-between pt-4 border-t mt-2 shrink-0">
                 <Button variant="outline" onClick={() => setStep('template')} data-testid="button-back-template">
                   {KO.pages.bulkEmail.back}
                 </Button>
@@ -381,8 +381,8 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
               </div>
             </TabsContent>
             
-            <TabsContent value="test" className="h-full overflow-auto p-1">
-              <div className="space-y-4">
+            <TabsContent value="test" className="h-full flex flex-col overflow-hidden p-1">
+              <div className="flex-1 overflow-auto space-y-4">
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-base">{KO.pages.bulkEmail.testSend}</CardTitle>
@@ -412,92 +412,94 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
                     </Button>
                   </CardContent>
                 </Card>
-                
-                <div className="flex justify-between pt-4">
-                  <Button variant="outline" onClick={() => setStep('preview')} data-testid="button-back-preview">
-                    {KO.pages.bulkEmail.back}
-                  </Button>
-                  <Button onClick={handleGoToConfirm} data-testid="button-next-confirm">
-                    {KO.pages.bulkEmail.next}
-                  </Button>
-                </div>
+              </div>
+              
+              <div className="flex justify-between pt-4 border-t mt-2 shrink-0">
+                <Button variant="outline" onClick={() => setStep('preview')} data-testid="button-back-preview">
+                  {KO.pages.bulkEmail.back}
+                </Button>
+                <Button onClick={handleGoToConfirm} data-testid="button-next-confirm">
+                  {KO.pages.bulkEmail.next}
+                </Button>
               </div>
             </TabsContent>
             
-            <TabsContent value="confirm" className="h-full overflow-auto p-1">
+            <TabsContent value="confirm" className="h-full flex flex-col overflow-hidden p-1">
               {validateMutation.isPending ? (
                 <div className="flex items-center justify-center h-64">
                   <Loader2 className="w-8 h-8 animate-spin" />
                 </div>
               ) : validation ? (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-3 gap-4">
-                    <Card>
-                      <CardContent className="pt-4 text-center">
-                        <div className="text-2xl font-bold">{validation.totalSelected}</div>
-                        <div className="text-sm text-muted-foreground">{KO.pages.bulkEmail.totalSelected}</div>
-                      </CardContent>
-                    </Card>
-                    <Card>
-                      <CardContent className="pt-4 text-center">
-                        <div className="text-2xl font-bold text-green-600">{validation.eligibleCount}</div>
-                        <div className="text-sm text-muted-foreground">{KO.pages.bulkEmail.eligible}</div>
-                      </CardContent>
-                    </Card>
-                    <Card>
-                      <CardContent className="pt-4 text-center">
-                        <div className="text-2xl font-bold text-red-600">{validation.excludedCount}</div>
-                        <div className="text-sm text-muted-foreground">{KO.pages.bulkEmail.excluded}</div>
-                      </CardContent>
-                    </Card>
+                <>
+                  <div className="flex-1 overflow-auto space-y-4">
+                    <div className="grid grid-cols-3 gap-4">
+                      <Card>
+                        <CardContent className="pt-4 text-center">
+                          <div className="text-2xl font-bold">{validation.totalSelected}</div>
+                          <div className="text-sm text-muted-foreground">{KO.pages.bulkEmail.totalSelected}</div>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardContent className="pt-4 text-center">
+                          <div className="text-2xl font-bold text-green-600">{validation.eligibleCount}</div>
+                          <div className="text-sm text-muted-foreground">{KO.pages.bulkEmail.eligible}</div>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardContent className="pt-4 text-center">
+                          <div className="text-2xl font-bold text-red-600">{validation.excludedCount}</div>
+                          <div className="text-sm text-muted-foreground">{KO.pages.bulkEmail.excluded}</div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                    
+                    {validation.excluded.length > 0 && (
+                      <Card>
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm flex items-center gap-2 text-red-600">
+                            <AlertCircle className="w-4 h-4" />
+                            {KO.pages.bulkEmail.excludedList}
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <ScrollArea className="h-32">
+                            <div className="space-y-1">
+                              {validation.excluded.map((item, idx) => (
+                                <div key={idx} className="flex items-center justify-between text-sm py-1">
+                                  <span>{item.name} ({item.email || KO.pages.bulkEmail.noEmail})</span>
+                                  <Badge variant="outline" className="text-xs">{item.reason}</Badge>
+                                </div>
+                              ))}
+                            </div>
+                          </ScrollArea>
+                        </CardContent>
+                      </Card>
+                    )}
+                    
+                    {validation.eligible.length > 0 && (
+                      <Card>
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm flex items-center gap-2 text-green-600">
+                            <Check className="w-4 h-4" />
+                            {KO.pages.bulkEmail.eligibleList}
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <ScrollArea className="h-32">
+                            <div className="space-y-1">
+                              {validation.eligible.map((item, idx) => (
+                                <div key={idx} className="text-sm py-1">
+                                  {item.name} - {item.email}
+                                </div>
+                              ))}
+                            </div>
+                          </ScrollArea>
+                        </CardContent>
+                      </Card>
+                    )}
                   </div>
                   
-                  {validation.excluded.length > 0 && (
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm flex items-center gap-2 text-red-600">
-                          <AlertCircle className="w-4 h-4" />
-                          {KO.pages.bulkEmail.excludedList}
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <ScrollArea className="h-32">
-                          <div className="space-y-1">
-                            {validation.excluded.map((item, idx) => (
-                              <div key={idx} className="flex items-center justify-between text-sm py-1">
-                                <span>{item.name} ({item.email || KO.pages.bulkEmail.noEmail})</span>
-                                <Badge variant="outline" className="text-xs">{item.reason}</Badge>
-                              </div>
-                            ))}
-                          </div>
-                        </ScrollArea>
-                      </CardContent>
-                    </Card>
-                  )}
-                  
-                  {validation.eligible.length > 0 && (
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm flex items-center gap-2 text-green-600">
-                          <Check className="w-4 h-4" />
-                          {KO.pages.bulkEmail.eligibleList}
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <ScrollArea className="h-32">
-                          <div className="space-y-1">
-                            {validation.eligible.map((item, idx) => (
-                              <div key={idx} className="text-sm py-1">
-                                {item.name} - {item.email}
-                              </div>
-                            ))}
-                          </div>
-                        </ScrollArea>
-                      </CardContent>
-                    </Card>
-                  )}
-                  
-                  <div className="flex justify-between pt-4">
+                  <div className="flex justify-between pt-4 border-t mt-2 shrink-0">
                     <Button variant="outline" onClick={() => setStep('test')} data-testid="button-back-test">
                       {KO.pages.bulkEmail.back}
                     </Button>
@@ -514,7 +516,7 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
                       {KO.pages.bulkEmail.startSend} ({validation.eligibleCount}{KO.pages.bulkEmail.people})
                     </Button>
                   </div>
-                </div>
+                </>
               ) : null}
             </TabsContent>
           </div>
