@@ -202,7 +202,8 @@ export default function CampaignDetail() {
 
   const getStatusLabel = (status: string) => {
     switch(status) {
-      case 'contacted': return '연락 완료';
+      case 'waiting': return '대기 중';
+      case 'contacted': return '컨택 완료';
       case 'negotiated': return '협상 중';
       case 'contracted': return '계약 완료';
       case 'posted': return '게시 완료';
@@ -403,7 +404,7 @@ export default function CampaignDetail() {
                         </TableCell>
                         <TableCell>
                           <Select 
-                            value={item.status || 'contacted'} 
+                            value={item.status || 'waiting'} 
                             onValueChange={(val) => {
                               handleStatusUpdate(item.id, 'status', val);
                             }}
@@ -413,6 +414,7 @@ export default function CampaignDetail() {
                                 item.status === 'posted' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
                                 item.status === 'contracted' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
                                 item.status === 'negotiated' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                                item.status === 'contacted' ? 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-400' :
                                 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400'
                               }`} 
                               onClick={e => e.stopPropagation()}
@@ -420,7 +422,8 @@ export default function CampaignDetail() {
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="contacted">연락 완료</SelectItem>
+                              <SelectItem value="waiting">대기 중</SelectItem>
+                              <SelectItem value="contacted">컨택 완료</SelectItem>
                               <SelectItem value="negotiated">협상 중</SelectItem>
                               <SelectItem value="contracted">계약 완료</SelectItem>
                               <SelectItem value="posted">게시 완료</SelectItem>
@@ -1021,12 +1024,13 @@ function LineItemDetailDrawer({ item, onClose, onUpdate }: {
               <div>
                 <label className="text-sm font-medium">진행 상태</label>
                 <Select 
-                  value={item.status || 'contacted'} 
+                  value={item.status || 'waiting'} 
                   onValueChange={(val) => onUpdate(item.id, 'status', val)}
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="contacted">연락 완료</SelectItem>
+                    <SelectItem value="waiting">대기 중</SelectItem>
+                    <SelectItem value="contacted">컨택 완료</SelectItem>
                     <SelectItem value="negotiated">협상 중</SelectItem>
                     <SelectItem value="contracted">계약 완료</SelectItem>
                     <SelectItem value="posted">게시 완료</SelectItem>

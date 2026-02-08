@@ -182,7 +182,7 @@ export const campaignInfluencers = pgTable("campaign_influencers", {
   id: serial("id").primaryKey(),
   campaignId: integer("campaign_id").notNull(),
   influencerId: integer("influencer_id").notNull(),
-  status: text("status").default("contacted"), // contacted, negotiated, contracted, posted, paid
+  status: text("status").default("waiting"), // waiting, contacted, negotiated, contracted, posted, paid
   contractStatus: text("contract_status").default("pending"), // pending, signed
   paymentStatus: text("payment_status").default("pending"), // pending, scheduled, paid
   payAmount: integer("pay_amount").default(0),

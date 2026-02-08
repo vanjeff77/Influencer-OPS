@@ -478,7 +478,7 @@ export class DatabaseStorage implements IStorage {
       newIds.map(influencerId => ({ 
         campaignId, 
         influencerId,
-        status: 'contacted',
+        status: 'waiting',
         contractStatus: 'pending',
         paymentStatus: 'pending',
         offerFee: 0

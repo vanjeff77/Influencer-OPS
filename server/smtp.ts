@@ -206,16 +206,47 @@ export async function startBulkEmailWorker(jobId: number): Promise<void> {
       
       if (result.success) {
         sentCount++;
+        const now = new Date();
         await storage.updateBulkEmailQueueItem(item.id, {
           status: 'sent',
-          sentAt: new Date(),
+          sentAt: now,
         });
         
         await storage.updateCampaignItem(item.lineItemId, {
           firstContactCompleted: true,
-          firstContactAt: new Date(),
+          firstContactAt: now,
           firstContactMethod: 'auto',
+          status: 'contacted',
         });
+        
+        try {
+          let conversation = await storage.getConversationByLineItem(item.lineItemId);
+          if (!conversation) {
+            conversation = await storage.createConversation({
+              campaignLineItemId: item.lineItemId,
+              emailAccountId: emailAccount.id,
+              subjectPrefix: item.renderedSubject,
+              lastMessageAt: now,
+              status: 'active',
+            });
+          }
+          
+          await storage.createConversationMessage({
+            conversationId: conversation.id,
+            direction: 'outbound',
+            senderEmail: emailAccount.email,
+            senderName: emailAccount.email,
+            recipientEmail: item.email,
+            snippet: item.renderedSubject,
+            bodyHtml: item.renderedBody,
+            gmailMessageId: result.messageId || null,
+            sendStatus: 'sent',
+            sentAt: now,
+          });
+          console.log(`[BulkEmail] Created conversation for line item ${item.lineItemId}`);
+        } catch (convErr) {
+          console.error(`[BulkEmail] Failed to create conversation for line item ${item.lineItemId}:`, convErr);
+        }
         
         console.log(`[BulkEmail] Sent email to ${item.email}`);
       } else {
