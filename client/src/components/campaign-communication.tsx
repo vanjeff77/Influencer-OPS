@@ -44,6 +44,9 @@ interface CampaignLineItem {
   campaignId: number;
   influencerId: number;
   status: string | null;
+  offerFee?: number | null;
+  draftDueAt?: string | null;
+  uploadDueAt?: string | null;
   firstContactCompleted?: boolean | null | undefined;
   firstContactAt?: string | null;
   firstContactMethod?: string | null;
@@ -51,11 +54,6 @@ interface CampaignLineItem {
     id: number;
     name: string;
     email: string | null;
-    phone: string | null;
-    tags: string[] | null;
-    tag1: string | null;
-    tag2: string | null;
-    tag3: string | null;
     memo: string | null;
     settlementType: string | null;
     bankName: string | null;
@@ -717,10 +715,10 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
   const { toast } = useToast();
   const [memo, setMemo] = useState(influencer?.memo || "");
   const [email, setEmail] = useState(influencer?.email || "");
-  const [phone, setPhone] = useState(influencer?.phone || "");
-  const [tag1, setTag1] = useState(influencer?.tag1 || "");
-  const [tag2, setTag2] = useState(influencer?.tag2 || "");
-  const [tag3, setTag3] = useState(influencer?.tag3 || "");
+  
+  const [offerFee, setOfferFee] = useState<string>(lineItem.offerFee?.toString() || "");
+  const [draftDueAt, setDraftDueAt] = useState(lineItem.draftDueAt ? new Date(lineItem.draftDueAt).toISOString().split('T')[0] : "");
+  const [uploadDueAt, setUploadDueAt] = useState(lineItem.uploadDueAt ? new Date(lineItem.uploadDueAt).toISOString().split('T')[0] : "");
   
   const [settlementType, setSettlementType] = useState(influencer?.settlementType || "");
   const [bankName, setBankName] = useState(influencer?.bankName || "");
@@ -742,15 +740,32 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
     }
   });
 
+  const updateLineItem = useMutation({
+    mutationFn: (data: any) => apiRequest('PATCH', `/api/line-items/${lineItem.id}/operations`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.campaigns.get.path, lineItem.campaignId] });
+      queryClient.invalidateQueries({ queryKey: [api.campaigns.list.path] });
+      queryClient.invalidateQueries({ queryKey: ['/api/conversations'] });
+      toast({ title: KO.pages.communication.saved });
+    }
+  });
+
   const handleSave = () => {
-    if (!influencer?.id) return;
-    updateInfluencer.mutate({
-      memo,
-      email,
-      phone,
-      tag1: tag1 || null,
-      tag2: tag2 || null,
-      tag3: tag3 || null
+    const lineItemData: Record<string, any> = {
+      draftDueAt: draftDueAt || null,
+      uploadDueAt: uploadDueAt || null,
+    };
+    if (offerFee !== "") {
+      lineItemData.offerFee = parseInt(offerFee);
+    }
+
+    if (influencer?.id) {
+      updateInfluencer.mutate({ memo, email }, {
+        onError: () => toast({ title: "인플루언서 정보 저장 실패", variant: "destructive" })
+      });
+    }
+    updateLineItem.mutate(lineItemData, {
+      onError: () => toast({ title: "캠페인 항목 저장 실패", variant: "destructive" })
     });
   };
 
@@ -808,45 +823,37 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
               data-testid="input-influencer-email"
             />
           </div>
+          <Separator />
           <div>
-            <label className="text-xs font-medium text-muted-foreground">전화번호</label>
+            <label className="text-xs font-medium text-muted-foreground">광고료</label>
             <Input 
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="010-1234-5678"
+              type="number"
+              value={offerFee}
+              onChange={(e) => setOfferFee(e.target.value)}
+              placeholder="0"
               className="mt-1 h-8 text-sm"
-              data-testid="input-influencer-phone"
+              data-testid="input-lineitem-offer-fee"
             />
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-xs font-medium text-muted-foreground">태그1</label>
+              <label className="text-xs font-medium text-muted-foreground">초안 예정일</label>
               <Input 
-                value={tag1}
-                onChange={(e) => setTag1(e.target.value)}
-                placeholder="태그1"
+                type="date"
+                value={draftDueAt}
+                onChange={(e) => setDraftDueAt(e.target.value)}
                 className="mt-1 h-8 text-sm"
-                data-testid="input-influencer-tag1"
+                data-testid="input-lineitem-draft-due"
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground">태그2</label>
+              <label className="text-xs font-medium text-muted-foreground">업로드 예정일</label>
               <Input 
-                value={tag2}
-                onChange={(e) => setTag2(e.target.value)}
-                placeholder="태그2"
+                type="date"
+                value={uploadDueAt}
+                onChange={(e) => setUploadDueAt(e.target.value)}
                 className="mt-1 h-8 text-sm"
-                data-testid="input-influencer-tag2"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">태그3</label>
-              <Input 
-                value={tag3}
-                onChange={(e) => setTag3(e.target.value)}
-                placeholder="태그3"
-                className="mt-1 h-8 text-sm"
-                data-testid="input-influencer-tag3"
+                data-testid="input-lineitem-upload-due"
               />
             </div>
           </div>
@@ -864,11 +871,11 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
 
         <Button 
           onClick={handleSave} 
-          disabled={updateInfluencer.isPending}
+          disabled={updateInfluencer.isPending || updateLineItem.isPending}
           className="w-full"
           data-testid="button-save-influencer"
         >
-          {updateInfluencer.isPending ? (
+          {(updateInfluencer.isPending || updateLineItem.isPending) ? (
             <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{KO.pages.communication.saving}</>
           ) : (
             <><Save className="w-4 h-4 mr-2" />{KO.pages.communication.saveChanges}</>
