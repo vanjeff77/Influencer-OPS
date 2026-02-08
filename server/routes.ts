@@ -2300,9 +2300,9 @@ export async function registerRoutes(
         renderedBody += `<br><br>--<br>${emailAccount.signature}`;
       }
       
-      if (emailAccount.provider === 'imap' && emailAccount.accessToken) {
+      if (emailAccount.provider === 'imap' && emailAccount.accessToken && emailAccount.refreshToken) {
         const config = JSON.parse(emailAccount.accessToken);
-        const decryptedPassword = decryptPassword(config.encryptedPassword);
+        const decryptedPassword = decryptPassword(emailAccount.refreshToken);
         
         const transporter = createSmtpTransporter({
           host: config.smtpServer,
@@ -2505,6 +2505,39 @@ export async function registerRoutes(
     res.json({ job, items });
   });
   
+  app.post('/api/bulk-email/jobs/:jobId/retry', async (req, res) => {
+    try {
+      const jobId = parseInt(req.params.jobId);
+      const job = await storage.getBulkEmailJob(jobId);
+      if (!job) return res.status(404).json({ message: "Job not found" });
+      
+      const items = await storage.getBulkEmailQueueItems(jobId);
+      const retryItems = items.filter(i => i.status === 'queued' || i.status === 'failed');
+      if (retryItems.length === 0) {
+        return res.status(400).json({ message: "발송 대기 중인 항목이 없습니다." });
+      }
+      
+      for (const item of retryItems) {
+        await storage.updateBulkEmailQueueItem(item.id, { status: 'queued', attempts: 0 });
+      }
+      
+      const alreadySent = items.filter(i => i.status === 'sent').length;
+      await storage.updateBulkEmailJob(jobId, { 
+        status: 'pending', 
+        completedAt: null,
+        sentCount: alreadySent,
+        failedCount: 0,
+      });
+      
+      const { startBulkEmailWorker } = await import('./smtp');
+      startBulkEmailWorker(jobId);
+      
+      res.json({ message: "재발송을 시작합니다.", retryCount: retryItems.length });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   // Toggle first contact completed status
   app.patch('/api/line-items/:id/first-contact', async (req, res) => {
     try {

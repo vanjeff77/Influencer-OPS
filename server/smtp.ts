@@ -149,10 +149,10 @@ export async function startBulkEmailWorker(jobId: number): Promise<void> {
     
     let smtpConfig: SmtpConfig;
     
-    if (emailAccount.provider === 'imap' && emailAccount.accessToken) {
+    if (emailAccount.provider === 'imap' && emailAccount.accessToken && emailAccount.refreshToken) {
       try {
         const config = JSON.parse(emailAccount.accessToken);
-        const decryptedPassword = decryptPassword(config.encryptedPassword);
+        const decryptedPassword = decryptPassword(emailAccount.refreshToken);
         smtpConfig = {
           host: config.smtpServer,
           port: parseInt(config.smtpPort) || 587,
@@ -163,15 +163,15 @@ export async function startBulkEmailWorker(jobId: number): Promise<void> {
       } catch (e) {
         console.error(`[BulkEmail] Failed to parse SMTP config: ${e}`);
         await storage.updateBulkEmailJob(jobId, { 
-          status: 'completed', 
+          status: 'failed', 
           completedAt: new Date() 
         });
         return;
       }
     } else {
-      console.error(`[BulkEmail] Unsupported email provider: ${emailAccount.provider}`);
+      console.error(`[BulkEmail] Unsupported email provider or missing credentials: ${emailAccount.provider}`);
       await storage.updateBulkEmailJob(jobId, { 
-        status: 'completed', 
+        status: 'failed', 
         completedAt: new Date() 
       });
       return;

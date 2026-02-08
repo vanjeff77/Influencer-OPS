@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { RefreshCw, Send, Mail, User, Clock, Plus, ExternalLink, Loader2, Trash2, Settings, Save } from "lucide-react";
+import { RefreshCw, Send, Mail, User, Clock, Plus, Loader2, Trash2, Settings, Save } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import ReactQuill from 'react-quill-new';
@@ -19,7 +19,6 @@ import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { KO } from "@/i18n/ko";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { SiGmail } from "react-icons/si";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FeatureHint } from "@/components/onboarding";
 import { TableStyleToolbar } from "@/components/table-style-toolbar";
@@ -44,7 +43,6 @@ export default function EmailCenter() {
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [isConnectOpen, setIsConnectOpen] = useState(false);
   const [composeData, setComposeData] = useState({ to: "", subject: "", body: "" });
-  const [connectType, setConnectType] = useState<"gmail" | "imap" | null>(null);
   const [emailPreset, setEmailPreset] = useState<string>("");
   const [imapData, setImapData] = useState({ email: "", password: "", imapServer: "", imapPort: "993", smtpServer: "", smtpPort: "587" });
   const [deleteAccountId, setDeleteAccountId] = useState<number | null>(null);
@@ -59,21 +57,6 @@ export default function EmailCenter() {
     }
   };
 
-  const registerGmail = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest('POST', '/api/email/gmail/register', { workspaceId });
-      return res.json();
-    },
-    onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/workspaces/:workspaceId/email-accounts', workspaceId] });
-      setIsConnectOpen(false);
-      toast({ title: "Gmail 연결 완료", description: `${data.account?.email || ''} 계정이 추가되었습니다.` });
-    },
-    onError: (err: any) => {
-      toast({ variant: "destructive", title: "Gmail 연결 실패", description: err.message || "Gmail이 Replit에 연결되어 있는지 확인하세요." });
-    }
-  });
-
   const registerImap = useMutation({
     mutationFn: async (data: any) => {
       const res = await apiRequest('POST', '/api/email/imap/register', { workspaceId, ...data });
@@ -82,7 +65,6 @@ export default function EmailCenter() {
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/workspaces/:workspaceId/email-accounts', workspaceId] });
       setIsConnectOpen(false);
-      setConnectType(null);
       setImapData({ email: "", password: "", imapServer: "", imapPort: "993", smtpServer: "", smtpPort: "587" });
       setEmailPreset("");
       toast({ title: "이메일 연결 완료", description: `${data.account?.email || ''} 계정이 추가되었습니다.` });
@@ -163,10 +145,6 @@ export default function EmailCenter() {
         toast({ title: KO.pages.email.emailsSent, description: KO.pages.email.emailsSentDesc });
       }
     });
-  };
-
-  const handleConnectGmail = () => {
-    registerGmail.mutate();
   };
 
   const handleConnectImap = () => {
@@ -257,46 +235,7 @@ export default function EmailCenter() {
                     <DialogTitle>{KO.pages.email.connectAccount}</DialogTitle>
                   </DialogHeader>
                   
-                  {!connectType ? (
-                    <div className="grid gap-4 py-4">
-                      <Button 
-                        variant="outline" 
-                        className="h-16 justify-start gap-4"
-                        onClick={() => handleConnectGmail()}
-                        disabled={registerGmail.isPending}
-                        data-testid="button-connect-gmail"
-                      >
-                        {registerGmail.isPending ? (
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                        ) : (
-                          <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-                            <SiGmail className="w-5 h-5 text-red-500" />
-                          </div>
-                        )}
-                        <div className="text-left">
-                          <div className="font-medium">{KO.pages.email.connectGmail}</div>
-                          <div className="text-xs text-muted-foreground">Replit에 연결된 Gmail 계정 사용</div>
-                        </div>
-                        {!registerGmail.isPending && <ExternalLink className="w-4 h-4 ml-auto text-muted-foreground" />}
-                      </Button>
-                      
-                      <Button 
-                        variant="outline" 
-                        className="h-16 justify-start gap-4"
-                        onClick={() => setConnectType("imap")}
-                        data-testid="button-connect-imap-option"
-                      >
-                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                          <Mail className="w-5 h-5 text-blue-500" />
-                        </div>
-                        <div className="text-left">
-                          <div className="font-medium">{KO.pages.email.connectOther}</div>
-                          <div className="text-xs text-muted-foreground">IMAP/SMTP 설정으로 연결</div>
-                        </div>
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="grid gap-4 py-4">
+                  <div className="grid gap-4 py-4">
                       <div className="grid gap-2">
                         <label className="text-sm font-medium">이메일 서비스 선택</label>
                         <Select value={emailPreset} onValueChange={handlePresetChange}>
@@ -338,14 +277,13 @@ export default function EmailCenter() {
                         </div>
                       </div>
                       <div className="flex gap-2 justify-end">
-                        <Button variant="outline" onClick={() => setConnectType(null)}>{KO.common.cancel}</Button>
+                        <Button variant="outline" onClick={() => setIsConnectOpen(false)}>{KO.common.cancel}</Button>
                         <Button onClick={handleConnectImap} disabled={registerImap.isPending} data-testid="button-connect-imap">
                           {registerImap.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                           {KO.pages.email.connect}
                         </Button>
                       </div>
                     </div>
-                  )}
                 </DialogContent>
               </Dialog>
             </div>

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -7,10 +7,12 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { FileText, CheckCircle2, XCircle, Clock, AlertCircle, Send, Loader2 } from 'lucide-react';
+import { FileText, CheckCircle2, XCircle, Clock, AlertCircle, Send, Loader2, RotateCcw } from 'lucide-react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { KO } from '@/i18n/ko';
+import { apiRequest, queryClient } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
 
 interface BulkEmailJob {
   id: number;
@@ -45,6 +47,21 @@ interface BulkEmailLogDialogProps {
 export function BulkEmailLogDialog({ open, onOpenChange, campaignId }: BulkEmailLogDialogProps) {
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
   const [filter, setFilter] = useState<'all' | 'failed'>('all');
+  const { toast } = useToast();
+  
+  const retryJob = useMutation({
+    mutationFn: async (jobId: number) => {
+      const res = await apiRequest('POST', `/api/bulk-email/jobs/${jobId}/retry`);
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      toast({ title: "재발송 시작", description: `${data.retryCount}건의 이메일을 재발송합니다.` });
+      queryClient.invalidateQueries({ queryKey: ['/api/bulk-email/jobs', campaignId.toString()] });
+    },
+    onError: (err: any) => {
+      toast({ variant: "destructive", title: "재발송 실패", description: err.message });
+    }
+  });
   
   const { data: jobs, isLoading: isLoadingJobs } = useQuery<BulkEmailJob[]>({
     queryKey: ['/api/bulk-email/jobs', campaignId.toString()],
@@ -85,6 +102,8 @@ export function BulkEmailLogDialog({ open, onOpenChange, campaignId }: BulkEmail
         return <Badge variant="secondary"><Loader2 className="w-3 h-3 mr-1 animate-spin" />{KO.common.active}</Badge>;
       case 'completed':
         return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">{KO.common.completed}</Badge>;
+      case 'failed':
+        return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">실패</Badge>;
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
@@ -151,9 +170,22 @@ export function BulkEmailLogDialog({ open, onOpenChange, campaignId }: BulkEmail
           <div className="md:col-span-2 border rounded-lg overflow-hidden">
             {selectedJobId && jobDetail ? (
               <>
-                <div className="p-2 border-b bg-muted/30 flex items-center justify-between">
+                <div className="p-2 border-b bg-muted/30 flex items-center justify-between gap-2">
                   <span className="font-medium text-sm">{KO.pages.bulkEmail.sendLog} #{selectedJobId}</span>
                   <div className="flex gap-1">
+                    {jobDetail.items.some(i => i.status === 'queued' || i.status === 'failed') && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => retryJob.mutate(selectedJobId)}
+                        disabled={retryJob.isPending}
+                        className="h-7 text-xs"
+                        data-testid="button-retry-job"
+                      >
+                        {retryJob.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <RotateCcw className="w-3 h-3 mr-1" />}
+                        재발송
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       variant={filter === 'all' ? 'default' : 'outline'}
