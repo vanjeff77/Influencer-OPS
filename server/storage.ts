@@ -696,22 +696,17 @@ export class DatabaseStorage implements IStorage {
       return { kpi: { pendingCount: 0, pendingTotal: 0, incompleteInfoCount: 0, holdCount: 0, settlementRequestCount: 0, settlementRequestTotal: 0 }, items: [] };
     }
     
-    let items = await db.select().from(campaignInfluencers).where(inArray(campaignInfluencers.campaignId, campaignIds));
+    let allItems = await db.select().from(campaignInfluencers).where(inArray(campaignInfluencers.campaignId, campaignIds));
     
-    // Filter by uploadCompletedOnly (default true)
+    // Filter by uploadCompletedOnly (default true) - applies to both KPI and list
     if (filters?.uploadCompletedOnly !== false) {
-      items = items.filter(i => i.isUploadCompleted);
+      allItems = allItems.filter(i => i.isUploadCompleted);
     }
     
-    // Filter by payoutStatus
-    if (filters?.payoutStatus) {
-      items = items.filter(i => i.payoutStatus === filters.payoutStatus);
-    }
-    
-    // Get influencer data
-    const influencerIds = Array.from(new Set(items.map(i => i.influencerId)));
-    const influencerList = influencerIds.length > 0 
-      ? await db.select().from(influencers).where(inArray(influencers.id, influencerIds))
+    // Get influencer data for ALL items (before payoutStatus filtering)
+    const allInfluencerIds = Array.from(new Set(allItems.map(i => i.influencerId)));
+    const influencerList = allInfluencerIds.length > 0 
+      ? await db.select().from(influencers).where(inArray(influencers.id, allInfluencerIds))
       : [];
     
     // Helper to check if settlement info is complete
@@ -726,7 +721,8 @@ export class DatabaseStorage implements IStorage {
       return false;
     };
     
-    const enrichedItems = items.map(item => {
+    // Enrich ALL items for KPI calculation
+    const allEnrichedItems = allItems.map(item => {
       const campaign = campaignList.find(c => c.id === item.campaignId);
       const influencer = influencerList.find(i => i.id === item.influencerId);
       const client = campaign?.clientId ? clientList.find(c => c.id === campaign.clientId) : null;
@@ -740,15 +736,25 @@ export class DatabaseStorage implements IStorage {
       };
     });
     
+    // Calculate KPI from ALL items (before payoutStatus filtering)
+    const pendingItems = allEnrichedItems.filter(i => i.payoutStatus === '지급대기');
+    const incompleteInfoItems = allEnrichedItems.filter(i => !i.settlementInfoComplete || i.payoutStatus === '정산정보미비');
+    const holdItems = allEnrichedItems.filter(i => i.payoutStatus === '보류');
+    const settlementRequestItems = allEnrichedItems.filter(i => i.payoutStatus === '정산요청');
+    
+    // Now apply payoutStatus filter for the returned items list
+    let filteredItems = allEnrichedItems;
+    if (filters?.payoutStatus) {
+      filteredItems = allEnrichedItems.filter(i => i.payoutStatus === filters.payoutStatus);
+    }
+    
     // Filter by settlementInfoComplete if specified
-    let finalItems = enrichedItems;
     if (filters?.settlementInfoComplete !== undefined) {
-      finalItems = enrichedItems.filter(i => i.settlementInfoComplete === filters.settlementInfoComplete);
+      filteredItems = filteredItems.filter(i => i.settlementInfoComplete === filters.settlementInfoComplete);
     }
     
     // Sort: incompleteInfo and pending first, then by uploadCompletedAt oldest first
-    finalItems.sort((a, b) => {
-      // Priority: 정산요청 > 정산정보미비 > 지급대기 > 증빙요청 > 증빙수령 > others
+    filteredItems.sort((a, b) => {
       const statusPriority: Record<string, number> = {
         '정산요청': 1,
         '정산정보미비': 2,
@@ -761,17 +767,10 @@ export class DatabaseStorage implements IStorage {
       const bPriority = statusPriority[b.payoutStatus || '정산정보미비'] || 5;
       if (aPriority !== bPriority) return aPriority - bPriority;
       
-      // Then by uploadCompletedAt (oldest first)
       const aDate = a.uploadCompletedAt ? new Date(a.uploadCompletedAt).getTime() : 0;
       const bDate = b.uploadCompletedAt ? new Date(b.uploadCompletedAt).getTime() : 0;
       return aDate - bDate;
     });
-    
-    // Calculate KPI based on all items (not filtered)
-    const pendingItems = enrichedItems.filter(i => i.payoutStatus === '지급대기');
-    const incompleteInfoItems = enrichedItems.filter(i => !i.settlementInfoComplete || i.payoutStatus === '정산정보미비');
-    const holdItems = enrichedItems.filter(i => i.payoutStatus === '보류');
-    const settlementRequestItems = enrichedItems.filter(i => i.payoutStatus === '정산요청');
     
     return {
       kpi: {
@@ -782,7 +781,7 @@ export class DatabaseStorage implements IStorage {
         settlementRequestCount: settlementRequestItems.length,
         settlementRequestTotal: settlementRequestItems.reduce((sum, i) => sum + (i.payoutTotal || i.offerFee || 0), 0)
       },
-      items: finalItems
+      items: filteredItems
     };
   }
 
