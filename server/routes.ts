@@ -2002,15 +2002,28 @@ export async function registerRoutes(
         return res.status(400).json({ message: "인플루언서 이메일이 없습니다" });
       }
       
-      // Get email account for signature - convert body for Gmail compatibility, keep signature intact
-      const account = conv.emailAccountId ? await storage.getEmailAccountById(conv.emailAccountId) : null;
+      const userId = (req.user as any)?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "로그인이 필요합니다" });
+      }
+
+      const [campaign] = await db.select().from(campaigns).where(eq(campaigns.id, conv.lineItem.campaignId));
+      if (!campaign) {
+        return res.status(404).json({ message: "캠페인을 찾을 수 없습니다" });
+      }
+
+      const userAccounts = await storage.getEmailAccounts(userId, campaign.workspaceId);
+      if (!userAccounts || userAccounts.length === 0) {
+        return res.status(400).json({ message: "등록된 이메일 계정이 없습니다. 설정에서 이메일 계정을 먼저 등록해주세요." });
+      }
+      const account = (conv.emailAccountId && userAccounts.find(a => a.id === conv.emailAccountId)) || userAccounts[0];
+
       const { convertToGmailCompatibleHtml } = await import('./smtp');
       let finalBody = convertToGmailCompatibleHtml(body);
-      if (account?.useSignature && account?.signature) {
+      if (account.useSignature && account.signature) {
         finalBody += `<br><br>--<br>${account.signature}`;
       }
       
-      // Parse CC emails from request (can be array or comma-separated string)
       const ccEmails: string[] = cc 
         ? (Array.isArray(cc) ? cc : cc.split(',').map((e: string) => e.trim()).filter(Boolean))
         : [];
@@ -2018,20 +2031,50 @@ export async function registerRoutes(
       let gmailMessageId: string | undefined;
       let gmailThreadId: string | undefined;
       let sendStatus = 'sent';
+      const finalSubject = conv.subjectPrefix ? `${conv.subjectPrefix} ${subject || ''}`.trim() : subject;
       
       try {
-        const { sendEmail, generateSnippet } = await import('./gmail');
-        const finalSubject = conv.subjectPrefix ? `${conv.subjectPrefix} ${subject || ''}`.trim() : subject;
-        const result = await sendEmail(toEmail, finalSubject, finalBody, conv.gmailThreadId || undefined, ccEmails);
-        gmailMessageId = result.id || undefined;
-        gmailThreadId = result.threadId || undefined;
-        
-        // Update conversation with Gmail thread ID if first message
-        if (!conv.gmailThreadId && gmailThreadId) {
-          await storage.updateConversation(conversationId, { gmailThreadId });
+        if (account.provider === 'imap') {
+          const { createSmtpTransporter, sendEmail: sendSmtpEmail } = await import('./smtp');
+          const { decryptPassword } = await import('./imap');
+          
+          if (!account.smtpHost || !account.smtpPort || !account.imapPassword) {
+            return res.status(400).json({ message: "SMTP 설정이 완료되지 않았습니다. 이메일 계정 설정을 확인해주세요." });
+          }
+          
+          const password = decryptPassword(account.imapPassword);
+          const transporter = createSmtpTransporter({
+            host: account.smtpHost,
+            port: account.smtpPort,
+            secure: account.smtpPort === 465,
+            user: account.email,
+            password,
+          });
+          
+          const result = await sendSmtpEmail(transporter, {
+            from: account.email,
+            to: toEmail,
+            cc: ccEmails.length > 0 ? ccEmails : undefined,
+            subject: finalSubject,
+            html: finalBody,
+          });
+          
+          if (!result.success) {
+            console.error('SMTP send failed:', result.error);
+            sendStatus = 'failed';
+          }
+        } else {
+          const { sendEmail: sendGmailEmail } = await import('./gmail');
+          const result = await sendGmailEmail(toEmail, finalSubject, finalBody, conv.gmailThreadId || undefined, ccEmails);
+          gmailMessageId = result.id || undefined;
+          gmailThreadId = result.threadId || undefined;
+          
+          if (!conv.gmailThreadId && gmailThreadId) {
+            await storage.updateConversation(conversationId, { gmailThreadId });
+          }
         }
-      } catch (gmailErr) {
-        console.error('Gmail send failed:', gmailErr);
+      } catch (sendErr) {
+        console.error('Email send failed:', sendErr);
         sendStatus = 'failed';
       }
       
@@ -2041,7 +2084,7 @@ export async function registerRoutes(
       const message = await storage.createConversationMessage({
         conversationId,
         direction: 'outbound',
-        senderEmail: account?.email || null,
+        senderEmail: account.email,
         senderName: null,
         recipientEmail: toEmail,
         ccEmails: ccEmails.length > 0 ? ccEmails : null,
@@ -2054,7 +2097,6 @@ export async function registerRoutes(
         sentAt: new Date()
       });
       
-      // Create timeline event
       if (influencer) {
         await storage.createTimelineEvent({
           workspaceId: influencer.workspaceId,
@@ -3225,6 +3267,9 @@ export async function registerRoutes(
       }
 
       const campaign = await storage.getCampaign(lineItem.campaignId);
+      if (!campaign) {
+        return res.status(404).json({ message: "캠페인을 찾을 수 없습니다." });
+      }
       const pdfContent = convertQuillAlignToInline(lineItem.contractContent);
 
       const fs = await import('fs');
@@ -3285,48 +3330,102 @@ export async function registerRoutes(
       const filename = `계약서_${lineItem.influencer?.name || 'contract'}_${new Date().toISOString().split('T')[0]}.pdf`;
       const body = emailBody || `안녕하세요, ${lineItem.influencer?.name}님.\n\n${campaign?.name || ''} 캠페인 계약서를 첨부하여 보내드립니다.\n\n확인 부탁드립니다.`;
 
-      const account = conversation.emailAccountId ? await storage.getEmailAccountById(conversation.emailAccountId) : null;
+      const contractUserId = (req.user as any)?.id;
+      if (!contractUserId) {
+        return res.status(401).json({ message: "로그인이 필요합니다" });
+      }
+
+      const contractUserAccounts = await storage.getEmailAccounts(contractUserId, campaign.workspaceId);
+      if (!contractUserAccounts || contractUserAccounts.length === 0) {
+        return res.status(400).json({ message: "등록된 이메일 계정이 없습니다. 설정에서 이메일 계정을 먼저 등록해주세요." });
+      }
+      const account = (conversation.emailAccountId && contractUserAccounts.find(a => a.id === conversation.emailAccountId)) || contractUserAccounts[0];
+
       const { convertToGmailCompatibleHtml } = await import('./smtp');
       let finalBody = convertToGmailCompatibleHtml(body);
-      if (account?.useSignature && account?.signature) {
+      if (account.useSignature && account.signature) {
         finalBody += `<br><br>--<br>${account.signature}`;
       }
 
-      const { sendEmail, generateSnippet } = await import('./gmail');
       const subject = conversation.subjectPrefix ? `${conversation.subjectPrefix} 계약서 송부`.trim() : '계약서 송부';
-      
-      const result = await sendEmail(
-        toEmail, 
-        subject, 
-        finalBody, 
-        conversation.gmailThreadId || undefined,
-        undefined,
-        [{
-          filename,
-          content: pdfBuffer,
-          mimeType: 'application/pdf',
-        }]
-      );
 
-      if (!conversation.gmailThreadId && result.threadId) {
-        await storage.updateConversation(conversation.id, { gmailThreadId: result.threadId });
+      let gmailMessageId: string | null = null;
+      let gmailThreadId: string | null = null;
+      let sendStatus = 'sent';
+
+      try {
+        if (account.provider === 'imap') {
+          const { createSmtpTransporter, sendEmail: sendSmtpEmail } = await import('./smtp');
+          const { decryptPassword } = await import('./imap');
+
+          if (!account.smtpHost || !account.smtpPort || !account.imapPassword) {
+            return res.status(400).json({ message: "SMTP 설정이 완료되지 않았습니다." });
+          }
+
+          const password = decryptPassword(account.imapPassword);
+          const transporter = createSmtpTransporter({
+            host: account.smtpHost,
+            port: account.smtpPort,
+            secure: account.smtpPort === 465,
+            user: account.email,
+            password,
+          });
+
+          const result = await sendSmtpEmail(transporter, {
+            from: account.email,
+            to: toEmail,
+            subject,
+            html: finalBody,
+            attachments: [{
+              filename,
+              content: pdfBuffer,
+              contentType: 'application/pdf',
+            }],
+          });
+
+          if (!result.success) {
+            throw new Error(result.error || 'SMTP 전송 실패');
+          }
+        } else {
+          const { sendEmail: sendGmailEmail } = await import('./gmail');
+          const result = await sendGmailEmail(
+            toEmail, subject, finalBody,
+            conversation.gmailThreadId || undefined,
+            undefined,
+            [{ filename, content: pdfBuffer, mimeType: 'application/pdf' }]
+          );
+          gmailMessageId = result.id || null;
+          gmailThreadId = result.threadId || null;
+
+          if (!conversation.gmailThreadId && gmailThreadId) {
+            await storage.updateConversation(conversation.id, { gmailThreadId });
+          }
+        }
+      } catch (sendErr: any) {
+        console.error('Contract email send failed:', sendErr);
+        sendStatus = 'failed';
       }
 
+      const { generateSnippet } = await import('./gmail');
       const snippet = generateSnippet(finalBody);
       await storage.createConversationMessage({
         conversationId: conversation.id,
         direction: 'outbound',
-        senderEmail: account?.email || null,
+        senderEmail: account.email,
         senderName: null,
         recipientEmail: toEmail,
         ccEmails: null,
         snippet,
         bodyHtml: finalBody,
         bodyText: finalBody.replace(/<[^>]*>/g, ''),
-        gmailMessageId: result.id || null,
-        gmailThreadId: result.threadId || null,
-        sendStatus: 'sent',
+        gmailMessageId,
+        gmailThreadId,
+        sendStatus,
       });
+
+      if (sendStatus === 'failed') {
+        return res.status(500).json({ message: '계약서 이메일 발송에 실패했습니다.' });
+      }
 
       res.json({ success: true, message: '계약서가 이메일로 발송되었습니다.' });
     } catch (err: any) {

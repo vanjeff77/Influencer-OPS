@@ -11,12 +11,19 @@ interface SmtpConfig {
   password: string;
 }
 
+interface SmtpAttachment {
+  filename: string;
+  content: Buffer;
+  contentType?: string;
+}
+
 interface SendEmailOptions {
   from: string;
   to: string;
   cc?: string[];
   subject: string;
   html: string;
+  attachments?: SmtpAttachment[];
 }
 
 export function createSmtpTransporter(config: SmtpConfig): Transporter {
@@ -38,13 +45,21 @@ export function createSmtpTransporter(config: SmtpConfig): Transporter {
 
 export async function sendEmail(transporter: Transporter, options: SendEmailOptions): Promise<{ success: boolean; messageId?: string; error?: string }> {
   try {
-    const info = await transporter.sendMail({
+    const mailOptions: any = {
       from: options.from,
       to: options.to,
       cc: options.cc && options.cc.length > 0 ? options.cc.join(', ') : undefined,
       subject: options.subject,
       html: options.html,
-    });
+    };
+    if (options.attachments && options.attachments.length > 0) {
+      mailOptions.attachments = options.attachments.map(att => ({
+        filename: att.filename,
+        content: att.content,
+        contentType: att.contentType || 'application/octet-stream',
+      }));
+    }
+    const info = await transporter.sendMail(mailOptions);
     
     return { success: true, messageId: info.messageId };
   } catch (error: any) {

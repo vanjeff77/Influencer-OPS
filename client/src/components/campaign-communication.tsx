@@ -421,7 +421,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
             <MessageComposer 
               conversationId={existingConv?.id} 
               influencerEmail={selectedLineItem.influencer?.email}
-              lastMessageCc={conversationDetail?.messages?.slice().reverse().find(m => m.direction === 'outbound')?.ccEmails}
+              lastMessageCc={conversationDetail?.messages?.[0]?.ccEmails}
               onSent={() => refetchConversation()}
             />
           </>
