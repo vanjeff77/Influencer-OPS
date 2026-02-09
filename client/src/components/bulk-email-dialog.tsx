@@ -273,18 +273,6 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
                   />
                 </div>
                 
-                {selectedAccount?.useSignature && selectedAccount?.signature && (
-                  <div className="mt-12">
-                    <Label className="text-muted-foreground text-xs">서명 미리보기</Label>
-                    <div className="border rounded-md p-3 mt-1 bg-muted/30">
-                      <div className="text-xs text-muted-foreground mb-2">--</div>
-                      <div
-                        className="prose prose-sm max-w-none dark:prose-invert"
-                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedAccount.signature) }}
-                      />
-                    </div>
-                  </div>
-                )}
               </div>
               
               <div className="flex justify-end pt-4 border-t mt-2 shrink-0">
