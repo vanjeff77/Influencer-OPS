@@ -150,6 +150,7 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
       const res = await apiRequest('POST', '/api/bulk-email/start', {
         subject,
         body,
+        cc: cc.trim() || undefined,
         campaignId,
         emailAccountId: parseInt(selectedEmailAccountId),
         eligible: validation?.eligible || [],

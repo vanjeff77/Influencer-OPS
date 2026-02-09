@@ -219,9 +219,12 @@ export async function startBulkEmailWorker(jobId: number): Promise<void> {
         attempts: (item.attempts || 0) + 1,
       });
       
+      const ccEmails = job.cc ? job.cc.split(',').map((e: string) => e.trim()).filter(Boolean) : [];
+      
       const result = await sendEmail(transporter, {
         from: emailAccount.email,
         to: item.email,
+        cc: ccEmails.length > 0 ? ccEmails : undefined,
         subject: item.renderedSubject,
         html: item.renderedBody,
       });

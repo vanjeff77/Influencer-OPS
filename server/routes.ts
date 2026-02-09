@@ -2279,7 +2279,7 @@ export async function registerRoutes(
     try {
       if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
       
-      const { subject, body, testEmail, emailAccountId, influencerId, campaignId } = req.body;
+      const { subject, body, cc, testEmail, emailAccountId, influencerId, campaignId } = req.body;
       const { renderTemplate, createSmtpTransporter, sendEmail, convertToGmailCompatibleHtml } = await import('./smtp');
       const { decryptPassword } = await import('./imap');
       
@@ -2294,6 +2294,10 @@ export async function registerRoutes(
       if (!emailAccount) {
         return res.status(404).json({ message: "이메일 계정을 찾을 수 없습니다" });
       }
+      
+      const ccEmails: string[] = cc
+        ? (typeof cc === 'string' ? cc.split(',').map((e: string) => e.trim()).filter(Boolean) : Array.isArray(cc) ? cc : [])
+        : [];
       
       const variables: Record<string, string> = {
         influencer_name: influencer?.name || '[인플루언서 이름]',
@@ -2322,6 +2326,7 @@ export async function registerRoutes(
         const result = await sendEmail(transporter, {
           from: emailAccount.email,
           to: testEmail,
+          cc: ccEmails.length > 0 ? ccEmails : undefined,
           subject: renderedSubject,
           html: renderedBody,
         });
@@ -2446,13 +2451,15 @@ export async function registerRoutes(
       if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
       const user = req.user as any;
       
-      const { subject, body, campaignId, emailAccountId, eligible, useSignature: useSignatureOverride } = req.body;
+      const { subject, body, cc, campaignId, emailAccountId, eligible, useSignature: useSignatureOverride } = req.body;
       const { renderTemplate, startBulkEmailWorker, convertToGmailCompatibleHtml } = await import('./smtp');
       
       const campaign = await storage.getCampaign(campaignId);
       if (!campaign) {
         return res.status(404).json({ message: "캠페인을 찾을 수 없습니다" });
       }
+      
+      const ccString = cc ? (typeof cc === 'string' ? cc.trim() : '') : '';
       
       const emailAccount = await storage.getEmailAccountById(emailAccountId);
       const shouldUseSignature = useSignatureOverride !== undefined ? useSignatureOverride : (emailAccount?.useSignature ?? true);
@@ -2464,6 +2471,7 @@ export async function registerRoutes(
         emailAccountId,
         templateSubject: subject,
         templateBody: body,
+        cc: ccString || null,
         totalCount: eligible.length,
         sentCount: 0,
         failedCount: 0,

@@ -322,11 +322,12 @@ export const bulkEmailJobs = pgTable("bulk_email_jobs", {
   emailAccountId: integer("email_account_id").notNull(),
   templateSubject: text("template_subject").notNull(),
   templateBody: text("template_body").notNull(),
+  cc: text("cc"),
   totalCount: integer("total_count").default(0),
   sentCount: integer("sent_count").default(0),
   failedCount: integer("failed_count").default(0),
   skippedCount: integer("skipped_count").default(0),
-  status: text("status").default("pending"), // pending, processing, completed, cancelled
+  status: text("status").default("pending"),
   createdBy: integer("created_by").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   completedAt: timestamp("completed_at"),
