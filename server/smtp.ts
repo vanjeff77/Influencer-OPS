@@ -52,6 +52,28 @@ export async function sendEmail(transporter: Transporter, options: SendEmailOpti
   }
 }
 
+export function convertToGmailCompatibleHtml(html: string): string {
+  let result = html;
+  
+  result = result.replace(/<p><br\s*\/?><\/p>/gi, '<div><br></div>');
+  
+  result = result.replace(/<p([^>]*)>([\s\S]*?)<\/p>/gi, '<div$1>$2</div>');
+  
+  result = result.replace(/<h1><strong>([\s\S]*?)<\/strong><\/h1>/gi, '<div style="font-size:20px;font-weight:bold">$1</div>');
+  result = result.replace(/<h1>([\s\S]*?)<\/h1>/gi, '<div style="font-size:20px;font-weight:bold">$1</div>');
+  
+  result = result.replace(/&nbsp;/g, ' ');
+  
+  result = result.replace(/(<img[^>]*)\ssrc="data:image\/[^"]*"([^>]*>)/gi, '');
+  
+  result = result.replace(/<div><\/div>/g, '');
+  
+  result = result.replace(/(<div[^>]*>)\s+/g, '$1');
+  result = result.replace(/\s+(<\/div>)/g, '$1');
+  
+  return result;
+}
+
 export function renderTemplate(template: string, variables: Record<string, string>): string {
   let result = template;
   for (const [key, value] of Object.entries(variables)) {

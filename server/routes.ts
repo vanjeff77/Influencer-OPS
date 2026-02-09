@@ -2226,7 +2226,7 @@ export async function registerRoutes(
   app.post('/api/bulk-email/preview', async (req, res) => {
     try {
       const { subject, body, influencerId, campaignId } = req.body;
-      const { renderTemplate, validateVariables } = await import('./smtp');
+      const { renderTemplate, validateVariables, convertToGmailCompatibleHtml } = await import('./smtp');
       
       const influencer = await storage.getInfluencer(influencerId);
       const campaign = await storage.getCampaign(campaignId);
@@ -2253,7 +2253,7 @@ export async function registerRoutes(
       }
       
       const renderedSubject = renderTemplate(subject, variables);
-      const renderedBody = renderTemplate(body, variables);
+      const renderedBody = convertToGmailCompatibleHtml(renderTemplate(body, variables));
       
       res.json({ 
         valid: true,
@@ -2272,7 +2272,7 @@ export async function registerRoutes(
       if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
       
       const { subject, body, testEmail, emailAccountId, influencerId, campaignId } = req.body;
-      const { renderTemplate, createSmtpTransporter, sendEmail } = await import('./smtp');
+      const { renderTemplate, createSmtpTransporter, sendEmail, convertToGmailCompatibleHtml } = await import('./smtp');
       const { decryptPassword } = await import('./imap');
       
       if (!testEmail) {
@@ -2295,10 +2295,10 @@ export async function registerRoutes(
       const renderedSubject = `[테스트] ${renderTemplate(subject, variables)}`;
       let renderedBody = renderTemplate(body, variables);
       
-      // Add signature if enabled
       if (emailAccount.useSignature && emailAccount.signature) {
         renderedBody += `<br><br>--<br>${emailAccount.signature}`;
       }
+      renderedBody = convertToGmailCompatibleHtml(renderedBody);
       
       if (emailAccount.provider === 'imap' && emailAccount.accessToken && emailAccount.refreshToken) {
         const config = JSON.parse(emailAccount.accessToken);
@@ -2335,7 +2335,7 @@ export async function registerRoutes(
   // Validate recipients and get summary before sending
   app.post('/api/bulk-email/validate', async (req, res) => {
     try {
-      const { subject, body, campaignId, lineItemIds } = req.body;
+      const { subject, body, campaignId, lineItemIds, allowResend } = req.body;
       const { validateVariables } = await import('./smtp');
       
       const campaign = await storage.getCampaign(campaignId);
@@ -2357,7 +2357,7 @@ export async function registerRoutes(
         const influencer = lineItem.influencer;
         if (!influencer) continue;
         
-        if (sentInfluencerIds.has(influencer.id)) {
+        if (!allowResend && sentInfluencerIds.has(influencer.id)) {
           excluded.push({
             lineItemId: lineItem.id,
             influencerId: influencer.id,
@@ -2440,14 +2440,13 @@ export async function registerRoutes(
       const user = req.user as any;
       
       const { subject, body, campaignId, emailAccountId, eligible, useSignature: useSignatureOverride } = req.body;
-      const { renderTemplate, startBulkEmailWorker } = await import('./smtp');
+      const { renderTemplate, startBulkEmailWorker, convertToGmailCompatibleHtml } = await import('./smtp');
       
       const campaign = await storage.getCampaign(campaignId);
       if (!campaign) {
         return res.status(404).json({ message: "캠페인을 찾을 수 없습니다" });
       }
       
-      // Get email account for signature
       const emailAccount = await storage.getEmailAccountById(emailAccountId);
       const shouldUseSignature = useSignatureOverride !== undefined ? useSignatureOverride : (emailAccount?.useSignature ?? true);
       const signatureHtml = shouldUseSignature && emailAccount?.signature ? `<br><br>--<br>${emailAccount.signature}` : '';
@@ -2473,7 +2472,7 @@ export async function registerRoutes(
         influencerId: item.influencerId,
         email: item.email,
         renderedSubject: renderTemplate(subject, item.variables),
-        renderedBody: renderTemplate(body, item.variables) + signatureHtml,
+        renderedBody: convertToGmailCompatibleHtml(renderTemplate(body, item.variables) + signatureHtml),
         variables: item.variables,
         status: 'queued' as const,
       }));

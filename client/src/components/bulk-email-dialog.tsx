@@ -12,7 +12,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
-import { Mail, Send, Eye, AlertCircle, Check, X, Loader2, FileText, Users, TestTube } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Mail, Send, Eye, AlertCircle, Check, X, Loader2, FileText, Users, TestTube, RotateCcw } from 'lucide-react';
 import DOMPurify from 'dompurify';
 import { KO } from '@/i18n/ko';
 
@@ -78,6 +79,7 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
   const [selectedEmailAccountId, setSelectedEmailAccountId] = useState<string>('');
   const [previewInfluencerId, setPreviewInfluencerId] = useState<number | null>(null);
   const [testEmail, setTestEmail] = useState('');
+  const [allowResend, setAllowResend] = useState(false);
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const bodyRef = useRef(body);
   const isComposing = useRef(false);
@@ -101,6 +103,36 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
           isComposing.current = false;
           setTimeout(() => setBody(bodyRef.current), 0);
         });
+        
+        editor.root.addEventListener('paste', (e: ClipboardEvent) => {
+          const clipboardHtml = e.clipboardData?.getData('text/html');
+          if (clipboardHtml && clipboardHtml.includes('<img')) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            let cleanedHtml = clipboardHtml;
+            cleanedHtml = cleanedHtml.replace(/<!--StartFragment-->/gi, '');
+            cleanedHtml = cleanedHtml.replace(/<!--EndFragment-->/gi, '');
+            
+            const bodyMatch = cleanedHtml.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+            if (bodyMatch) {
+              cleanedHtml = bodyMatch[1];
+            }
+            
+            const metaIndex = cleanedHtml.indexOf('<meta');
+            if (metaIndex === -1 || cleanedHtml.indexOf('<') < metaIndex) {
+              // no meta to strip
+            } else {
+              cleanedHtml = cleanedHtml.replace(/<meta[^>]*>/gi, '');
+            }
+            
+            cleanedHtml = cleanedHtml.replace(/<img([^>]*)src="data:image\/[^"]*"([^>]*)>/gi, '');
+            
+            const range = editor.getSelection(true);
+            editor.clipboard.dangerouslyPasteHTML(range.index, cleanedHtml, 'user');
+          }
+        });
+        
         compositionSetup.current = true;
       }
     }
@@ -151,11 +183,12 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
   });
   
   const validateMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (resend?: boolean) => {
       const res = await apiRequest('POST', '/api/bulk-email/validate', {
         subject,
         body,
         campaignId,
+        allowResend: resend ?? allowResend,
       });
       return res.json();
     },
@@ -191,6 +224,7 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
     setValidation(null);
     setPreviewInfluencerId(null);
     setTestEmail('');
+    setAllowResend(false);
     compositionSetup.current = false;
   };
   
@@ -200,7 +234,7 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
   };
   
   const handleGoToConfirm = () => {
-    validateMutation.mutate();
+    validateMutation.mutate(allowResend);
     setStep('confirm');
   };
   
@@ -451,6 +485,23 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
                           <div className="text-sm text-muted-foreground">{KO.pages.bulkEmail.excluded}</div>
                         </CardContent>
                       </Card>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="allowResend"
+                        checked={allowResend}
+                        onCheckedChange={(checked) => {
+                          const newVal = !!checked;
+                          setAllowResend(newVal);
+                          validateMutation.mutate(newVal);
+                        }}
+                        data-testid="checkbox-allow-resend"
+                      />
+                      <label htmlFor="allowResend" className="text-sm cursor-pointer flex items-center gap-1.5">
+                        <RotateCcw className="w-3.5 h-3.5 text-muted-foreground" />
+                        기존 발송 이력이 있는 인플루언서도 포함
+                      </label>
                     </div>
                     
                     {validation.excluded.length > 0 && (
