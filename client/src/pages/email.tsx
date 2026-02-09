@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { RefreshCw, Send, Mail, User, Clock, Plus, Loader2, Trash2, Settings, Save } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { TiptapEditor } from '@/components/tiptap-editor';
+import DOMPurify from "dompurify";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -473,19 +473,31 @@ export default function EmailCenter() {
             </div>
             
             <div className="space-y-2">
-              <Label>서명 내용</Label>
-              <TiptapEditor
+              <Label>서명 HTML 코드</Label>
+              <Textarea
                 value={signatureContent}
-                onChange={setSignatureContent}
-                toolbar="email"
-                placeholder="서명을 입력하세요..."
-                data-testid="editor-signature"
+                onChange={(e) => setSignatureContent(e.target.value)}
+                placeholder="<table>...</table> 형식의 HTML 서명을 붙여넣으세요"
+                className="font-mono text-xs min-h-[160px] resize-y"
+                data-testid="textarea-signature-html"
               />
-
               <p className="text-xs text-muted-foreground">
-                이미지는 URL 링크로 삽입하거나 직접 붙여넣기 할 수 있습니다.
+                Gmail이나 외부 서명 생성기에서 만든 HTML을 그대로 붙여넣으세요.
               </p>
             </div>
+
+            {signatureContent && (
+              <div className="space-y-2">
+                <Label>미리보기</Label>
+                <div className="border rounded-md p-4 bg-background">
+                  <div
+                    className="prose prose-sm max-w-none dark:prose-invert"
+                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(signatureContent, { ADD_TAGS: ['style'], ADD_ATTR: ['style', 'target', 'rel'] }) }}
+                    data-testid="signature-preview"
+                  />
+                </div>
+              </div>
+            )}
           </div>
           
           <div className="flex justify-end gap-2">
