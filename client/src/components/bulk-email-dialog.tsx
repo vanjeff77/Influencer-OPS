@@ -220,7 +220,7 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
           
           <div className="flex-1 overflow-hidden">
             <TabsContent value="template" className="h-full flex flex-col overflow-hidden p-1">
-              <div className="flex-1 overflow-auto space-y-4">
+              <div className="flex-1 min-h-0 overflow-auto space-y-4 pb-2">
                 <div>
                   <Label>{KO.pages.bulkEmail.selectAccount}</Label>
                   {isLoadingAccounts ? (
@@ -263,7 +263,7 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
                   <p className="text-xs text-muted-foreground mt-1">모든 이메일에 동일하게 적용됩니다</p>
                 </div>
                 
-                <div>
+                <div className="flex flex-col">
                   <Label>{KO.pages.bulkEmail.body}</Label>
                   <TiptapEditor
                     value={body}
@@ -272,10 +272,9 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
                     data-testid="editor-body"
                   />
                 </div>
-                
               </div>
               
-              <div className="flex justify-end pt-4 border-t mt-2 shrink-0">
+              <div className="flex justify-end pt-3 border-t shrink-0">
                 <Button onClick={() => setStep('preview')} disabled={!selectedEmailAccountId} data-testid="button-next-preview">
                   {KO.pages.bulkEmail.next}
                 </Button>
