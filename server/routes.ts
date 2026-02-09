@@ -9,6 +9,7 @@ import bcrypt from "bcryptjs";
 import { db } from "./db";
 import { campaignInfluencers, campaigns, influencers, users, workspaceMembers, workspaces } from "@shared/schema";
 import { eq, and, or, inArray } from "drizzle-orm";
+import { getImapSmtpSettings } from "./smtp";
 
 // Singleton browser instance for PDF generation
 let sharedBrowser: any = null;
@@ -1560,14 +1561,15 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Account already registered" });
       }
       
-      // Create new email account with encrypted password for this user
-      const imapSettings = JSON.stringify({ imapServer, imapPort, smtpServer, smtpPort });
       const encryptedPassword = encryptPassword(password);
       const account = await storage.createEmailAccount(userId, workspaceId, {
         email,
         provider: 'imap',
-        accessToken: imapSettings,
-        refreshToken: encryptedPassword,
+        imapHost: imapServer,
+        imapPort: parseInt(imapPort) || 993,
+        smtpHost: smtpServer,
+        smtpPort: parseInt(smtpPort) || 587,
+        imapPassword: encryptedPassword,
       });
       
       res.status(201).json({ account, message: "IMAP account registered successfully" });
@@ -1651,21 +1653,24 @@ export async function registerRoutes(
       }
       
       // Check if it's an IMAP account
-      if (account.provider === 'imap' && account.accessToken) {
+      if (account.provider === 'imap') {
         const { fetchEmails, decryptPassword } = await import('./imap');
         
-        const settings = JSON.parse(account.accessToken);
-        const password = decryptPassword(account.refreshToken || '');
+        const { imapHost, imapPort: imapPortNum, imapPassword: encPwd } = getImapSmtpSettings(account);
+        if (!imapHost || !encPwd) {
+          return res.status(400).json({ message: "IMAP 설정이 완료되지 않았습니다." });
+        }
+        const password = decryptPassword(encPwd);
         
         const imapConfig = {
           user: account.email,
           password: password,
-          host: settings.imapServer,
-          port: parseInt(settings.imapPort) || 993,
+          host: imapHost,
+          port: imapPortNum,
           tls: true,
         };
         
-        console.log('Connecting to IMAP server:', settings.imapServer, 'for', account.email);
+        console.log('Connecting to IMAP server:', imapHost, 'for', account.email);
         
         const emails = await fetchEmails(imapConfig, 'INBOX', 20);
         console.log(`Fetched ${emails.length} emails from IMAP`);
@@ -1833,17 +1838,20 @@ export async function registerRoutes(
         return res.status(404).json({ message: "이메일 계정을 찾을 수 없습니다" });
       }
       
-      if (account.provider === 'imap' && account.accessToken) {
+      if (account.provider === 'imap') {
         const { searchThreads, decryptPassword } = await import('./imap');
         
-        const settings = JSON.parse(account.accessToken);
-        const password = decryptPassword(account.refreshToken || '');
+        const { imapHost, imapPort: imapPortNum, imapPassword: encPwd } = getImapSmtpSettings(account);
+        if (!imapHost || !encPwd) {
+          return res.status(400).json({ message: "IMAP 설정이 완료되지 않았습니다." });
+        }
+        const password = decryptPassword(encPwd);
         
         const imapConfig = {
           user: account.email,
           password: password,
-          host: settings.imapServer,
-          port: parseInt(settings.imapPort) || 993,
+          host: imapHost,
+          port: imapPortNum,
           tls: true,
         };
         
@@ -1910,17 +1918,20 @@ export async function registerRoutes(
         });
       }
       
-      if (account.provider === 'imap' && account.accessToken) {
+      if (account.provider === 'imap') {
         const { fetchThreadMessages, decryptPassword } = await import('./imap');
         
-        const settings = JSON.parse(account.accessToken);
-        const password = decryptPassword(account.refreshToken || '');
+        const { imapHost, imapPort: imapPortNum, imapPassword: encPwd } = getImapSmtpSettings(account);
+        if (!imapHost || !encPwd) {
+          return res.status(400).json({ message: "IMAP 설정이 완료되지 않았습니다." });
+        }
+        const password = decryptPassword(encPwd);
         
         const imapConfig = {
           user: account.email,
           password: password,
-          host: settings.imapServer,
-          port: parseInt(settings.imapPort) || 993,
+          host: imapHost,
+          port: imapPortNum,
           tls: true,
         };
         
@@ -2038,15 +2049,16 @@ export async function registerRoutes(
           const { createSmtpTransporter, sendEmail: sendSmtpEmail } = await import('./smtp');
           const { decryptPassword } = await import('./imap');
           
-          if (!account.smtpHost || !account.smtpPort || !account.imapPassword) {
+          const replySmtp = getImapSmtpSettings(account);
+          if (!replySmtp.smtpHost || !replySmtp.imapPassword) {
             return res.status(400).json({ message: "SMTP 설정이 완료되지 않았습니다. 이메일 계정 설정을 확인해주세요." });
           }
           
-          const password = decryptPassword(account.imapPassword);
+          const password = decryptPassword(replySmtp.imapPassword);
           const transporter = createSmtpTransporter({
-            host: account.smtpHost,
-            port: account.smtpPort,
-            secure: account.smtpPort === 465,
+            host: replySmtp.smtpHost,
+            port: replySmtp.smtpPort,
+            secure: replySmtp.smtpPort === 465,
             user: account.email,
             password,
           });
@@ -2353,14 +2365,14 @@ export async function registerRoutes(
         renderedBody += `<br><br>--<br>${emailAccount.signature}`;
       }
       
-      if (emailAccount.provider === 'imap' && emailAccount.accessToken && emailAccount.refreshToken) {
-        const config = JSON.parse(emailAccount.accessToken);
-        const decryptedPassword = decryptPassword(emailAccount.refreshToken);
+      const bulkSmtpSettings = getImapSmtpSettings(emailAccount);
+      if (emailAccount.provider === 'imap' && bulkSmtpSettings.smtpHost && bulkSmtpSettings.imapPassword) {
+        const decryptedPassword = decryptPassword(bulkSmtpSettings.imapPassword);
         
         const transporter = createSmtpTransporter({
-          host: config.smtpServer,
-          port: parseInt(config.smtpPort) || 587,
-          secure: parseInt(config.smtpPort) === 465,
+          host: bulkSmtpSettings.smtpHost,
+          port: bulkSmtpSettings.smtpPort,
+          secure: bulkSmtpSettings.smtpPort === 465,
           user: emailAccount.email,
           password: decryptedPassword,
         });
@@ -3358,15 +3370,16 @@ export async function registerRoutes(
           const { createSmtpTransporter, sendEmail: sendSmtpEmail } = await import('./smtp');
           const { decryptPassword } = await import('./imap');
 
-          if (!account.smtpHost || !account.smtpPort || !account.imapPassword) {
+          const contractSmtp = getImapSmtpSettings(account);
+          if (!contractSmtp.smtpHost || !contractSmtp.imapPassword) {
             return res.status(400).json({ message: "SMTP 설정이 완료되지 않았습니다." });
           }
 
-          const password = decryptPassword(account.imapPassword);
+          const password = decryptPassword(contractSmtp.imapPassword);
           const transporter = createSmtpTransporter({
-            host: account.smtpHost,
-            port: account.smtpPort,
-            secure: account.smtpPort === 465,
+            host: contractSmtp.smtpHost,
+            port: contractSmtp.smtpPort,
+            secure: contractSmtp.smtpPort === 465,
             user: account.email,
             password,
           });

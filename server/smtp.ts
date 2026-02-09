@@ -3,6 +3,48 @@ import type { Transporter } from 'nodemailer';
 import { storage } from './storage';
 import { decryptPassword } from './imap';
 
+export function getImapSmtpSettings(account: any): {
+  imapHost: string | null;
+  imapPort: number;
+  smtpHost: string | null;
+  smtpPort: number;
+  imapPassword: string | null;
+} {
+  const fromColumns = {
+    imapHost: account.imapHost || null,
+    imapPort: typeof account.imapPort === 'number' ? account.imapPort : parseInt(account.imapPort) || 993,
+    smtpHost: account.smtpHost || null,
+    smtpPort: typeof account.smtpPort === 'number' ? account.smtpPort : parseInt(account.smtpPort) || 587,
+    imapPassword: account.imapPassword || null,
+  };
+
+  if (fromColumns.imapHost && fromColumns.smtpHost && fromColumns.imapPassword) {
+    return fromColumns;
+  }
+  
+  if (account.accessToken) {
+    try {
+      const config = JSON.parse(account.accessToken);
+      const fromLegacy = {
+        imapHost: config.imapServer || null,
+        imapPort: parseInt(config.imapPort) || 993,
+        smtpHost: config.smtpServer || null,
+        smtpPort: parseInt(config.smtpPort) || 587,
+        imapPassword: account.refreshToken || null,
+      };
+      return {
+        imapHost: fromColumns.imapHost || fromLegacy.imapHost,
+        imapPort: fromColumns.imapHost ? fromColumns.imapPort : fromLegacy.imapPort,
+        smtpHost: fromColumns.smtpHost || fromLegacy.smtpHost,
+        smtpPort: fromColumns.smtpHost ? fromColumns.smtpPort : fromLegacy.smtpPort,
+        imapPassword: fromColumns.imapPassword || fromLegacy.imapPassword,
+      };
+    } catch {}
+  }
+  
+  return fromColumns;
+}
+
 interface SmtpConfig {
   host: string;
   port: number;
@@ -186,14 +228,22 @@ export async function startBulkEmailWorker(jobId: number): Promise<void> {
     
     let smtpConfig: SmtpConfig;
     
-    if (emailAccount.provider === 'imap' && emailAccount.accessToken && emailAccount.refreshToken) {
+    if (emailAccount.provider === 'imap') {
       try {
-        const config = JSON.parse(emailAccount.accessToken);
-        const decryptedPassword = decryptPassword(emailAccount.refreshToken);
+        const { smtpHost, smtpPort, imapPassword } = getImapSmtpSettings(emailAccount);
+        if (!smtpHost || !imapPassword) {
+          console.error(`[BulkEmail] Missing SMTP settings for account ${emailAccount.email}`);
+          await storage.updateBulkEmailJob(jobId, { 
+            status: 'failed', 
+            completedAt: new Date() 
+          });
+          return;
+        }
+        const decryptedPassword = decryptPassword(imapPassword);
         smtpConfig = {
-          host: config.smtpServer,
-          port: parseInt(config.smtpPort) || 587,
-          secure: parseInt(config.smtpPort) === 465,
+          host: smtpHost,
+          port: smtpPort,
+          secure: smtpPort === 465,
           user: emailAccount.email,
           password: decryptedPassword,
         };
