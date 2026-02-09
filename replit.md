@@ -80,7 +80,7 @@ Preferred communication style: Simple, everyday language.
 - **Security**: IMAP password encryption (AES-256-CBC), Zod validation, authentication and workspace authorization checks for sensitive operations.
 - **Contract Template Management (계약서 템플릿)**:
     - **Template CRUD**: Full create, read, update, delete operations for contract templates in Settings page with default template marking.
-    - **Rich Text Editor**: React-Quill WYSIWYG editor for template content with bold, italic, underline, headers, lists, colors, and tables.
+    - **Rich Text Editor**: TipTap (ProseMirror-based) WYSIWYG editor for template content, email composition, and signature editing with bold, italic, underline, headers, lists, colors, links, images, and tables. Reusable component at `client/src/components/tiptap-editor.tsx` with toolbar variants (full/email/minimal).
     - **Variable Substitution**: Supports {{인플루언서명}}, {{캠페인명}}, {{금액}}, {{날짜}}, {{초안예정일}}, {{업로드예정일}}, {{클라이언트명}}, {{이메일}}, {{연락처}} placeholders.
     - **Dual Format Export**: 
         - DOCX: Uses html-to-docx library for full HTML support with 맑은 고딕 font.

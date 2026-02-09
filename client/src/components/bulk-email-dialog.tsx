@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback, lazy, Suspense } from 'react';
+import { useState, useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -16,9 +16,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Mail, Send, Eye, AlertCircle, Check, X, Loader2, FileText, Users, TestTube, RotateCcw } from 'lucide-react';
 import DOMPurify from 'dompurify';
 import { KO } from '@/i18n/ko';
-
-const ReactQuill = lazy(() => import('react-quill-new'));
-import 'react-quill-new/dist/quill.snow.css';
+import { TiptapEditor } from '@/components/tiptap-editor';
 
 interface CampaignLineItem {
   id: number;
@@ -81,62 +79,6 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
   const [testEmail, setTestEmail] = useState('');
   const [allowResend, setAllowResend] = useState(false);
   const [validation, setValidation] = useState<ValidationResult | null>(null);
-  const bodyRef = useRef(body);
-  const isComposing = useRef(false);
-  const quillRef = useRef<any>(null);
-  const compositionSetup = useRef(false);
-
-  const handleBodyChange = useCallback((value: string) => {
-    bodyRef.current = value;
-    if (!isComposing.current) {
-      setBody(value);
-    }
-  }, []);
-
-  const setupCompositionHandlers = useCallback((ref: any) => {
-    quillRef.current = ref;
-    if (ref && !compositionSetup.current) {
-      const editor = ref.getEditor?.();
-      if (editor?.root) {
-        editor.root.addEventListener('compositionstart', () => { isComposing.current = true; });
-        editor.root.addEventListener('compositionend', () => {
-          isComposing.current = false;
-          setTimeout(() => setBody(bodyRef.current), 0);
-        });
-        
-        editor.root.addEventListener('paste', (e: ClipboardEvent) => {
-          const clipboardHtml = e.clipboardData?.getData('text/html');
-          if (clipboardHtml && clipboardHtml.includes('<img')) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            let cleanedHtml = clipboardHtml;
-            cleanedHtml = cleanedHtml.replace(/<!--StartFragment-->/gi, '');
-            cleanedHtml = cleanedHtml.replace(/<!--EndFragment-->/gi, '');
-            
-            const bodyMatch = cleanedHtml.match(/<body[^>]*>([\s\S]*)<\/body>/i);
-            if (bodyMatch) {
-              cleanedHtml = bodyMatch[1];
-            }
-            
-            const metaIndex = cleanedHtml.indexOf('<meta');
-            if (metaIndex === -1 || cleanedHtml.indexOf('<') < metaIndex) {
-              // no meta to strip
-            } else {
-              cleanedHtml = cleanedHtml.replace(/<meta[^>]*>/gi, '');
-            }
-            
-            cleanedHtml = cleanedHtml.replace(/<img([^>]*)src="data:image\/[^"]*"([^>]*)>/gi, '');
-            
-            const range = editor.getSelection(true);
-            editor.clipboard.dangerouslyPasteHTML(range.index, cleanedHtml, 'user');
-          }
-        });
-        
-        compositionSetup.current = true;
-      }
-    }
-  }, []);
   
   
   const { data: emailAccounts, isLoading: isLoadingAccounts } = useQuery<any[]>({
@@ -231,7 +173,6 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
     setPreviewInfluencerId(null);
     setTestEmail('');
     setAllowResend(false);
-    compositionSetup.current = false;
   };
   
   const handlePreview = (influencerId: number) => {
@@ -242,23 +183,6 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
   const handleGoToConfirm = () => {
     validateMutation.mutate(allowResend);
     setStep('confirm');
-  };
-  
-  const quillModules = {
-    table: true,
-    toolbar: [
-      [{ 'header': [1, 2, 3, false] }],
-      ['bold', 'italic', 'underline'],
-      [{ 'color': [] }, { 'background': [] }],
-      [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-      ['link', 'image'],
-      ['clean'],
-    ],
-    history: {
-      delay: 500,
-      maxStack: 100,
-      userOnly: true
-    }
   };
   
   return (
@@ -341,17 +265,12 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
                 
                 <div>
                   <Label>{KO.pages.bulkEmail.body}</Label>
-                  <Suspense fallback={<Skeleton className="h-64" />}>
-                    <ReactQuill
-                      ref={setupCompositionHandlers}
-                      theme="snow"
-                      defaultValue={body}
-                      onChange={handleBodyChange}
-                      modules={quillModules}
-                      className="h-64"
-                      data-testid="editor-body"
-                    />
-                  </Suspense>
+                  <TiptapEditor
+                    value={body}
+                    onChange={setBody}
+                    toolbar="email"
+                    data-testid="editor-body"
+                  />
                 </div>
                 
                 {selectedAccount?.useSignature && selectedAccount?.signature && (

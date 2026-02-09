@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { RefreshCw, Send, Mail, User, Clock, Plus, Loader2, Trash2, Settings, Save } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import ReactQuill from 'react-quill-new';
+import { TiptapEditor } from '@/components/tiptap-editor';
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -474,31 +474,13 @@ export default function EmailCenter() {
             
             <div className="space-y-2">
               <Label>서명 내용</Label>
-              <div className="border rounded-md overflow-hidden">
-                <ReactQuill
-                  theme="snow"
-                  value={signatureContent}
-                  onChange={setSignatureContent}
-                  modules={{
-                    table: true,
-                    toolbar: [
-                      [{ 'header': [1, 2, 3, false] }],
-                      ['bold', 'italic', 'underline', 'strike'],
-                      [{ 'color': [] }, { 'background': [] }],
-                      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                      ['link', 'image'],
-                      ['clean']
-                    ],
-                    history: {
-                      delay: 500,
-                      maxStack: 100,
-                      userOnly: true
-                    }
-                  }}
-                  className="bg-background min-h-[200px]"
-                  placeholder="서명을 입력하세요..."
-                />
-              </div>
+              <TiptapEditor
+                value={signatureContent}
+                onChange={setSignatureContent}
+                toolbar="email"
+                placeholder="서명을 입력하세요..."
+                data-testid="editor-signature"
+              />
 
               <p className="text-xs text-muted-foreground">
                 이미지는 URL 링크로 삽입하거나 직접 붙여넣기 할 수 있습니다.

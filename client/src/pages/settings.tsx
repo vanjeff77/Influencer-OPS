@@ -1,4 +1,4 @@
-import { useState, lazy, Suspense } from "react";
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useWorkspaces } from "@/hooks/use-workspaces";
 import { useUser } from "@/hooks/use-auth";
@@ -13,7 +13,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { KO } from "@/i18n/ko";
@@ -21,26 +20,7 @@ import { Plus, Pencil, Trash2, Building2, Users, Shield, FileText, Star, Setting
 import { useResetOnboarding } from "@/hooks/use-auth";
 
 
-const ReactQuill = lazy(() => import('react-quill-new'));
-import 'react-quill-new/dist/quill.snow.css';
-
-const quillModules = {
-  table: true,
-  toolbar: [
-    [{ 'header': [1, 2, 3, false] }],
-    ['bold', 'italic', 'underline', 'strike'],
-    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-    [{ 'align': [] }],
-    [{ 'color': [] }, { 'background': [] }],
-    ['image'],
-    ['clean']
-  ],
-  history: {
-    delay: 500,
-    maxStack: 100,
-    userOnly: true
-  }
-};
+import { TiptapEditor } from '@/components/tiptap-editor';
 
 
 interface Client {
@@ -915,20 +895,14 @@ function ContractTemplatesSection({ workspaceId }: { workspaceId: number }) {
               </div>
               <div>
                 <Label>{KO.contractTemplates.content}</Label>
-                <div className="border rounded-md">
-                  <Suspense fallback={<Skeleton className="h-80" />}>
-                    <ReactQuill
-                      theme="snow"
-                      value={content}
-                      onChange={setContent}
-                      modules={quillModules}
-                      className="h-80"
-                      data-testid="editor-template-content"
-                    />
-                  </Suspense>
-                </div>
+                <TiptapEditor
+                  value={content}
+                  onChange={setContent}
+                  toolbar="full"
+                  data-testid="editor-template-content"
+                />
               </div>
-              <div className="flex items-center gap-2 pt-10">
+              <div className="flex items-center gap-2 pt-4">
                 <Checkbox id="is-default" checked={isDefault} onCheckedChange={(v) => setIsDefault(!!v)} data-testid="checkbox-template-default" />
                 <label htmlFor="is-default" className="text-sm">{KO.contractTemplates.setAsDefault}</label>
               </div>
@@ -1009,20 +983,14 @@ function ContractTemplatesSection({ workspaceId }: { workspaceId: number }) {
               </div>
               <div>
                 <Label>{KO.contractTemplates.content}</Label>
-                <div className="border rounded-md">
-                  <Suspense fallback={<Skeleton className="h-80" />}>
-                    <ReactQuill
-                      theme="snow"
-                      value={content}
-                      onChange={setContent}
-                      modules={quillModules}
-                      className="h-80"
-                      data-testid="editor-edit-template-content"
-                    />
-                  </Suspense>
-                </div>
+                <TiptapEditor
+                  value={content}
+                  onChange={setContent}
+                  toolbar="full"
+                  data-testid="editor-edit-template-content"
+                />
               </div>
-              <div className="flex items-center gap-2 pt-10">
+              <div className="flex items-center gap-2 pt-4">
                 <Checkbox id="edit-is-default" checked={isDefault} onCheckedChange={(v) => setIsDefault(!!v)} data-testid="checkbox-edit-template-default" />
                 <label htmlFor="edit-is-default" className="text-sm">{KO.contractTemplates.setAsDefault}</label>
               </div>

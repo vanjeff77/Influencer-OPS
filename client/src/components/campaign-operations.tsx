@@ -1,4 +1,4 @@
-import { useState, useMemo, lazy, Suspense } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useDeleteCampaignItem } from "@/hooks/use-campaigns";
@@ -31,8 +31,7 @@ import type { CampaignInfluencer, Influencer, InfluencerAccount, FeedbackNote, U
 import { KO } from "@/i18n/ko";
 
 
-const ReactQuill = lazy(() => import('react-quill-new'));
-import 'react-quill-new/dist/quill.snow.css';
+import { TiptapEditor } from '@/components/tiptap-editor';
 
 interface LineItemWithDetails extends CampaignInfluencer {
   influencer?: Influencer & { accounts: InfluencerAccount[] };
@@ -821,23 +820,6 @@ interface ContractTemplate {
   isDefault: boolean | null;
 }
 
-const contractQuillModules = {
-  table: true,
-  toolbar: [
-    [{ 'header': [1, 2, 3, false] }],
-    ['bold', 'italic', 'underline', 'strike'],
-    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-    [{ 'align': [] }],
-    [{ 'color': [] }, { 'background': [] }],
-    ['image'],
-    ['clean']
-  ],
-  history: {
-    delay: 500,
-    maxStack: 100,
-    userOnly: true
-  }
-};
 
 function ContractGenerateDialog({ item, campaignId, workspaceId, onClose }: ContractGenerateDialogProps) {
   const { toast } = useToast();
@@ -1083,17 +1065,13 @@ function ContractGenerateDialog({ item, campaignId, workspaceId, onClose }: Cont
             </div>
           ) : (
             <div className="space-y-3 py-2">
-              <div className="border rounded-md">
-                <Suspense fallback={<Skeleton className="h-96" />}>
-                  <ReactQuill
-                    theme="snow"
-                    value={contractContent}
-                    onChange={setContractContent}
-                    modules={contractQuillModules}
-                    className="h-96"
-                    data-testid="editor-contract-content"
-                  />
-                </Suspense>
+              <div>
+                <TiptapEditor
+                  value={contractContent}
+                  onChange={setContractContent}
+                  toolbar="full"
+                  data-testid="editor-contract-content"
+                />
               </div>
 
 
