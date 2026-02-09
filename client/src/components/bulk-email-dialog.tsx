@@ -187,8 +187,8 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
   
   return (
     <Dialog open={open} onOpenChange={(o) => { onOpenChange(o); if (!o) resetState(); }}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader>
+      <DialogContent className="max-w-4xl h-[85vh] overflow-hidden flex flex-col">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Mail className="w-5 h-5" />
             {KO.pages.bulkEmail.title}
@@ -198,8 +198,8 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
           </DialogDescription>
         </DialogHeader>
         
-        <Tabs value={step} onValueChange={(v) => setStep(v as Step)} className="flex-1 overflow-hidden flex flex-col">
-          <TabsList className="grid grid-cols-4 w-full">
+        <Tabs value={step} onValueChange={(v) => setStep(v as Step)} className="flex-1 min-h-0 flex flex-col">
+          <TabsList className="grid grid-cols-4 w-full shrink-0">
             <TabsTrigger value="template" className="flex items-center gap-1">
               <FileText className="w-4 h-4" />
               <span className="hidden sm:inline">{KO.pages.bulkEmail.templateTab}</span>
@@ -218,9 +218,9 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
             </TabsTrigger>
           </TabsList>
           
-          <div className="flex-1 overflow-hidden">
-            <TabsContent value="template" className="h-full flex flex-col overflow-hidden p-1">
-              <div className="flex-1 min-h-0 overflow-auto space-y-4 pb-2">
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <TabsContent value="template" className="h-full flex flex-col p-1">
+              <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pb-2">
                 <div>
                   <Label>{KO.pages.bulkEmail.selectAccount}</Label>
                   {isLoadingAccounts ? (
