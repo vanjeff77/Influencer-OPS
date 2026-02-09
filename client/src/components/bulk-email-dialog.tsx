@@ -220,7 +220,7 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
           </TabsList>
           
           <div className="flex-1 min-h-0 relative">
-            <TabsContent value="template" className="absolute inset-0 flex flex-col p-1 overflow-hidden">
+            <TabsContent value="template" className="absolute inset-0 flex flex-col p-1 overflow-hidden data-[state=inactive]:pointer-events-none">
               <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pb-2">
                 <div>
                   <Label>{KO.pages.bulkEmail.selectAccount}</Label>
@@ -282,7 +282,7 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
               </div>
             </TabsContent>
             
-            <TabsContent value="preview" className="absolute inset-0 flex flex-col overflow-hidden p-1">
+            <TabsContent value="preview" className="absolute inset-0 flex flex-col overflow-hidden p-1 data-[state=inactive]:pointer-events-none">
               <div className="flex-1 overflow-auto">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -341,7 +341,7 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
               </div>
             </TabsContent>
             
-            <TabsContent value="test" className="absolute inset-0 flex flex-col overflow-hidden p-1">
+            <TabsContent value="test" className="absolute inset-0 flex flex-col overflow-hidden p-1 data-[state=inactive]:pointer-events-none">
               <div className="flex-1 overflow-auto space-y-4">
                 <Card>
                   <CardHeader>
@@ -384,7 +384,7 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
               </div>
             </TabsContent>
             
-            <TabsContent value="confirm" className="absolute inset-0 flex flex-col overflow-hidden p-1">
+            <TabsContent value="confirm" className="absolute inset-0 flex flex-col overflow-hidden p-1 data-[state=inactive]:pointer-events-none">
               {validateMutation.isPending ? (
                 <div className="flex items-center justify-center h-64">
                   <Loader2 className="w-8 h-8 animate-spin" />
