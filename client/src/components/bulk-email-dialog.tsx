@@ -149,6 +149,11 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
     return emailAccounts || [];
   }, [emailAccounts]);
   
+  const selectedAccount = useMemo(() => {
+    if (!selectedEmailAccountId || !availableAccounts.length) return null;
+    return availableAccounts.find((acc: any) => acc.id.toString() === selectedEmailAccountId);
+  }, [selectedEmailAccountId, availableAccounts]);
+  
   const previewMutation = useMutation({
     mutationFn: async (influencerId: number) => {
       const res = await apiRequest('POST', '/api/bulk-email/preview', {
@@ -156,6 +161,7 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
         body,
         influencerId,
         campaignId,
+        emailAccountId: selectedEmailAccountId ? parseInt(selectedEmailAccountId) : undefined,
       });
       return res.json();
     },
@@ -347,6 +353,19 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
                     />
                   </Suspense>
                 </div>
+                
+                {selectedAccount?.useSignature && selectedAccount?.signature && (
+                  <div className="mt-12">
+                    <Label className="text-muted-foreground text-xs">서명 미리보기</Label>
+                    <div className="border rounded-md p-3 mt-1 bg-muted/30">
+                      <div className="text-xs text-muted-foreground mb-2">--</div>
+                      <div
+                        className="prose prose-sm max-w-none dark:prose-invert"
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedAccount.signature) }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
               
               <div className="flex justify-end pt-4 border-t mt-2 shrink-0">

@@ -2002,11 +2002,12 @@ export async function registerRoutes(
         return res.status(400).json({ message: "인플루언서 이메일이 없습니다" });
       }
       
-      // Get email account for signature
+      // Get email account for signature - convert body for Gmail compatibility, keep signature intact
       const account = conv.emailAccountId ? await storage.getEmailAccountById(conv.emailAccountId) : null;
-      let finalBody = body;
+      const { convertToGmailCompatibleHtml } = await import('./smtp');
+      let finalBody = convertToGmailCompatibleHtml(body);
       if (account?.useSignature && account?.signature) {
-        finalBody = body + `<br><br>--<br>${account.signature}`;
+        finalBody += `<br><br>--<br>${account.signature}`;
       }
       
       // Parse CC emails from request (can be array or comma-separated string)
@@ -2225,7 +2226,7 @@ export async function registerRoutes(
   // Preview template with variable substitution
   app.post('/api/bulk-email/preview', async (req, res) => {
     try {
-      const { subject, body, influencerId, campaignId } = req.body;
+      const { subject, body, influencerId, campaignId, emailAccountId } = req.body;
       const { renderTemplate, validateVariables, convertToGmailCompatibleHtml } = await import('./smtp');
       
       const influencer = await storage.getInfluencer(influencerId);
@@ -2253,7 +2254,14 @@ export async function registerRoutes(
       }
       
       const renderedSubject = renderTemplate(subject, variables);
-      const renderedBody = convertToGmailCompatibleHtml(renderTemplate(body, variables));
+      let renderedBody = convertToGmailCompatibleHtml(renderTemplate(body, variables));
+      
+      if (emailAccountId) {
+        const emailAccount = await storage.getEmailAccountById(emailAccountId);
+        if (emailAccount?.useSignature && emailAccount?.signature) {
+          renderedBody += `<br><br>--<br>${emailAccount.signature}`;
+        }
+      }
       
       res.json({ 
         valid: true,
@@ -2293,12 +2301,11 @@ export async function registerRoutes(
       };
       
       const renderedSubject = `[테스트] ${renderTemplate(subject, variables)}`;
-      let renderedBody = renderTemplate(body, variables);
+      let renderedBody = convertToGmailCompatibleHtml(renderTemplate(body, variables));
       
       if (emailAccount.useSignature && emailAccount.signature) {
         renderedBody += `<br><br>--<br>${emailAccount.signature}`;
       }
-      renderedBody = convertToGmailCompatibleHtml(renderedBody);
       
       if (emailAccount.provider === 'imap' && emailAccount.accessToken && emailAccount.refreshToken) {
         const config = JSON.parse(emailAccount.accessToken);
@@ -2472,7 +2479,7 @@ export async function registerRoutes(
         influencerId: item.influencerId,
         email: item.email,
         renderedSubject: renderTemplate(subject, item.variables),
-        renderedBody: convertToGmailCompatibleHtml(renderTemplate(body, item.variables) + signatureHtml),
+        renderedBody: convertToGmailCompatibleHtml(renderTemplate(body, item.variables)) + signatureHtml,
         variables: item.variables,
         status: 'queued' as const,
       }));
@@ -3271,9 +3278,10 @@ export async function registerRoutes(
       const body = emailBody || `안녕하세요, ${lineItem.influencer?.name}님.\n\n${campaign?.name || ''} 캠페인 계약서를 첨부하여 보내드립니다.\n\n확인 부탁드립니다.`;
 
       const account = conversation.emailAccountId ? await storage.getEmailAccountById(conversation.emailAccountId) : null;
-      let finalBody = body;
+      const { convertToGmailCompatibleHtml } = await import('./smtp');
+      let finalBody = convertToGmailCompatibleHtml(body);
       if (account?.useSignature && account?.signature) {
-        finalBody = body + `<br><br>--<br>${account.signature}`;
+        finalBody += `<br><br>--<br>${account.signature}`;
       }
 
       const { sendEmail, generateSnippet } = await import('./gmail');
