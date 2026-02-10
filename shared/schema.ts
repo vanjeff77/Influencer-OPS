@@ -307,10 +307,12 @@ export const emailTemplates = pgTable("email_templates", {
   id: serial("id").primaryKey(),
   workspaceId: integer("workspace_id").notNull(),
   name: text("name").notNull(),
+  description: text("description"),
   type: text("type").notNull(), // first_contact, followup, contract_request, settlement_request
   subject: text("subject").notNull(),
   bodyHtml: text("body_html").notNull(),
   variables: text("variables").array(),
+  isDefault: boolean("is_default").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { KO } from "@/i18n/ko";
-import { Plus, Pencil, Trash2, Building2, Users, Shield, FileText, Star, Settings, RotateCcw } from "lucide-react";
+import { Plus, Pencil, Trash2, Building2, Users, Shield, FileText, Star, Settings, RotateCcw, Mail } from "lucide-react";
 import { useResetOnboarding } from "@/hooks/use-auth";
 
 
@@ -652,7 +652,8 @@ export default function SettingsPage() {
           </TabsContent>
         )}
 
-        <TabsContent value="templates" className="mt-6">
+        <TabsContent value="templates" className="mt-6 space-y-6">
+          <EmailTemplatesSection workspaceId={workspaceId} />
           <ContractTemplatesSection workspaceId={workspaceId} />
         </TabsContent>
       </Tabs>
@@ -774,6 +775,259 @@ export default function SettingsPage() {
 }
 
 // Contract Templates Section Component
+interface EmailTemplate {
+  id: number;
+  workspaceId: number;
+  name: string;
+  description: string | null;
+  type: string;
+  subject: string;
+  bodyHtml: string;
+  variables: string[] | null;
+  isDefault: boolean | null;
+  createdAt?: string | null;
+}
+
+const EMAIL_TEMPLATE_TYPES = [
+  { value: 'first_contact', label: KO.emailTemplates.typeOptions.first_contact },
+  { value: 'followup', label: KO.emailTemplates.typeOptions.followup },
+  { value: 'contract_request', label: KO.emailTemplates.typeOptions.contract_request },
+  { value: 'settlement_request', label: KO.emailTemplates.typeOptions.settlement_request },
+  { value: 'general', label: KO.emailTemplates.typeOptions.general },
+];
+
+function EmailTemplatesSection({ workspaceId }: { workspaceId: number }) {
+  const { toast } = useToast();
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<EmailTemplate | null>(null);
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [type, setType] = useState("general");
+  const [subject, setSubject] = useState("");
+  const [bodyHtml, setBodyHtml] = useState("");
+  const [isDefault, setIsDefault] = useState(false);
+
+  const { data: templates = [], isLoading } = useQuery<EmailTemplate[]>({
+    queryKey: ['/api/workspaces', workspaceId, 'email-templates'],
+    queryFn: () => fetch(`/api/workspaces/${workspaceId}/email-templates`).then(r => r.json()),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (data: { name: string; description?: string; type: string; subject: string; bodyHtml: string; isDefault?: boolean }) =>
+      apiRequest('POST', `/api/workspaces/${workspaceId}/email-templates`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/workspaces', workspaceId, 'email-templates'] });
+      toast({ title: KO.emailTemplates.created });
+      resetForm();
+      setDialogOpen(false);
+    },
+    onError: () => toast({ title: KO.toast.saveFailed, variant: "destructive" }),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Partial<EmailTemplate> }) =>
+      apiRequest('PATCH', `/api/workspaces/${workspaceId}/email-templates/${id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/workspaces', workspaceId, 'email-templates'] });
+      toast({ title: KO.emailTemplates.updated });
+      resetForm();
+      setEditingTemplate(null);
+    },
+    onError: () => toast({ title: KO.toast.saveFailed, variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) =>
+      apiRequest('DELETE', `/api/workspaces/${workspaceId}/email-templates/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/workspaces', workspaceId, 'email-templates'] });
+      toast({ title: KO.emailTemplates.deleted });
+    },
+    onError: () => toast({ title: KO.toast.deleteFailed, variant: "destructive" }),
+  });
+
+  const resetForm = () => {
+    setName("");
+    setDescription("");
+    setType("general");
+    setSubject("");
+    setBodyHtml("");
+    setIsDefault(false);
+  };
+
+  const handleEdit = (template: EmailTemplate) => {
+    setEditingTemplate(template);
+    setName(template.name);
+    setDescription(template.description || "");
+    setType(template.type);
+    setSubject(template.subject);
+    setBodyHtml(template.bodyHtml);
+    setIsDefault(template.isDefault || false);
+  };
+
+  const handleSubmit = () => {
+    if (!name.trim() || !subject.trim() || !bodyHtml.trim()) {
+      toast({ title: "이름, 제목, 본문은 필수입니다.", variant: "destructive" });
+      return;
+    }
+    if (editingTemplate) {
+      updateMutation.mutate({ id: editingTemplate.id, data: { name, description, type, subject, bodyHtml, isDefault } });
+    } else {
+      createMutation.mutate({ name, description, type, subject, bodyHtml, isDefault });
+    }
+  };
+
+  const getTypeLabel = (typeValue: string) => {
+    return EMAIL_TEMPLATE_TYPES.find(t => t.value === typeValue)?.label || typeValue;
+  };
+
+  const formContent = (
+    <div className="space-y-4 py-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label>{KO.emailTemplates.name}</Label>
+          <Input value={name} onChange={(e) => setName(e.target.value)} data-testid="input-email-template-name" />
+        </div>
+        <div>
+          <Label>{KO.emailTemplates.descriptionLabel}</Label>
+          <Input value={description} onChange={(e) => setDescription(e.target.value)} data-testid="input-email-template-description" />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label>{KO.emailTemplates.type}</Label>
+          <Select value={type} onValueChange={setType}>
+            <SelectTrigger data-testid="select-email-template-type">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {EMAIL_TEMPLATE_TYPES.map(t => (
+                <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label>{KO.emailTemplates.subject}</Label>
+          <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="[캠페인명] 협업 제안 드립니다" data-testid="input-email-template-subject" />
+        </div>
+      </div>
+      <div>
+        <Label>{KO.emailTemplates.body}</Label>
+        <TiptapEditor
+          value={bodyHtml}
+          onChange={setBodyHtml}
+          toolbar="email"
+          data-testid="editor-email-template-body"
+        />
+      </div>
+      <p className="text-xs text-muted-foreground">{KO.emailTemplates.variableHint}</p>
+      <div className="flex items-center gap-2 pt-2">
+        <Checkbox id={editingTemplate ? "edit-email-default" : "email-default"} checked={isDefault} onCheckedChange={(v) => setIsDefault(!!v)} data-testid="checkbox-email-template-default" />
+        <label htmlFor={editingTemplate ? "edit-email-default" : "email-default"} className="text-sm">{KO.emailTemplates.setAsDefault}</label>
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" onClick={() => { editingTemplate ? setEditingTemplate(null) : setDialogOpen(false); resetForm(); }}>{KO.common.cancel}</Button>
+        <Button onClick={handleSubmit} disabled={createMutation.isPending || updateMutation.isPending}>{KO.common.save}</Button>
+      </div>
+    </div>
+  );
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between gap-4">
+        <div>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Mail className="w-5 h-5" />
+            {KO.emailTemplates.title}
+          </CardTitle>
+          <CardDescription>{KO.emailTemplates.description}</CardDescription>
+        </div>
+        <Dialog open={dialogOpen && !editingTemplate} onOpenChange={(open) => {
+          setDialogOpen(open);
+          if (!open) resetForm();
+        }}>
+          <DialogTrigger asChild>
+            <Button size="sm" className="gap-1" data-testid="button-add-email-template">
+              <Plus className="w-4 h-4" />
+              {KO.emailTemplates.add}
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>{KO.emailTemplates.add}</DialogTitle>
+              <DialogDescription>{KO.emailTemplates.variableHint}</DialogDescription>
+            </DialogHeader>
+            {formContent}
+          </DialogContent>
+        </Dialog>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <p className="text-muted-foreground text-sm">로딩 중...</p>
+        ) : templates.length === 0 ? (
+          <p className="text-muted-foreground text-sm">{KO.emailTemplates.noTemplates}</p>
+        ) : (
+          <div className="space-y-3">
+            {templates.map((template) => (
+              <div key={template.id} className="flex items-center justify-between p-4 border rounded-md" data-testid={`email-template-item-${template.id}`}>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium">{template.name}</span>
+                    <Badge variant="outline">{getTypeLabel(template.type)}</Badge>
+                    {template.isDefault && (
+                      <Badge variant="secondary" className="gap-1">
+                        <Star className="w-3 h-3" /> 기본
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-sm text-muted-foreground truncate mt-1">{template.subject}</p>
+                  {template.description && <p className="text-xs text-muted-foreground">{template.description}</p>}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button size="icon" variant="ghost" onClick={() => handleEdit(template)} data-testid={`button-edit-email-template-${template.id}`}>
+                    <Pencil className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => {
+                      if (confirm(KO.settings.confirmDelete)) {
+                        deleteMutation.mutate(template.id);
+                      }
+                    }}
+                    data-testid={`button-delete-email-template-${template.id}`}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+
+      {editingTemplate && (
+        <Dialog open={!!editingTemplate} onOpenChange={(open) => {
+          if (!open) {
+            setEditingTemplate(null);
+            resetForm();
+          }
+        }}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>{KO.common.edit}</DialogTitle>
+              <DialogDescription>{KO.emailTemplates.variableHint}</DialogDescription>
+            </DialogHeader>
+            {formContent}
+          </DialogContent>
+        </Dialog>
+      )}
+    </Card>
+  );
+}
+
 interface ContractTemplate {
   id: number;
   workspaceId: number;

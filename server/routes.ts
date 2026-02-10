@@ -2836,6 +2836,66 @@ export async function registerRoutes(
     res.send('\uFEFF' + csv); // BOM for Korean Excel compatibility
   });
 
+  // === EMAIL TEMPLATES ===
+  app.get(api.emailTemplates.list.path, async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const wId = parseInt(req.params.workspaceId);
+      const templates = await storage.getEmailTemplates(wId);
+      res.json(templates);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get(api.emailTemplates.get.path, async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const templates = await storage.getEmailTemplates(parseInt(req.params.workspaceId));
+      const template = templates.find(t => t.id === parseInt(req.params.id));
+      if (!template) return res.status(404).json({ message: "Template not found" });
+      res.json(template);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post(api.emailTemplates.create.path, async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const wId = parseInt(req.params.workspaceId);
+      const input = api.emailTemplates.create.input.parse({ ...req.body, workspaceId: wId });
+      const template = await storage.createEmailTemplate(input);
+      res.status(201).json(template);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.patch(api.emailTemplates.update.path, async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const id = parseInt(req.params.id);
+      const input = api.emailTemplates.update.input.parse(req.body);
+      const template = await storage.updateEmailTemplate(id, input);
+      if (!template) return res.status(404).json({ message: "Template not found" });
+      res.json(template);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete(api.emailTemplates.delete.path, async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const id = parseInt(req.params.id);
+      await storage.deleteEmailTemplate(id);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   // === CONTRACT TEMPLATES ===
   app.get(api.contractTemplates.list.path, async (req, res) => {
     try {

@@ -2,8 +2,8 @@ import { z } from 'zod';
 import { 
   insertUserSchema, insertWorkspaceSchema, insertInfluencerSchema, 
   insertInfluencerAccountSchema, insertGroupSchema, insertCampaignSchema,
-  insertEmailAccountSchema, insertTrackingJobSchema, insertContractTemplateSchema,
-  influencers, groups, campaigns, campaignInfluencers, emailAccounts, emailThreads, emailMessages, trackingJobs, contractTemplates
+  insertEmailAccountSchema, insertTrackingJobSchema, insertContractTemplateSchema, insertEmailTemplateSchema,
+  influencers, groups, campaigns, campaignInfluencers, emailAccounts, emailThreads, emailMessages, trackingJobs, contractTemplates, emailTemplates
 } from './schema';
 
 export const errorSchemas = {
@@ -196,6 +196,35 @@ export const api = {
       method: 'GET' as const,
       path: '/api/tracking/jobs/:id/metrics',
       responses: { 200: z.array(z.object({ date: z.string(), value: z.number() })) },
+    },
+  },
+  emailTemplates: {
+    list: {
+      method: 'GET' as const,
+      path: '/api/workspaces/:workspaceId/email-templates',
+      responses: { 200: z.array(z.custom<typeof emailTemplates.$inferSelect>()) },
+    },
+    get: {
+      method: 'GET' as const,
+      path: '/api/workspaces/:workspaceId/email-templates/:id',
+      responses: { 200: z.custom<typeof emailTemplates.$inferSelect>(), 404: errorSchemas.notFound },
+    },
+    create: {
+      method: 'POST' as const,
+      path: '/api/workspaces/:workspaceId/email-templates',
+      input: insertEmailTemplateSchema,
+      responses: { 201: z.custom<typeof emailTemplates.$inferSelect>() },
+    },
+    update: {
+      method: 'PATCH' as const,
+      path: '/api/workspaces/:workspaceId/email-templates/:id',
+      input: insertEmailTemplateSchema.partial(),
+      responses: { 200: z.custom<typeof emailTemplates.$inferSelect>(), 404: errorSchemas.notFound },
+    },
+    delete: {
+      method: 'DELETE' as const,
+      path: '/api/workspaces/:workspaceId/email-templates/:id',
+      responses: { 200: z.object({ success: z.boolean() }), 404: errorSchemas.notFound },
     },
   },
   contractTemplates: {

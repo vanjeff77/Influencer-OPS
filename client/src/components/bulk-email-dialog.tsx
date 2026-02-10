@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { api } from '@shared/routes';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Mail, Send, Eye, AlertCircle, Check, X, Loader2, FileText, Users, TestTube, RotateCcw } from 'lucide-react';
+import { Mail, Send, Eye, AlertCircle, Check, X, Loader2, FileText, Users, TestTube, RotateCcw, Star } from 'lucide-react';
 import DOMPurify from 'dompurify';
 import { KO } from '@/i18n/ko';
 import { TiptapEditor } from '@/components/tiptap-editor';
@@ -88,6 +88,12 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
     enabled: open && !!workspaceId,
   });
   
+  const { data: emailTemplates = [] } = useQuery<any[]>({
+    queryKey: ['/api/workspaces', workspaceId.toString(), 'email-templates'],
+    queryFn: () => fetch(`/api/workspaces/${workspaceId}/email-templates`).then(r => r.json()),
+    enabled: open && !!workspaceId,
+  });
+
   const availableAccounts = useMemo(() => {
     return emailAccounts || [];
   }, [emailAccounts]);
@@ -245,6 +251,38 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
                   )}
                 </div>
                 
+                {emailTemplates.length > 0 && (
+                  <div>
+                    <Label>{KO.emailTemplates.loadTemplate}</Label>
+                    <Select
+                      value=""
+                      onValueChange={(templateId) => {
+                        const tmpl = emailTemplates.find((t: any) => t.id.toString() === templateId);
+                        if (tmpl) {
+                          setSubject(tmpl.subject);
+                          setBody(tmpl.bodyHtml);
+                          toast({ title: KO.emailTemplates.applied });
+                        }
+                      }}
+                    >
+                      <SelectTrigger data-testid="select-email-template">
+                        <SelectValue placeholder={KO.emailTemplates.selectTemplate} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {emailTemplates.map((tmpl: any) => (
+                          <SelectItem key={tmpl.id} value={tmpl.id.toString()}>
+                            <span className="flex items-center gap-2">
+                              {tmpl.isDefault && <Star className="w-3 h-3 text-yellow-500 shrink-0" />}
+                              {tmpl.name}
+                              <span className="text-muted-foreground text-xs">— {tmpl.subject}</span>
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
                 <div>
                   <Label>{KO.pages.bulkEmail.subject}</Label>
                   <Input
