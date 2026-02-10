@@ -948,6 +948,8 @@ function ContractGenerateDialog({ item, campaignId, workspaceId, onClose }: Cont
       setShowEmailDialog(false);
       setEmailBody('');
       queryClient.invalidateQueries({ queryKey: ['/api/campaigns', campaignId, 'conversations'] });
+      queryClient.invalidateQueries({ queryKey: [api.campaigns.get.path, campaignId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/conversations', 'campaignId', campaignId.toString()] });
     } catch (err: any) {
       toast({ title: '이메일 발송 실패', description: err?.message, variant: 'destructive' });
     } finally {

@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
+import { api } from '@shared/routes';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Mail, Send, Eye, AlertCircle, Check, X, Loader2, FileText, Users, TestTube, RotateCcw } from 'lucide-react';
 import DOMPurify from 'dompurify';
@@ -160,6 +161,8 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
     onSuccess: (data) => {
       toast({ title: KO.pages.bulkEmail.sendStarted, description: data.message });
       queryClient.invalidateQueries({ queryKey: ['/api/bulk-email/jobs', campaignId.toString()] });
+      queryClient.invalidateQueries({ queryKey: [api.campaigns.get.path, campaignId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/conversations', 'campaignId', campaignId.toString()] });
       onOpenChange(false);
       resetState();
     },

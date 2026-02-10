@@ -422,7 +422,14 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
               conversationId={existingConv?.id} 
               influencerEmail={selectedLineItem.influencer?.email}
               lastMessageCc={conversationDetail?.messages?.[0]?.ccEmails}
-              onSent={() => refetchConversation()}
+              onSent={() => {
+                refetchConversation();
+                if (existingConv?.id) {
+                  syncMessages.mutate(existingConv.id);
+                }
+                queryClient.invalidateQueries({ queryKey: [api.campaigns.get.path, campaignId] });
+                queryClient.invalidateQueries({ queryKey: ['/api/conversations', 'campaignId', campaignId.toString()] });
+              }}
             />
           </>
         ) : (
