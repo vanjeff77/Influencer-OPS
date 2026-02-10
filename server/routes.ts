@@ -1966,6 +1966,21 @@ export async function registerRoutes(
     }
   });
 
+  app.get('/api/campaigns/:campaignId/line-items/:lineItemId/has-thread', async (req, res) => {
+    try {
+      const lineItemId = parseInt(req.params.lineItemId);
+      const conv = await storage.getConversationByLineItem(lineItemId);
+      if (conv) {
+        const messages = await storage.getConversationMessages(conv.id);
+        return res.json({ hasThread: messages.length > 0 });
+      }
+      return res.json({ hasThread: false });
+    } catch (err) {
+      console.error('Check thread error:', err);
+      res.json({ hasThread: false });
+    }
+  });
+
   // === CONVERSATIONS (Messenger-style email threads) ===
   app.get('/api/conversations', async (req, res) => {
     const campaignId = parseInt(req.query.campaignId as string);
@@ -4240,8 +4255,8 @@ async function seedDatabase() {
     
     // Update items with different statuses
     if (items[0]) await storage.updateCampaignItem(items[0].id, { status: 'contracted', contractStatus: 'signed', paymentStatus: 'pending', offerFee: 500000 });
-    if (items[1]) await storage.updateCampaignItem(items[1].id, { status: 'posted', contractStatus: 'signed', paymentStatus: 'paid', offerFee: 750000 });
-    if (items[2]) await storage.updateCampaignItem(items[2].id, { status: 'negotiated', contractStatus: 'pending', paymentStatus: 'pending', offerFee: 300000 });
+    if (items[1]) await storage.updateCampaignItem(items[1].id, { status: 'contracted', contractStatus: 'signed', paymentStatus: 'paid', offerFee: 750000 });
+    if (items[2]) await storage.updateCampaignItem(items[2].id, { status: 'contacted', contractStatus: 'pending', paymentStatus: 'pending', offerFee: 300000 });
 
     // Create tracking job
     await storage.createTrackingJob(ws.id, {

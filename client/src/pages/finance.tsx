@@ -141,7 +141,7 @@ export default function Finance() {
   const exportToCSV = () => {
     if (!items.length) return;
     
-    const headers = ['광고주', '캠페인', '인플루언서', '사업자유형', '은행명', '예금주', '계좌번호', '광고료', '상태', '지급예정일'];
+    const headers = ['광고주', '캠페인', '인플루언서', '사업자유형', '은행명', '예금주', '계좌번호', '광고료(VAT+)', '상태', '지급예정일'];
     const rows = items.map(item => [
       item.client?.name || '',
       item.campaign?.name || '',
@@ -343,7 +343,7 @@ export default function Finance() {
                       <TableHead className="text-xs md:text-sm">광고주</TableHead>
                       <TableHead className="text-xs md:text-sm">캠페인</TableHead>
                       <TableHead className="text-xs md:text-sm text-center">건수</TableHead>
-                      <TableHead className="text-xs md:text-sm text-right">광고료</TableHead>
+                      <TableHead className="text-xs md:text-sm text-right">광고료(VAT+)</TableHead>
                       <TableHead className="text-xs md:text-sm">정산 기한</TableHead>
                     </TableRow>
                   </TableHeader>

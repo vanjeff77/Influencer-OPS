@@ -21,7 +21,9 @@ import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Link } from "wouter";
 import { format } from "date-fns";
 import { KO } from "@/i18n/ko";
-import { useState } from "react";
+import { useState, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { CampaignLineItem, CampaignContentWithInfluencer } from "@/hooks/use-campaigns";
@@ -30,12 +32,134 @@ import { CampaignOperations } from "@/components/campaign-operations";
 import { CampaignContents } from "@/components/campaign-contents";
 import type { CampaignContent } from "@shared/schema";
 import { Settings2 } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
 
 interface Client {
   id: number;
   workspaceId: number;
   name: string;
+}
+
+const STEPS = [
+  { key: 'waiting', label: '대기' },
+  { key: 'contacted', label: '컨택' },
+  { key: 'confirmed', label: '확정' },
+  { key: 'contracted', label: '계약' },
+] as const;
+
+function StepProgressBar({ status, itemId, item, onStatusChange, campaignId }: {
+  status: string;
+  itemId: number;
+  item: any;
+  onStatusChange: (newStatus: string) => void;
+  campaignId: number;
+}) {
+  const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; targetStatus: string; type: 'contact_no_thread' | 'confirm_missing' | null }>({ open: false, targetStatus: '', type: null });
+  const { toast } = useToast();
+
+  const currentIndex = STEPS.findIndex(s => s.key === status);
+
+  const handleStepClick = async (stepKey: string) => {
+    if (stepKey === status) return;
+    const targetIndex = STEPS.findIndex(s => s.key === stepKey);
+
+    if (targetIndex < currentIndex) {
+      onStatusChange(stepKey);
+      return;
+    }
+
+    if (targetIndex >= 1 && currentIndex < 1) {
+      try {
+        const res = await fetch(`/api/campaigns/${campaignId}/line-items/${itemId}/has-thread`);
+        const data = await res.json();
+        if (!data.hasThread) {
+          setConfirmDialog({ open: true, targetStatus: stepKey, type: 'contact_no_thread' });
+          return;
+        }
+      } catch {
+        setConfirmDialog({ open: true, targetStatus: stepKey, type: 'contact_no_thread' });
+        return;
+      }
+    }
+
+    if (targetIndex >= 2) {
+      const hasFee = item.offerFee && item.offerFee > 0;
+      const hasUploadDate = !!item.uploadDueAt;
+      if (!hasFee || !hasUploadDate) {
+        setConfirmDialog({ open: true, targetStatus: stepKey, type: 'confirm_missing' });
+        return;
+      }
+    }
+
+    onStatusChange(stepKey);
+  };
+
+  return (
+    <>
+      <div className="flex items-center gap-0.5" data-testid={`progress-bar-${itemId}`}>
+        {STEPS.map((step, idx) => {
+          const isCurrent = step.key === status;
+          const isCompleted = idx < currentIndex;
+          const isPending = idx > currentIndex;
+
+          return (
+            <div key={step.key} className="flex items-center gap-0.5">
+              <button
+                onClick={() => handleStepClick(step.key)}
+                className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors cursor-pointer ${
+                  isCompleted
+                    ? 'bg-primary/15 text-primary dark:bg-primary/25'
+                    : isCurrent
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground'
+                }`}
+                data-testid={`step-${step.key}-${itemId}`}
+              >
+                {isCompleted && <CheckCircle2 className="w-3 h-3" />}
+                {step.label}
+              </button>
+              {idx < STEPS.length - 1 && (
+                <div className={`w-2 h-px ${idx < currentIndex ? 'bg-primary' : 'bg-border'}`} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <Dialog open={confirmDialog.open} onOpenChange={(open) => !open && setConfirmDialog({ open: false, targetStatus: '', type: null })}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>
+              {confirmDialog.type === 'contact_no_thread' ? '컨택 확인' : '확정 불가'}
+            </DialogTitle>
+            <DialogDescription>
+              {confirmDialog.type === 'contact_no_thread'
+                ? '메일에 컨택내역이 없습니다. 컨택으로 기록할까요?'
+                : '확정 처리 전 광고비와 업로드 일정을 입력해주세요'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 mt-4">
+            {confirmDialog.type === 'contact_no_thread' ? (
+              <>
+                <Button variant="outline" onClick={() => setConfirmDialog({ open: false, targetStatus: '', type: null })} data-testid="button-cancel-contact">
+                  취소
+                </Button>
+                <Button onClick={() => {
+                  onStatusChange(confirmDialog.targetStatus);
+                  setConfirmDialog({ open: false, targetStatus: '', type: null });
+                }} data-testid="button-confirm-contact">
+                  확인
+                </Button>
+              </>
+            ) : (
+              <Button onClick={() => setConfirmDialog({ open: false, targetStatus: '', type: null })} data-testid="button-ok-confirm">
+                확인
+              </Button>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 }
 
 export default function CampaignDetail() {
@@ -202,11 +326,10 @@ export default function CampaignDetail() {
 
   const getStatusLabel = (status: string) => {
     switch(status) {
-      case 'waiting': return '대기 중';
-      case 'contacted': return '컨택 완료';
-      case 'negotiated': return '협상 중';
-      case 'contracted': return '계약 완료';
-      case 'posted': return '게시 완료';
+      case 'waiting': return '대기';
+      case 'contacted': return '컨택';
+      case 'confirmed': return '확정';
+      case 'contracted': return '계약';
       default: return status;
     }
   };
@@ -378,11 +501,12 @@ export default function CampaignDetail() {
                         />
                       </TableHead>
                       <TableHead>인플루언서</TableHead>
-                      <TableHead>채널 바로가기</TableHead>
-                      <TableHead>진행 상태</TableHead>
-                      <TableHead>계약</TableHead>
-                      <TableHead>지급</TableHead>
-                      <TableHead className="text-right">광고료</TableHead>
+                      <TableHead>채널</TableHead>
+                      <TableHead>메모</TableHead>
+                      <TableHead>진행 단계</TableHead>
+                      <TableHead className="text-right">광고료(VAT+)</TableHead>
+                      <TableHead>초안 예정일</TableHead>
+                      <TableHead>업로드 예정일</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -424,89 +548,33 @@ export default function CampaignDetail() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Select 
-                            value={item.status || 'waiting'} 
-                            onValueChange={(val) => {
-                              handleStatusUpdate(item.id, 'status', val);
-                            }}
-                          >
-                            <SelectTrigger 
-                              className={`w-[120px] h-7 text-xs border-0 ${
-                                item.status === 'posted' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
-                                item.status === 'contracted' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
-                                item.status === 'negotiated' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
-                                item.status === 'contacted' ? 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-400' :
-                                'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400'
-                              }`} 
-                              onClick={e => e.stopPropagation()}
-                            >
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="waiting">대기 중</SelectItem>
-                              <SelectItem value="contacted">컨택 완료</SelectItem>
-                              <SelectItem value="negotiated">협상 중</SelectItem>
-                              <SelectItem value="contracted">계약 완료</SelectItem>
-                              <SelectItem value="posted">게시 완료</SelectItem>
-                            </SelectContent>
-                          </Select>
+                          <div className="max-w-[150px] text-xs text-muted-foreground line-clamp-2" data-testid={`text-memo-${item.id}`}>
+                            {item.influencer?.memo || '-'}
+                          </div>
                         </TableCell>
-                        <TableCell>
-                          <Select 
-                            value={item.contractStatus || 'pending'} 
-                            onValueChange={(val) => {
-                              handleStatusUpdate(item.id, 'contractStatus', val);
-                            }}
-                          >
-                            <SelectTrigger 
-                              className={`w-[100px] h-7 text-xs border-0 ${
-                                item.contractStatus === 'signed' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
-                                item.contractStatus === 'sent' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
-                                'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400'
-                              }`} 
-                              onClick={e => e.stopPropagation()}
-                            >
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="pending">대기 중</SelectItem>
-                              <SelectItem value="sent">발송됨</SelectItem>
-                              <SelectItem value="signed">서명 완료</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell>
-                          <Select 
-                            value={item.paymentStatus || 'pending'} 
-                            onValueChange={(val) => {
-                              handleStatusUpdate(item.id, 'paymentStatus', val);
-                            }}
-                          >
-                            <SelectTrigger 
-                              className={`w-[100px] h-7 text-xs border-0 ${
-                                item.paymentStatus === 'paid' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
-                                item.paymentStatus === 'invoiced' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' :
-                                'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400'
-                              }`} 
-                              onClick={e => e.stopPropagation()}
-                            >
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="pending">대기 중</SelectItem>
-                              <SelectItem value="invoiced">청구됨</SelectItem>
-                              <SelectItem value="paid">지급 완료</SelectItem>
-                            </SelectContent>
-                          </Select>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <StepProgressBar
+                            status={item.status || 'waiting'}
+                            itemId={item.id}
+                            item={item}
+                            onStatusChange={(newStatus) => handleStatusUpdate(item.id, 'status', newStatus)}
+                            campaignId={id}
+                          />
                         </TableCell>
                         <TableCell className="text-right font-mono">
                           {item.offerFee?.toLocaleString() || '-'}원
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {item.draftDueAt ? new Date(item.draftDueAt).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) : '-'}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {item.uploadDueAt ? new Date(item.uploadDueAt).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) : '-'}
                         </TableCell>
                       </TableRow>
                     ))}
                     {!campaign.items?.length && (
                       <TableRow>
-                         <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                         <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                            이 캠페인에 아직 인플루언서가 없습니다.
                          </TableCell>
                       </TableRow>
@@ -581,7 +649,7 @@ export default function CampaignDetail() {
                       <TableHead>은행명</TableHead>
                       <TableHead>예금주</TableHead>
                       <TableHead>계좌번호</TableHead>
-                      <TableHead className="text-right">광고료</TableHead>
+                      <TableHead className="text-right">광고료(VAT+)</TableHead>
                       <TableHead>정산상태</TableHead>
                       <TableHead>지급예정일</TableHead>
                       <TableHead>메모</TableHead>
@@ -1050,11 +1118,10 @@ function LineItemDetailDrawer({ item, onClose, onUpdate }: {
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="waiting">대기 중</SelectItem>
-                    <SelectItem value="contacted">컨택 완료</SelectItem>
-                    <SelectItem value="negotiated">협상 중</SelectItem>
-                    <SelectItem value="contracted">계약 완료</SelectItem>
-                    <SelectItem value="posted">게시 완료</SelectItem>
+                    <SelectItem value="waiting">대기</SelectItem>
+                    <SelectItem value="contacted">컨택</SelectItem>
+                    <SelectItem value="confirmed">확정</SelectItem>
+                    <SelectItem value="contracted">계약</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1102,7 +1169,7 @@ function LineItemDetailDrawer({ item, onClose, onUpdate }: {
               </Select>
             </div>
             <div>
-              <label className="text-sm font-medium">광고료 (원)</label>
+              <label className="text-sm font-medium">광고료(VAT+)</label>
               <div className="flex gap-2">
                 <Input 
                   type="number" 

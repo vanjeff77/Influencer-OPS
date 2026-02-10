@@ -366,12 +366,10 @@ export default function Discover() {
 
   const getStatusLabel = (status: string) => {
     switch(status) {
-      case 'waiting': return '대기 중';
-      case 'contacted': return '컨택 완료';
-      case 'negotiated': return '협상 중';
-      case 'contracted': return '계약 완료';
-      case 'posted': return '게시 완료';
-      case 'paid': return '정산 완료';
+      case 'waiting': return '대기';
+      case 'contacted': return '컨택';
+      case 'confirmed': return '확정';
+      case 'contracted': return '계약';
       default: return status;
     }
   };
@@ -380,10 +378,8 @@ export default function Discover() {
     switch(status) {
       case 'waiting': return 'bg-gray-100 text-gray-700';
       case 'contacted': return 'bg-sky-100 text-sky-700';
-      case 'negotiated': return 'bg-yellow-100 text-yellow-700';
+      case 'confirmed': return 'bg-yellow-100 text-yellow-700';
       case 'contracted': return 'bg-blue-100 text-blue-700';
-      case 'posted': return 'bg-green-100 text-green-700';
-      case 'paid': return 'bg-purple-100 text-purple-700';
       default: return 'bg-gray-100 text-gray-700';
     }
   };

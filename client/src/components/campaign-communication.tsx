@@ -867,7 +867,7 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
           </div>
           <Separator />
           <div>
-            <label className="text-xs font-medium text-muted-foreground">광고료</label>
+            <label className="text-xs font-medium text-muted-foreground">광고료(VAT+)</label>
             <div className="relative mt-1">
               <Input 
                 type="text"
