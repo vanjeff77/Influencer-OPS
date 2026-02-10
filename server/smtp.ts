@@ -123,7 +123,7 @@ export function convertToGmailCompatibleHtml(html: string): string {
   
   result = result.replace(/(<img[^>]*)\ssrc="data:image\/[^"]*"([^>]*>)/gi, '');
   
-  result = result.replace(/<div><\/div>/g, '');
+  result = result.replace(/<div><\/div>/g, '<div><br></div>');
   
   result = result.replace(/(<div[^>]*>)\s+/g, '$1');
   result = result.replace(/\s+(<\/div>)/g, '$1');
