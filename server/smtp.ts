@@ -112,9 +112,17 @@ export async function sendEmail(transporter: Transporter, options: SendEmailOpti
 export function convertToGmailCompatibleHtml(html: string): string {
   let result = html;
   
-  result = result.replace(/<p><br\s*\/?><\/p>/gi, '<div><br></div>');
+  result = result.replace(/<p><br\s*\/?><\/p>/gi, '<div style="margin:0 0 1em 0"><br></div>');
   
-  result = result.replace(/<p([^>]*)>([\s\S]*?)<\/p>/gi, '<div$1>$2</div>');
+  result = result.replace(/<p([^>]*)>([\s\S]*?)<\/p>/gi, (match, attrs, content) => {
+    const existingStyle = attrs.match(/style="([^"]*)"/);
+    if (existingStyle) {
+      const newStyle = existingStyle[1] + ';margin:0 0 1em 0';
+      const newAttrs = attrs.replace(/style="[^"]*"/, `style="${newStyle}"`);
+      return `<div${newAttrs}>${content}</div>`;
+    }
+    return `<div${attrs} style="margin:0 0 1em 0">${content}</div>`;
+  });
   
   result = result.replace(/<h1><strong>([\s\S]*?)<\/strong><\/h1>/gi, '<div style="font-size:20px;font-weight:bold">$1</div>');
   result = result.replace(/<h1>([\s\S]*?)<\/h1>/gi, '<div style="font-size:20px;font-weight:bold">$1</div>');
