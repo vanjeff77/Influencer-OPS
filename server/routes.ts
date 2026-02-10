@@ -7,7 +7,7 @@ import { api } from "@shared/routes";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
-import { campaignInfluencers, campaigns, influencers, users, workspaceMembers, workspaces } from "@shared/schema";
+import { campaignInfluencers, campaigns, influencers, users, workspaceMembers, workspaces, emailAccounts } from "@shared/schema";
 import { eq, and, or, inArray } from "drizzle-orm";
 import { getImapSmtpSettings } from "./smtp";
 
@@ -2128,95 +2128,135 @@ export async function registerRoutes(
     }
   });
 
-  // Sync conversation (fetch new emails from Gmail)
+  // Sync conversation (fetch new emails via IMAP Message-ID based threading)
   app.post('/api/conversations/:id/sync', async (req, res) => {
     try {
       const conversationId = parseInt(req.params.id);
       const conv = await storage.getConversation(conversationId);
       if (!conv) return res.status(404).json({ message: "Conversation not found" });
-      
-      if (!conv.gmailThreadId) {
-        return res.json({ synced: 0, message: "아직 Gmail 스레드가 없습니다" });
+
+      const existingMessages = await storage.getConversationMessages(conversationId);
+
+      const knownMessageIds = existingMessages
+        .map(m => m.gmailMessageId)
+        .filter((id): id is string => !!id && id.startsWith('<'));
+
+      if (knownMessageIds.length === 0) {
+        return res.json({ synced: 0, message: "동기화할 메시지 ID가 없습니다" });
       }
-      
-      const { getThread, parseMessageHeaders, getMessageBody, generateSnippet } = await import('./gmail');
-      const thread = await getThread(conv.gmailThreadId);
-      
-      if (!thread.messages) {
+
+      const emailAccountId = conv.emailAccountId || existingMessages.find(m => m.senderEmail)?.id;
+      let emailAccount: any = null;
+
+      if (conv.emailAccountId) {
+        emailAccount = await storage.getEmailAccountById(conv.emailAccountId);
+      }
+      if (!emailAccount) {
+        const senderEmail = existingMessages.find(m => m.direction === 'outbound')?.senderEmail;
+        if (senderEmail) {
+          const workspaceId = conv.lineItem.influencer?.workspaceId || 0;
+          const allAccounts = await db.select().from(emailAccounts).where(eq(emailAccounts.workspaceId, workspaceId));
+          emailAccount = allAccounts.find((a: any) => a.email === senderEmail);
+        }
+      }
+
+      if (!emailAccount) {
+        return res.json({ synced: 0, message: "이메일 계정을 찾을 수 없습니다" });
+      }
+
+      const { imapHost, imapPort: imapPortNum, imapPassword: encPwd } = getImapSmtpSettings(emailAccount);
+      if (!imapHost || !encPwd) {
+        return res.json({ synced: 0, message: "IMAP 설정이 완료되지 않았습니다" });
+      }
+
+      const { decryptPassword } = await import('./imap');
+      const password = decryptPassword(encPwd);
+      const imapConfig = {
+        user: emailAccount.email,
+        password,
+        host: imapHost,
+        port: imapPortNum,
+        tls: true,
+      };
+
+      const { fetchThreadByMessageIds } = await import('./imap');
+      console.log(`[Sync] Searching IMAP for thread with ${knownMessageIds.length} message IDs for conversation ${conversationId}`);
+      const threadMessages = await fetchThreadByMessageIds(imapConfig, knownMessageIds);
+      console.log(`[Sync] Found ${threadMessages.length} messages in IMAP thread`);
+
+      if (threadMessages.length === 0) {
         return res.json({ synced: 0 });
       }
-      
-      // Get existing message IDs to avoid duplicates
-      const existingMessages = await storage.getConversationMessages(conversationId);
-      const existingGmailIds = new Set(existingMessages.map(m => m.gmailMessageId).filter(Boolean));
-      
-      // Also track by snippet to avoid duplicates when gmailMessageId is missing
+
+      const existingMsgIds = new Set(existingMessages.map(m => m.gmailMessageId).filter(Boolean));
       const existingSnippets = new Set(existingMessages.map(m => m.snippet?.slice(0, 50)).filter(Boolean));
-      
-      let syncedCount = 0;
       const influencer = conv.lineItem.influencer;
-      
-      for (const msg of thread.messages) {
-        // Skip if we already have this Gmail message ID
-        if (msg.id && existingGmailIds.has(msg.id)) continue;
-        
-        const headers = parseMessageHeaders(msg);
-        const body = getMessageBody(msg);
-        const snippet = generateSnippet(body.text || body.html);
-        
-        // Skip if we already have a message with similar content (prevents duplicates)
-        if (snippet && existingSnippets.has(snippet.slice(0, 50))) continue;
-        
-        const isInbound = influencer?.email ? headers.from.toLowerCase().includes(influencer.email.toLowerCase()) : false;
-        
-        if (!isInbound) continue; // Only sync inbound messages
-        
-        const senderEmailMatch = headers.from.match(/<([^>]+)>/);
-        const senderEmail = senderEmailMatch ? senderEmailMatch[1] : headers.from.split(/\s/)[0];
-        const senderName = headers.from.replace(/<[^>]+>/, '').trim() || null;
-        
+      let syncedCount = 0;
+
+      for (const msg of threadMessages) {
+        if (msg.messageId && existingMsgIds.has(msg.messageId)) continue;
+        if (msg.snippet && existingSnippets.has(msg.snippet.slice(0, 50))) continue;
+
+        const isInbound = influencer?.email
+          ? msg.from.toLowerCase().includes(influencer.email.toLowerCase())
+          : false;
+        const isOutbound = emailAccount.email
+          ? msg.from.toLowerCase().includes(emailAccount.email.toLowerCase())
+          : false;
+
+        if (!isInbound && !isOutbound) continue;
+
+        const ccEmails = msg.cc
+          ? msg.cc.split(',').map((e: string) => e.trim()).filter(Boolean)
+          : null;
+
         await storage.createConversationMessage({
           conversationId,
-          direction: 'inbound',
-          senderEmail,
-          senderName,
-          recipientEmail: headers.to || null,
-          ccEmails: headers.ccEmails && headers.ccEmails.length > 0 ? headers.ccEmails : null,
-          snippet,
-          bodyHtml: body.html,
-          bodyText: body.text,
-          gmailMessageId: msg.id || null,
-          gmailThreadId: msg.threadId || null,
+          direction: isInbound ? 'inbound' : 'outbound',
+          senderEmail: msg.from,
+          senderName: null,
+          recipientEmail: msg.to || null,
+          ccEmails: ccEmails && ccEmails.length > 0 ? ccEmails : null,
+          snippet: msg.snippet,
+          bodyHtml: msg.bodyHtml,
+          bodyText: msg.bodyText,
+          gmailMessageId: msg.messageId || null,
+          gmailThreadId: null,
           sendStatus: 'sent',
-          receivedAt: new Date(parseInt(msg.internalDate || '0'))
+          receivedAt: msg.date
         });
-        
+
         syncedCount++;
-        existingSnippets.add(snippet?.slice(0, 50));
-        
-        // Create timeline event
-        if (influencer) {
+        existingMsgIds.add(msg.messageId);
+        existingSnippets.add(msg.snippet?.slice(0, 50));
+
+        if (isInbound && influencer) {
           await storage.createTimelineEvent({
             workspaceId: influencer.workspaceId,
             influencerId: influencer.id,
             lineItemId: conv.campaignLineItemId,
             eventType: 'email_received',
             title: '이메일 수신',
-            description: headers.subject,
-            metadata: { conversationId, gmailMessageId: msg.id }
+            description: msg.subject,
+            metadata: { conversationId, messageId: msg.messageId }
           });
         }
       }
-      
-      // Update conversation status if got reply
+
       if (syncedCount > 0) {
-        await storage.updateConversation(conversationId, { status: 'replied' });
+        const hasInbound = threadMessages.some(m =>
+          influencer?.email && m.from.toLowerCase().includes(influencer.email.toLowerCase())
+          && !existingMessages.some(em => em.gmailMessageId === m.messageId)
+        );
+        if (hasInbound) {
+          await storage.updateConversation(conversationId, { status: 'replied' });
+        }
       }
-      
+
       res.json({ synced: syncedCount });
     } catch (err) {
       console.error('Sync error:', err);
-      res.status(500).json({ message: "동기화 실패" });
+      res.status(500).json({ message: "동기화 실패: " + (err as Error).message });
     }
   });
 

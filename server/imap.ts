@@ -403,6 +403,209 @@ export async function fetchThreadMessages(
   });
 }
 
+export interface ThreadMessage {
+  messageId: string;
+  inReplyTo: string | null;
+  references: string[];
+  subject: string;
+  from: string;
+  to: string;
+  cc: string;
+  date: Date;
+  snippet: string;
+  bodyHtml: string;
+  bodyText: string;
+  isRead: boolean;
+}
+
+async function fetchFromFolder(
+  config: ImapConfig,
+  folder: string,
+  messageIds: string[]
+): Promise<ThreadMessage[]> {
+  let imap: Imap;
+  try {
+    imap = await createImapConnection(config);
+  } catch (err) {
+    console.log(`IMAP: Could not connect for folder ${folder}:`, (err as Error).message);
+    return [];
+  }
+
+  return new Promise((resolve) => {
+    imap.openBox(folder, true, (err) => {
+      if (err) {
+        imap.end();
+        resolve([]);
+        return;
+      }
+
+      const doSearch = (criteria: any[]): Promise<number[]> => {
+        return new Promise((res) => {
+          imap.search(criteria, (err, results) => {
+            res(err || !results ? [] : results);
+          });
+        });
+      };
+
+      const searchAll = async () => {
+        const allResults = new Set<number>();
+        for (const mid of messageIds) {
+          const r1 = await doSearch([['HEADER', 'MESSAGE-ID', mid]]);
+          const r2 = await doSearch([['HEADER', 'IN-REPLY-TO', mid]]);
+          const r3 = await doSearch([['HEADER', 'REFERENCES', mid]]);
+          for (const r of [...r1, ...r2, ...r3]) allResults.add(r);
+        }
+        return Array.from(allResults);
+      };
+
+      searchAll().then((results) => {
+        if (!results || results.length === 0) {
+          imap.end();
+          resolve([]);
+          return;
+        }
+
+        const messages: ThreadMessage[] = [];
+        const fetch = imap.fetch(results, { bodies: '', struct: true });
+
+        fetch.on('message', (msg) => {
+          let buffer = '';
+          msg.on('body', (stream) => {
+            stream.on('data', (chunk: Buffer) => {
+              buffer += chunk.toString('utf8');
+            });
+          });
+
+          msg.once('attributes', (attrs) => {
+            msg.once('end', async () => {
+              try {
+                const parsed = await simpleParser(buffer);
+                const fromAddress = Array.isArray(parsed.from?.value)
+                  ? parsed.from.value[0]?.address || ''
+                  : '';
+                const toAddress = Array.isArray(parsed.to)
+                  ? (parsed.to[0] as any)?.value?.[0]?.address || ''
+                  : (parsed.to as any)?.value?.[0]?.address || '';
+                const ccValue = Array.isArray(parsed.cc)
+                  ? parsed.cc.map((c: any) => c.value?.map((v: any) => v.address).join(', ')).join(', ')
+                  : (parsed.cc as any)?.value?.map((v: any) => v.address).join(', ') || '';
+
+                const refs = parsed.references
+                  ? (Array.isArray(parsed.references) ? parsed.references : [parsed.references])
+                  : [];
+
+                const textBody = parsed.text || '';
+                const snippet = textBody.substring(0, 150).replace(/\n/g, ' ').trim();
+
+                messages.push({
+                  messageId: parsed.messageId || '',
+                  inReplyTo: (parsed.inReplyTo as string) || null,
+                  references: refs as string[],
+                  subject: parsed.subject || '(제목 없음)',
+                  from: fromAddress,
+                  to: toAddress,
+                  cc: ccValue,
+                  date: parsed.date || new Date(),
+                  snippet: snippet || '(내용 없음)',
+                  bodyHtml: parsed.html || parsed.text || '',
+                  bodyText: parsed.text || '',
+                  isRead: attrs.flags?.includes('\\Seen') || false,
+                });
+              } catch (parseErr) {
+                console.error('Error parsing email in fetchFromFolder:', parseErr);
+              }
+            });
+          });
+        });
+
+        fetch.once('error', () => {
+          imap.end();
+          resolve([]);
+        });
+
+        fetch.once('end', () => {
+          imap.end();
+          setTimeout(() => {
+            messages.sort((a, b) => a.date.getTime() - b.date.getTime());
+            resolve(messages);
+          }, 300);
+        });
+      });
+    });
+  });
+}
+
+export async function fetchThreadByMessageIds(
+  config: ImapConfig,
+  messageIds: string[],
+  sentFolder?: string
+): Promise<ThreadMessage[]> {
+  if (!messageIds.length) return [];
+
+  const inboxMessages = await fetchFromFolder(config, 'INBOX', messageIds);
+
+  const sentFolders = sentFolder
+    ? [sentFolder]
+    : ['[Gmail]/Sent Mail', '[Gmail]/보낸편지함', 'Sent', 'INBOX.Sent', 'Sent Messages'];
+
+  let sentMessages: ThreadMessage[] = [];
+  for (const folder of sentFolders) {
+    try {
+      sentMessages = await fetchFromFolder(config, folder, messageIds);
+      if (sentMessages.length > 0) break;
+    } catch {
+      continue;
+    }
+  }
+
+  const allMessages = [...inboxMessages, ...sentMessages];
+  const seen = new Set<string>();
+  const unique = allMessages.filter(m => {
+    if (!m.messageId || seen.has(m.messageId)) return false;
+    seen.add(m.messageId);
+    return true;
+  });
+
+  unique.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  const knownIds = new Set(messageIds.map(id => id.toLowerCase()));
+  for (const msg of unique) {
+    if (msg.messageId) knownIds.add(msg.messageId.toLowerCase());
+  }
+
+  const newRefs = unique
+    .flatMap(m => [m.inReplyTo, ...m.references])
+    .filter((r): r is string => !!r && !knownIds.has(r.toLowerCase()));
+
+  if (newRefs.length > 0) {
+    const uniqueNewRefs = Array.from(new Set(newRefs));
+    const extraInbox = await fetchFromFolder(config, 'INBOX', uniqueNewRefs);
+    for (const m of extraInbox) {
+      if (m.messageId && !seen.has(m.messageId)) {
+        seen.add(m.messageId);
+        unique.push(m);
+      }
+    }
+    for (const folder of sentFolders) {
+      try {
+        const extraSent = await fetchFromFolder(config, folder, uniqueNewRefs);
+        for (const m of extraSent) {
+          if (m.messageId && !seen.has(m.messageId)) {
+            seen.add(m.messageId);
+            unique.push(m);
+          }
+        }
+        if (extraSent.length > 0) break;
+      } catch {
+        continue;
+      }
+    }
+    unique.sort((a, b) => a.date.getTime() - b.date.getTime());
+  }
+
+  return unique;
+}
+
 export async function testImapConnection(config: ImapConfig): Promise<{ success: boolean; message: string; folders?: string[] }> {
   try {
     const imap = await createImapConnection(config);
