@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ArrowLeft, CheckCircle2, CircleDollarSign, FileText, Plus, Search, Users, Instagram, Youtube, Twitter, Save, MessageCircle, ExternalLink, Eye, Heart, MessageSquare, Share2, Trash2, Edit3, Image, Pencil, Calendar, Copy, Upload, Settings } from "lucide-react";
+import { ArrowLeft, CheckCircle2, CircleDollarSign, FileText, Plus, Search, Users, Instagram, Youtube, Twitter, Save, MessageCircle, ExternalLink, Eye, Heart, MessageSquare, Share2, Trash2, Edit3, Image, Pencil, Calendar, Copy, Upload, Settings, UserCheck, FileSignature, Film, Wallet } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Link } from "wouter";
@@ -314,17 +314,26 @@ export default function CampaignDetail() {
 
         <Tabs defaultValue="influencers" className="w-full">
           <TabsList className="mb-4 flex-wrap gap-1 w-full justify-start">
-            <TabsTrigger value="influencers">선정</TabsTrigger>
+            <TabsTrigger value="influencers" className="flex items-center gap-1">
+              <UserCheck className="w-4 h-4" />
+              선정
+            </TabsTrigger>
             <TabsTrigger value="communication" className="flex items-center gap-1">
               <MessageCircle className="w-4 h-4" />
-              {KO.pages.communication.title}
+              컨택
             </TabsTrigger>
             <TabsTrigger value="operations" className="flex items-center gap-1">
-              <Settings2 className="w-4 h-4" />
-              운영
+              <FileSignature className="w-4 h-4" />
+              계약
             </TabsTrigger>
-            <TabsTrigger value="content">콘텐츠</TabsTrigger>
-            <TabsTrigger value="finance">정산</TabsTrigger>
+            <TabsTrigger value="content" className="flex items-center gap-1">
+              <Film className="w-4 h-4" />
+              제작
+            </TabsTrigger>
+            <TabsTrigger value="finance" className="flex items-center gap-1">
+              <Wallet className="w-4 h-4" />
+              정산
+            </TabsTrigger>
             <div className="flex-1" />
             <TabsTrigger value="settings" className="flex items-center gap-1">
               <Settings className="w-4 h-4" />
@@ -1016,7 +1025,7 @@ function LineItemDetailDrawer({ item, onClose, onUpdate }: {
             <TabsTrigger value="overview">개요</TabsTrigger>
             <TabsTrigger value="contract">계약</TabsTrigger>
             <TabsTrigger value="settlement">정산</TabsTrigger>
-            <TabsTrigger value="content">콘텐츠</TabsTrigger>
+            <TabsTrigger value="content">제작</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4 mt-4">
