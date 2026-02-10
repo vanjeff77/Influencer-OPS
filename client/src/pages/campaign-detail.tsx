@@ -378,7 +378,7 @@ export default function CampaignDetail() {
                         />
                       </TableHead>
                       <TableHead>인플루언서</TableHead>
-                      <TableHead>플랫폼</TableHead>
+                      <TableHead>채널 바로가기</TableHead>
                       <TableHead>진행 상태</TableHead>
                       <TableHead>계약</TableHead>
                       <TableHead>지급</TableHead>
@@ -406,10 +406,22 @@ export default function CampaignDetail() {
                             <div className="text-xs text-muted-foreground">{item.influencer?.email}</div>
                           </div>
                         </TableCell>
-                        <TableCell>
-                          {item.influencer?.accounts?.[0] && (
-                            <PlatformIcon p={item.influencer.accounts[0].platform} />
-                          )}
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <div className="flex gap-1">
+                            {item.influencer?.accounts?.map((acc) => (
+                              <a
+                                key={acc.id}
+                                href={acc.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                data-testid={`link-channel-${acc.platform}-${item.id}`}
+                              >
+                                <Button variant="outline" size="icon" className="h-7 w-7">
+                                  <PlatformIcon p={acc.platform} />
+                                </Button>
+                              </a>
+                            ))}
+                          </div>
                         </TableCell>
                         <TableCell>
                           <Select 
