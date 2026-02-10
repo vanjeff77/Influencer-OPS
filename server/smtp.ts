@@ -66,6 +66,8 @@ interface SendEmailOptions {
   subject: string;
   html: string;
   attachments?: SmtpAttachment[];
+  inReplyTo?: string;
+  references?: string[];
 }
 
 export function createSmtpTransporter(config: SmtpConfig): Transporter {
@@ -94,6 +96,12 @@ export async function sendEmail(transporter: Transporter, options: SendEmailOpti
       subject: options.subject,
       html: options.html,
     };
+    if (options.inReplyTo) {
+      mailOptions.inReplyTo = options.inReplyTo;
+    }
+    if (options.references && options.references.length > 0) {
+      mailOptions.references = options.references.join(' ');
+    }
     if (options.attachments && options.attachments.length > 0) {
       mailOptions.attachments = options.attachments.map(att => ({
         filename: att.filename,

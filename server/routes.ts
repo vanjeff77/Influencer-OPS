@@ -2063,15 +2063,31 @@ export async function registerRoutes(
             password,
           });
           
-          const result = await sendSmtpEmail(transporter, {
+          const existingMsgs = await storage.getConversationMessages(conversationId);
+          const lastInbound = existingMsgs.filter(m => m.direction === 'inbound').pop();
+          const lastMessageId = lastInbound?.gmailMessageId || existingMsgs[existingMsgs.length - 1]?.gmailMessageId;
+          
+          const smtpMailOptions: any = {
             from: account.email,
             to: toEmail,
             cc: ccEmails.length > 0 ? ccEmails : undefined,
             subject: finalSubject,
             html: finalBody,
-          });
+          };
           
-          if (!result.success) {
+          if (lastMessageId) {
+            smtpMailOptions.inReplyTo = lastMessageId;
+            const allRefs = existingMsgs
+              .map(m => m.gmailMessageId)
+              .filter((id): id is string => !!id && id.startsWith('<'));
+            smtpMailOptions.references = allRefs;
+          }
+
+          const result = await sendSmtpEmail(transporter, smtpMailOptions);
+          
+          if (result.success) {
+            gmailMessageId = result.messageId;
+          } else {
             console.error('SMTP send failed:', result.error);
             sendStatus = 'failed';
           }
@@ -2189,13 +2205,25 @@ export async function registerRoutes(
       }
 
       const existingMsgIds = new Set(existingMessages.map(m => m.gmailMessageId).filter(Boolean));
-      const existingSnippets = new Set(existingMessages.map(m => m.snippet?.slice(0, 50)).filter(Boolean));
+      const existingFingerprints = new Set(
+        existingMessages.map(m => {
+          const sender = (m.senderEmail || '').toLowerCase().trim();
+          const date = m.receivedAt ? new Date(m.receivedAt).getTime() : (m.sentAt ? new Date(m.sentAt).getTime() : 0);
+          const snip = (m.snippet || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+          return `${sender}|${date}|${snip}`;
+        }).filter(f => f !== '|0|')
+      );
       const influencer = conv.lineItem.influencer;
       let syncedCount = 0;
 
       for (const msg of threadMessages) {
         if (msg.messageId && existingMsgIds.has(msg.messageId)) continue;
-        if (msg.snippet && existingSnippets.has(msg.snippet.slice(0, 50))) continue;
+
+        const msgSender = (msg.from || '').toLowerCase().trim();
+        const msgDate = msg.date ? msg.date.getTime() : 0;
+        const msgSnip = (msg.snippet || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+        const fingerprint = `${msgSender}|${msgDate}|${msgSnip}`;
+        if (existingFingerprints.has(fingerprint)) continue;
 
         const isInbound = influencer?.email
           ? msg.from.toLowerCase().includes(influencer.email.toLowerCase())
@@ -2228,7 +2256,7 @@ export async function registerRoutes(
 
         syncedCount++;
         existingMsgIds.add(msg.messageId);
-        existingSnippets.add(msg.snippet?.slice(0, 50));
+        existingFingerprints.add(fingerprint);
 
         if (isInbound && influencer) {
           await storage.createTimelineEvent({
