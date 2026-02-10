@@ -421,7 +421,22 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
             <MessageComposer 
               conversationId={existingConv?.id} 
               influencerEmail={selectedLineItem.influencer?.email}
-              lastMessageCc={conversationDetail?.messages?.[0]?.ccEmails}
+              lastMessageCc={(() => {
+                const allCc = new Set<string>();
+                conversationDetail?.messages?.forEach((msg: any) => {
+                  if (msg.ccEmails && Array.isArray(msg.ccEmails)) {
+                    msg.ccEmails.forEach((e: string) => {
+                      if (e) allCc.add(e.toLowerCase().trim());
+                    });
+                  }
+                });
+                const senderEmail = conversationDetail?.messages?.find((m: any) => m.direction === 'outbound')?.senderEmail;
+                const infEmail = selectedLineItem.influencer?.email;
+                if (senderEmail) allCc.delete(senderEmail.toLowerCase().trim());
+                if (infEmail) allCc.delete(infEmail.toLowerCase().trim());
+                const result = Array.from(allCc);
+                return result.length > 0 ? result : null;
+              })()}
               onSent={() => {
                 refetchConversation();
                 if (existingConv?.id) {
@@ -623,6 +638,13 @@ function MessageComposer({ conversationId, influencerEmail, lastMessageCc, onSen
   const [cc, setCc] = useState(lastMessageCc?.join(', ') || "");
   const [isExpanded, setIsExpanded] = useState(false);
   const [showCc, setShowCc] = useState(!!lastMessageCc?.length);
+
+  const lastCcKey = lastMessageCc ? [...lastMessageCc].sort().join('|') : '';
+  useEffect(() => {
+    const newCc = lastMessageCc?.join(', ') || "";
+    setCc(newCc);
+    setShowCc(!!lastMessageCc?.length);
+  }, [lastCcKey]);
 
   const sendMessage = useMutation({
     mutationFn: (data: { body: string; subject: string; cc?: string }) => 

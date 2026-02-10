@@ -2027,9 +2027,32 @@ export async function registerRoutes(
         finalBody += `<br><br>--<br>${account.signature}`;
       }
       
-      const ccEmails: string[] = cc 
+      const userCcEmails: string[] = cc 
         ? (Array.isArray(cc) ? cc : cc.split(',').map((e: string) => e.trim()).filter(Boolean))
         : [];
+      
+      const existingMessages = await storage.getConversationMessages(conversationId);
+      const previousCcSet = new Set<string>();
+      for (const msg of existingMessages) {
+        if (msg.ccEmails && Array.isArray(msg.ccEmails)) {
+          for (const email of msg.ccEmails) {
+            if (email) previousCcSet.add(email.toLowerCase().trim());
+          }
+        }
+      }
+      
+      const excludeEmails = new Set<string>();
+      excludeEmails.add(account.email.toLowerCase().trim());
+      excludeEmails.add(toEmail.toLowerCase().trim());
+      
+      const mergedCcSet = new Set<string>();
+      for (const e of previousCcSet) {
+        if (!excludeEmails.has(e)) mergedCcSet.add(e);
+      }
+      for (const e of userCcEmails) {
+        if (!excludeEmails.has(e.toLowerCase().trim())) mergedCcSet.add(e.toLowerCase().trim());
+      }
+      const ccEmails: string[] = Array.from(mergedCcSet);
       
       let gmailMessageId: string | undefined;
       let gmailThreadId: string | undefined;
