@@ -553,21 +553,17 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id);
       
-      // Check if influencer is assigned to any active (진행중) campaigns
-      const activeCampaignAssignments = await db.select({
+      const campaignAssignments = await db.select({
         campaignName: campaigns.name
       })
         .from(campaignInfluencers)
         .innerJoin(campaigns, eq(campaignInfluencers.campaignId, campaigns.id))
-        .where(and(
-          eq(campaignInfluencers.influencerId, id),
-          eq(campaigns.status, '진행중')
-        ));
+        .where(eq(campaignInfluencers.influencerId, id));
       
-      if (activeCampaignAssignments.length > 0) {
-        const campaignNames = activeCampaignAssignments.map(a => a.campaignName).join(', ');
+      if (campaignAssignments.length > 0) {
+        const campaignNames = campaignAssignments.map(a => a.campaignName).join(', ');
         return res.status(400).json({ 
-          message: `진행 중인 캠페인에 배정된 인플루언서는 삭제할 수 없습니다. (${campaignNames})` 
+          message: `캠페인에 할당된 인플루언서는 삭제할 수 없습니다. 해당 캠페인에서 먼저 제외한 후 삭제해 주세요. (${campaignNames})` 
         });
       }
       
@@ -587,23 +583,19 @@ export async function registerRoutes(
         return res.status(400).json({ message: "삭제할 인플루언서 ID가 필요합니다." });
       }
       
-      // Check if any influencers are assigned to active campaigns
-      const activeCampaignAssignments = await db.select({
+      const campaignAssignments = await db.select({
         influencerId: campaignInfluencers.influencerId,
         campaignName: campaigns.name
       })
         .from(campaignInfluencers)
         .innerJoin(campaigns, eq(campaignInfluencers.campaignId, campaigns.id))
-        .where(and(
-          inArray(campaignInfluencers.influencerId, ids),
-          eq(campaigns.status, '진행중')
-        ));
+        .where(inArray(campaignInfluencers.influencerId, ids));
       
-      if (activeCampaignAssignments.length > 0) {
-        const blockedIds = Array.from(new Set(activeCampaignAssignments.map(a => a.influencerId)));
-        const campaignNames = Array.from(new Set(activeCampaignAssignments.map(a => a.campaignName))).join(', ');
+      if (campaignAssignments.length > 0) {
+        const blockedIds = Array.from(new Set(campaignAssignments.map(a => a.influencerId)));
+        const campaignNames = Array.from(new Set(campaignAssignments.map(a => a.campaignName))).join(', ');
         return res.status(400).json({ 
-          message: `진행 중인 캠페인에 배정된 인플루언서 ${blockedIds.length}명은 삭제할 수 없습니다. (${campaignNames})` 
+          message: `캠페인에 할당된 인플루언서 ${blockedIds.length}명은 삭제할 수 없습니다. 해당 캠페인에서 먼저 제외한 후 삭제해 주세요. (${campaignNames})` 
         });
       }
       

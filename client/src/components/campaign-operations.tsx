@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useDeleteCampaignItem } from "@/hooks/use-campaigns";
@@ -556,6 +556,10 @@ interface OperationsPanelProps {
 
 function OperationsPanel({ item, onUpdate, isSaving }: OperationsPanelProps) {
   const [localItem, setLocalItem] = useState(item);
+
+  useEffect(() => {
+    setLocalItem(item);
+  }, [item]);
 
   const dueBadges = getDueBadges(item);
   const hasDanger = dueBadges.some(b => b.type === 'danger');

@@ -741,8 +741,8 @@ export default function Discover() {
                       setSelectedIds(new Set());
                       setIsBulkDeleteOpen(false);
                     },
-                    onError: () => {
-                      toast({ title: KO.pages.discover.bulkDeleteFailed, variant: "destructive" });
+                    onError: (error: Error) => {
+                      toast({ title: error.message || KO.pages.discover.bulkDeleteFailed, variant: "destructive" });
                     }
                   });
                 }}
@@ -1430,8 +1430,8 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
         setIsDeleteDialogOpen(false);
         onClose();
       },
-      onError: () => {
-        toast({ title: KO.pages.discover.deleteInfluencerFailed, variant: "destructive" });
+      onError: (error: Error) => {
+        toast({ title: error.message || KO.pages.discover.deleteInfluencerFailed, variant: "destructive" });
       }
     });
   };

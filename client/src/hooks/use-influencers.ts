@@ -115,7 +115,10 @@ export function useDeleteInfluencer() {
   return useMutation({
     mutationFn: async (influencerId: number) => {
       const res = await fetch(`/api/influencers/${influencerId}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed to delete influencer");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || "Failed to delete influencer");
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -134,7 +137,10 @@ export function useBulkDeleteInfluencers() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids: influencerIds }),
       });
-      if (!res.ok) throw new Error("Failed to bulk delete influencers");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || "Failed to bulk delete influencers");
+      }
       return res.json();
     },
     onSuccess: () => {

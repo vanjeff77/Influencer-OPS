@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -724,9 +724,22 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
   const [email, setEmail] = useState(influencer?.email || "");
   
   const [offerFee, setOfferFee] = useState<string>(lineItem.offerFee?.toString() || "");
+  const [offerFeeDisplay, setOfferFeeDisplay] = useState<string>(lineItem.offerFee ? Number(lineItem.offerFee).toLocaleString() : "");
   const [draftDueAt, setDraftDueAt] = useState(lineItem.draftDueAt ? new Date(lineItem.draftDueAt).toISOString().split('T')[0] : "");
   const [uploadDueAt, setUploadDueAt] = useState(lineItem.uploadDueAt ? new Date(lineItem.uploadDueAt).toISOString().split('T')[0] : "");
-  
+
+  useEffect(() => {
+    setOfferFee(lineItem.offerFee?.toString() || "");
+    setOfferFeeDisplay(lineItem.offerFee ? Number(lineItem.offerFee).toLocaleString() : "");
+    setDraftDueAt(lineItem.draftDueAt ? new Date(lineItem.draftDueAt).toISOString().split('T')[0] : "");
+    setUploadDueAt(lineItem.uploadDueAt ? new Date(lineItem.uploadDueAt).toISOString().split('T')[0] : "");
+  }, [lineItem.offerFee, lineItem.draftDueAt, lineItem.uploadDueAt]);
+
+  useEffect(() => {
+    setMemo(influencer?.memo || "");
+    setEmail(influencer?.email || "");
+  }, [influencer?.memo, influencer?.email]);
+
   const [settlementType, setSettlementType] = useState(influencer?.settlementType || "");
   const [bankName, setBankName] = useState(influencer?.bankName || "");
   const [accountHolder, setAccountHolder] = useState(influencer?.accountHolder || "");
@@ -833,14 +846,22 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
           <Separator />
           <div>
             <label className="text-xs font-medium text-muted-foreground">광고료</label>
-            <Input 
-              type="number"
-              value={offerFee}
-              onChange={(e) => setOfferFee(e.target.value)}
-              placeholder="0"
-              className="mt-1 h-8 text-sm"
-              data-testid="input-lineitem-offer-fee"
-            />
+            <div className="relative mt-1">
+              <Input 
+                type="text"
+                inputMode="numeric"
+                value={offerFeeDisplay}
+                onChange={(e) => {
+                  const raw = e.target.value.replace(/[^0-9]/g, "");
+                  setOfferFee(raw);
+                  setOfferFeeDisplay(raw ? Number(raw).toLocaleString() : "");
+                }}
+                placeholder="0"
+                className="mt-0 h-8 text-sm pr-8 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                data-testid="input-lineitem-offer-fee"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">원</span>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
@@ -848,7 +869,10 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
               <Input 
                 type="date"
                 value={draftDueAt}
-                onChange={(e) => setDraftDueAt(e.target.value)}
+                onChange={(e) => {
+                  setDraftDueAt(e.target.value);
+                  updateLineItem.mutate({ draftDueAt: e.target.value || null });
+                }}
                 className="mt-1 h-8 text-sm"
                 data-testid="input-lineitem-draft-due"
               />
@@ -858,7 +882,10 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
               <Input 
                 type="date"
                 value={uploadDueAt}
-                onChange={(e) => setUploadDueAt(e.target.value)}
+                onChange={(e) => {
+                  setUploadDueAt(e.target.value);
+                  updateLineItem.mutate({ uploadDueAt: e.target.value || null });
+                }}
                 className="mt-1 h-8 text-sm"
                 data-testid="input-lineitem-upload-due"
               />
