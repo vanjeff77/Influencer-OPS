@@ -118,10 +118,6 @@ export function CampaignOperations({ campaignId, workspaceId = 1, lineItems }: C
   const { toast } = useToast();
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
-  const [stageFilter, setStageFilter] = useState<string>("all");
-  const [commFilter, setCommFilter] = useState<string>("all");
-  const [reviewFilter, setReviewFilter] = useState<string>("all");
-  const [dueFilter, setDueFilter] = useState<string>("all");
   const [contractDialogItem, setContractDialogItem] = useState<LineItemWithDetails | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{ id: number; name: string } | null>(null);
@@ -186,22 +182,9 @@ export function CampaignOperations({ campaignId, workspaceId = 1, lineItems }: C
         const email = item.influencer?.email?.toLowerCase() || "";
         if (!name.includes(searchLower) && !email.includes(searchLower)) return false;
       }
-      if (stageFilter !== "all" && item.stage !== stageFilter) return false;
-      if (commFilter !== "all" && item.commStatus !== commFilter) return false;
-      if (reviewFilter !== "all" && item.reviewStatus !== reviewFilter) return false;
-      
-      if (dueFilter !== "all") {
-        const badges = getDueBadges(item);
-        if (dueFilter === "overdue") {
-          if (!badges.some(b => b.type === 'danger')) return false;
-        } else if (dueFilter === "dueSoon") {
-          if (!badges.some(b => b.type === 'warning' || b.type === 'info')) return false;
-        }
-      }
-      
       return true;
     });
-  }, [lineItems, search, stageFilter, commFilter, reviewFilter, dueFilter]);
+  }, [lineItems, search]);
 
   const handleDeleteClick = (e: React.MouseEvent, item: LineItemWithDetails) => {
     e.stopPropagation();
@@ -239,61 +222,20 @@ export function CampaignOperations({ campaignId, workspaceId = 1, lineItems }: C
             data-testid="input-search-operations"
           />
         </div>
-        <Select value={stageFilter} onValueChange={setStageFilter}>
-          <SelectTrigger className="w-[120px]" data-testid="select-stage-filter">
-            <SelectValue placeholder={KO.pages.operations.filterStage} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{KO.pages.operations.filterAll}</SelectItem>
-            {STAGES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={commFilter} onValueChange={setCommFilter}>
-          <SelectTrigger className="w-[120px]" data-testid="select-comm-filter">
-            <SelectValue placeholder={KO.pages.operations.filterComm} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{KO.pages.operations.filterAll}</SelectItem>
-            {COMM_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={reviewFilter} onValueChange={setReviewFilter}>
-          <SelectTrigger className="w-[120px]" data-testid="select-review-filter">
-            <SelectValue placeholder={KO.pages.operations.filterReview} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{KO.pages.operations.filterAll}</SelectItem>
-            {REVIEW_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={dueFilter} onValueChange={setDueFilter}>
-          <SelectTrigger className="w-[120px]" data-testid="select-due-filter">
-            <SelectValue placeholder={KO.pages.operations.filterDue} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{KO.pages.operations.filterAll}</SelectItem>
-            <SelectItem value="dueSoon">{KO.pages.operations.filterDueSoon}</SelectItem>
-            <SelectItem value="overdue">{KO.pages.operations.filterOverdue}</SelectItem>
-          </SelectContent>
-        </Select>
       </div>
 
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <ScrollArea className="max-h-[600px]">
-              <Table className="min-w-[1100px]">
+              <Table className="min-w-[700px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="sticky left-0 bg-background z-10">{KO.pages.operations.influencer}</TableHead>
-                    <TableHead>{KO.pages.operations.stage}</TableHead>
-                    <TableHead>{KO.pages.operations.commStatus}</TableHead>
-                    <TableHead>{KO.pages.operations.reviewStatus}</TableHead>
-                    <TableHead>{KO.pages.operations.dueStatus}</TableHead>
+                    <TableHead>{KO.pages.operations.contractGenerate}</TableHead>
                     <TableHead>{KO.pages.operations.contract}</TableHead>
                     <TableHead>{KO.pages.operations.draftDue}</TableHead>
                     <TableHead>{KO.pages.operations.uploadDue}</TableHead>
-                    <TableHead>{KO.pages.operations.contractGenerate}</TableHead>
                     <TableHead>{KO.pages.operations.notes}</TableHead>
                     <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
@@ -301,13 +243,12 @@ export function CampaignOperations({ campaignId, workspaceId = 1, lineItems }: C
                 <TableBody>
                 {filteredItems.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       {KO.pages.operations.noItems}
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredItems.map((item) => {
-                    const dueBadges = getDueBadges(item);
                     const hasContract = item.contractUrl || item.contractFileId || item.contractContent;
                     return (
                       <TableRow 
@@ -329,76 +270,17 @@ export function CampaignOperations({ campaignId, workspaceId = 1, lineItems }: C
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell>
-                          <Select 
-                            value={item.stage || "선정완료"} 
-                            onValueChange={(val) => {
-                              updateOperations.mutate({ id: item.id, updates: { stage: val } });
-                            }}
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() => setContractDialogItem(item)}
+                            data-testid={`button-contract-generate-${item.id}`}
                           >
-                            <SelectTrigger 
-                              className={`w-[100px] h-7 text-xs border-0 ${getStageColor(item.stage || "선정완료")}`}
-                              onClick={e => e.stopPropagation()}
-                            >
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {STAGES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell>
-                          <Select 
-                            value={item.commStatus || "컨택전"} 
-                            onValueChange={(val) => {
-                              updateOperations.mutate({ id: item.id, updates: { commStatus: val } });
-                            }}
-                          >
-                            <SelectTrigger 
-                              className={`w-[90px] h-7 text-xs border-0 ${getCommStatusColor(item.commStatus || "컨택전")}`}
-                              onClick={e => e.stopPropagation()}
-                            >
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {COMM_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell>
-                          <Select 
-                            value={item.reviewStatus || "초안대기"} 
-                            onValueChange={(val) => {
-                              updateOperations.mutate({ id: item.id, updates: { reviewStatus: val } });
-                            }}
-                          >
-                            <SelectTrigger 
-                              className={`w-[100px] h-7 text-xs border-0 ${getReviewStatusColor(item.reviewStatus || "초안대기")}`}
-                              onClick={e => e.stopPropagation()}
-                            >
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {REVIEW_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-1">
-                            {dueBadges.map((badge, i) => (
-                              <Badge 
-                                key={i} 
-                                variant="outline" 
-                                className={
-                                  badge.type === 'danger' ? 'bg-red-100 text-red-800 border-red-300' :
-                                  badge.type === 'warning' ? 'bg-orange-100 text-orange-800 border-orange-300' :
-                                  'bg-blue-100 text-blue-800 border-blue-300'
-                                }
-                              >
-                                {badge.text}
-                              </Badge>
-                            ))}
-                          </div>
+                            <FileText className="w-3 h-3 mr-1" />
+                            작성
+                          </Button>
                         </TableCell>
                         <TableCell>
                           {hasContract ? (
@@ -461,18 +343,6 @@ export function CampaignOperations({ campaignId, workspaceId = 1, lineItems }: C
                               />
                             </PopoverContent>
                           </Popover>
-                        </TableCell>
-                        <TableCell onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs"
-                            onClick={() => setContractDialogItem(item)}
-                            data-testid={`button-contract-generate-${item.id}`}
-                          >
-                            <FileText className="w-3 h-3 mr-1" />
-                            작성
-                          </Button>
                         </TableCell>
                         <TableCell>
                           <Badge variant="secondary" className="text-xs">
