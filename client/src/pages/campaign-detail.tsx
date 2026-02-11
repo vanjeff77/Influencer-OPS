@@ -96,7 +96,7 @@ function StepProgressBar({ status, itemId, item, onStatusChange, campaignId }: {
   return (
     <>
       <div
-        className="inline-flex items-center gap-1 rounded-md bg-muted/80 dark:bg-muted/50 p-1 shadow-inner"
+        className="inline-flex items-center gap-1 rounded-md bg-muted dark:bg-muted/60 p-1 shadow-[inset_0_2px_6px_rgba(0,0,0,0.15)] dark:shadow-[inset_0_2px_6px_rgba(0,0,0,0.4)]"
         data-testid={`progress-bar-${itemId}`}
       >
         {STEPS.map((step, idx) => {
@@ -110,11 +110,11 @@ function StepProgressBar({ status, itemId, item, onStatusChange, campaignId }: {
               size="sm"
               onClick={() => handleStepClick(step.key)}
               className={`gap-1 rounded-md shadow-sm
-                ${isCompleted ? 'text-primary' : ''}
+                ${isCompleted ? 'text-primary font-semibold' : ''}
                 ${isCurrent ? 'shadow-md' : ''}`}
               data-testid={`step-${step.key}-${itemId}`}
             >
-              {isCompleted && <CheckCircle2 className="w-3 h-3 shrink-0" />}
+              {isCompleted && <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />}
               {step.label}
             </Button>
           );
