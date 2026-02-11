@@ -68,6 +68,7 @@ interface SendEmailOptions {
   attachments?: SmtpAttachment[];
   inReplyTo?: string;
   references?: string[];
+  forceUniqueThread?: boolean;
 }
 
 export function createSmtpTransporter(config: SmtpConfig): Transporter {
@@ -96,11 +97,20 @@ export async function sendEmail(transporter: Transporter, options: SendEmailOpti
       subject: options.subject,
       html: options.html,
     };
-    if (options.inReplyTo) {
-      mailOptions.inReplyTo = options.inReplyTo;
-    }
-    if (options.references && options.references.length > 0) {
-      mailOptions.references = options.references.join(' ');
+    if (options.forceUniqueThread) {
+      const domain = options.from.split('@')[1] || 'localhost';
+      const uniqueId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      mailOptions.messageId = `<bulk-${uniqueId}@${domain}>`;
+      mailOptions.headers = {
+        'X-Entity-Ref-ID': `bulk-${uniqueId}`,
+      };
+    } else {
+      if (options.inReplyTo) {
+        mailOptions.inReplyTo = options.inReplyTo;
+      }
+      if (options.references && options.references.length > 0) {
+        mailOptions.references = options.references.join(' ');
+      }
     }
     if (options.attachments && options.attachments.length > 0) {
       mailOptions.attachments = options.attachments.map(att => ({
@@ -308,6 +318,7 @@ export async function startBulkEmailWorker(jobId: number): Promise<void> {
         cc: ccEmails.length > 0 ? ccEmails : undefined,
         subject: item.renderedSubject,
         html: item.renderedBody,
+        forceUniqueThread: true,
       });
       
       if (result.success) {

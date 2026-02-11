@@ -445,6 +445,7 @@ export const KO = {
       subjectPlaceholder: "이메일 제목을 입력하세요",
       body: "본문",
       variableHint: "사용 가능한 변수: {{influencer_name}}, {{campaign_name}}",
+      subjectVariableGuide: "제목에 {{influencer_name}} 변수를 넣으면 수신자별로 다른 제목이 적용되어 이메일이 개별 스레드로 분리됩니다.",
       next: "다음",
       back: "이전",
       selectInfluencer: "미리보기할 인플루언서 선택",

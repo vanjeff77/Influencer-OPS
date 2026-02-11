@@ -277,12 +277,25 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
                   </Select>
                 )}
 
-                <Input
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  placeholder={`${KO.pages.bulkEmail.subject} (${KO.pages.bulkEmail.variableHint})`}
-                  data-testid="input-subject"
-                />
+                <div className="space-y-1">
+                  <Input
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    placeholder={`${KO.pages.bulkEmail.subject} (${KO.pages.bulkEmail.variableHint})`}
+                    data-testid="input-subject"
+                  />
+                  {!subject.includes('{{influencer_name}}') ? (
+                    <p className="text-xs text-orange-600 dark:text-orange-400 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      {KO.pages.bulkEmail.subjectVariableGuide}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Check className="w-3 h-3 shrink-0" />
+                      {KO.pages.bulkEmail.variableHint}
+                    </p>
+                  )}
+                </div>
 
                 <Input
                   value={cc}

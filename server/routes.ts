@@ -2481,6 +2481,7 @@ export async function registerRoutes(
           cc: ccEmails.length > 0 ? ccEmails : undefined,
           subject: renderedSubject,
           html: renderedBody,
+          forceUniqueThread: true,
         });
         
         if (result.success) {
