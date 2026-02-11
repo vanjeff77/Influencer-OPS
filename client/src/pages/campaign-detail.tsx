@@ -96,7 +96,7 @@ function StepProgressBar({ status, itemId, item, onStatusChange, campaignId }: {
   return (
     <>
       <div
-        className="inline-flex rounded-md border border-border overflow-hidden"
+        className="inline-flex items-center gap-1 rounded-md bg-muted/80 dark:bg-muted/50 p-1 shadow-inner"
         data-testid={`progress-bar-${itemId}`}
       >
         {STEPS.map((step, idx) => {
@@ -104,22 +104,19 @@ function StepProgressBar({ status, itemId, item, onStatusChange, campaignId }: {
           const isCompleted = idx < currentIndex;
 
           return (
-            <button
+            <Button
               key={step.key}
+              variant={isCurrent ? "default" : isCompleted ? "outline" : "ghost"}
+              size="sm"
               onClick={() => handleStepClick(step.key)}
-              className={`flex items-center justify-center gap-1 px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer select-none
-                ${idx < STEPS.length - 1 ? 'border-r border-border' : ''}
-                ${isCompleted
-                  ? 'bg-primary/10 text-primary hover:bg-primary/20 dark:bg-primary/20 dark:hover:bg-primary/30'
-                  : isCurrent
-                  ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                  : 'bg-background text-muted-foreground hover:bg-muted'
-                }`}
+              className={`gap-1 rounded-md shadow-sm
+                ${isCompleted ? 'text-primary' : ''}
+                ${isCurrent ? 'shadow-md' : ''}`}
               data-testid={`step-${step.key}-${itemId}`}
             >
               {isCompleted && <CheckCircle2 className="w-3 h-3 shrink-0" />}
               {step.label}
-            </button>
+            </Button>
           );
         })}
       </div>
