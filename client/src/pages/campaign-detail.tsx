@@ -95,32 +95,31 @@ function StepProgressBar({ status, itemId, item, onStatusChange, campaignId }: {
 
   return (
     <>
-      <div className="flex items-center gap-0.5" data-testid={`progress-bar-${itemId}`}>
+      <div
+        className="inline-flex rounded-md border border-border overflow-hidden"
+        data-testid={`progress-bar-${itemId}`}
+      >
         {STEPS.map((step, idx) => {
           const isCurrent = step.key === status;
           const isCompleted = idx < currentIndex;
-          const isPending = idx > currentIndex;
 
           return (
-            <div key={step.key} className="flex items-center gap-0.5">
-              <button
-                onClick={() => handleStepClick(step.key)}
-                className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors cursor-pointer ${
-                  isCompleted
-                    ? 'bg-primary/15 text-primary dark:bg-primary/25'
-                    : isCurrent
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted text-muted-foreground'
+            <button
+              key={step.key}
+              onClick={() => handleStepClick(step.key)}
+              className={`flex items-center justify-center gap-1 px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer select-none
+                ${idx < STEPS.length - 1 ? 'border-r border-border' : ''}
+                ${isCompleted
+                  ? 'bg-primary/10 text-primary hover:bg-primary/20 dark:bg-primary/20 dark:hover:bg-primary/30'
+                  : isCurrent
+                  ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                  : 'bg-background text-muted-foreground hover:bg-muted'
                 }`}
-                data-testid={`step-${step.key}-${itemId}`}
-              >
-                {isCompleted && <CheckCircle2 className="w-3 h-3" />}
-                {step.label}
-              </button>
-              {idx < STEPS.length - 1 && (
-                <div className={`w-2 h-px ${idx < currentIndex ? 'bg-primary' : 'bg-border'}`} />
-              )}
-            </div>
+              data-testid={`step-${step.key}-${itemId}`}
+            >
+              {isCompleted && <CheckCircle2 className="w-3 h-3 shrink-0" />}
+              {step.label}
+            </button>
           );
         })}
       </div>
@@ -501,6 +500,7 @@ export default function CampaignDetail() {
                         />
                       </TableHead>
                       <TableHead>인플루언서</TableHead>
+                      <TableHead className="text-right">팔로워</TableHead>
                       <TableHead>채널</TableHead>
                       <TableHead>메모</TableHead>
                       <TableHead>진행 단계</TableHead>
@@ -529,6 +529,15 @@ export default function CampaignDetail() {
                             <div className="font-medium">{item.influencer?.name || `인플루언서 #${item.influencerId}`}</div>
                             <div className="text-xs text-muted-foreground">{item.influencer?.email}</div>
                           </div>
+                        </TableCell>
+                        <TableCell className="text-right text-xs text-muted-foreground tabular-nums">
+                          {(() => {
+                            const totalFollowers = item.influencer?.accounts?.reduce((sum: number, acc: any) => sum + (acc.followers || 0), 0) || 0;
+                            if (totalFollowers === 0) return '-';
+                            if (totalFollowers >= 10000) return `${(totalFollowers / 10000).toFixed(1)}만`;
+                            if (totalFollowers >= 1000) return `${(totalFollowers / 1000).toFixed(1)}천`;
+                            return totalFollowers.toLocaleString();
+                          })()}
                         </TableCell>
                         <TableCell onClick={(e) => e.stopPropagation()}>
                           <div className="flex gap-1">
@@ -574,7 +583,7 @@ export default function CampaignDetail() {
                     ))}
                     {!campaign.items?.length && (
                       <TableRow>
-                         <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                         <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                            이 캠페인에 아직 인플루언서가 없습니다.
                          </TableCell>
                       </TableRow>
