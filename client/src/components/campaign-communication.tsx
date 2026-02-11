@@ -421,6 +421,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
             <MessageComposer 
               conversationId={existingConv?.id} 
               influencerEmail={selectedLineItem.influencer?.email}
+              senderEmail={conversationDetail?.messages?.find((m: any) => m.direction === 'outbound')?.senderEmail || null}
               lastMessageCc={(() => {
                 const allCc = new Set<string>();
                 conversationDetail?.messages?.forEach((msg: any) => {
@@ -598,21 +599,6 @@ function MessageThread({ messages, onViewFull }: { messages: ConversationMessage
                 {msg.sentAt || msg.receivedAt ? (
                   <span>{formatMessageTime(new Date(msg.sentAt || msg.receivedAt!))}</span>
                 ) : null}
-                {msg.ccEmails && msg.ccEmails.length > 0 && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className={`text-[10px] px-1 rounded cursor-help ${msg.direction === 'outbound' ? 'bg-primary-foreground/20' : 'bg-muted'}`} data-testid={`cc-indicator-${msg.id}`}>
-                        참조 {msg.ccEmails.length}
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="max-w-xs">
-                      <p className="text-xs font-medium mb-1">참조:</p>
-                      {msg.ccEmails.map((email, i) => (
-                        <p key={i} className="text-xs">{email}</p>
-                      ))}
-                    </TooltipContent>
-                  </Tooltip>
-                )}
                 {msg.sendStatus === 'failed' && (
                   <Badge variant="destructive" className="text-[10px]" data-testid={`badge-send-failed-${msg.id}`}>
                     <AlertCircle className="w-3 h-3 mr-1" />
@@ -631,30 +617,27 @@ function MessageThread({ messages, onViewFull }: { messages: ConversationMessage
   );
 }
 
-function MessageComposer({ conversationId, influencerEmail, lastMessageCc, onSent }: { conversationId?: number; influencerEmail?: string | null; lastMessageCc?: string[] | null; onSent: () => void }) {
+function MessageComposer({ conversationId, influencerEmail, senderEmail, lastMessageCc, onSent }: { conversationId?: number; influencerEmail?: string | null; senderEmail?: string | null; lastMessageCc?: string[] | null; onSent: () => void }) {
   const { toast } = useToast();
   const [message, setMessage] = useState("");
-  const [subject, setSubject] = useState("");
   const [cc, setCc] = useState(lastMessageCc?.join(', ') || "");
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [showCc, setShowCc] = useState(!!lastMessageCc?.length);
+  const [showCcEdit, setShowCcEdit] = useState(false);
 
   const lastCcKey = lastMessageCc ? [...lastMessageCc].sort().join('|') : '';
   useEffect(() => {
     const newCc = lastMessageCc?.join(', ') || "";
     setCc(newCc);
-    setShowCc(!!lastMessageCc?.length);
   }, [lastCcKey]);
 
+  const ccList = cc.split(',').map(e => e.trim()).filter(Boolean);
+
   const sendMessage = useMutation({
-    mutationFn: (data: { body: string; subject: string; cc?: string }) => 
+    mutationFn: (data: { body: string; cc?: string }) => 
       apiRequest('POST', `/api/conversations/${conversationId}/messages`, data),
     onSuccess: () => {
       setMessage("");
-      setSubject("");
       setCc("");
-      setShowCc(false);
-      setIsExpanded(false);
+      setShowCcEdit(false);
       onSent();
       queryClient.invalidateQueries({ queryKey: ['/api/conversations'] });
       toast({ title: KO.toast.sent });
@@ -666,7 +649,7 @@ function MessageComposer({ conversationId, influencerEmail, lastMessageCc, onSen
 
   const handleSend = () => {
     if (!message.trim() || !conversationId) return;
-    sendMessage.mutate({ body: message, subject, cc: cc.trim() || undefined });
+    sendMessage.mutate({ body: message, cc: cc.trim() || undefined });
   };
 
   if (!influencerEmail) {
@@ -679,35 +662,63 @@ function MessageComposer({ conversationId, influencerEmail, lastMessageCc, onSen
 
   return (
     <div className="p-3 border-t">
-      {isExpanded && (
-        <>
-          <Input 
-            placeholder={KO.pages.email.subject}
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
-            className="mb-2 h-8 text-sm"
-            data-testid="input-email-subject"
-          />
-          {showCc ? (
-            <Input 
-              placeholder="참조 (CC): 이메일 주소, 쉼표로 구분"
-              value={cc}
-              onChange={(e) => setCc(e.target.value)}
-              className="mb-2 h-8 text-sm"
-              data-testid="input-email-cc"
-            />
-          ) : (
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="mb-2 h-6 text-xs text-muted-foreground"
-              onClick={() => setShowCc(true)}
-              data-testid="button-add-cc"
+      <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+        {senderEmail && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground cursor-help" data-testid="badge-sender">
+                발신 <Mail className="w-2.5 h-2.5" />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              <p className="text-xs">{senderEmail}</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground cursor-help" data-testid="badge-recipient">
+              수신 <User className="w-2.5 h-2.5" />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            <p className="text-xs">{influencerEmail}</p>
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground cursor-pointer"
+              onClick={() => setShowCcEdit(!showCcEdit)}
+              data-testid="badge-cc"
             >
-              + 참조 추가 (CC)
-            </Button>
-          )}
-        </>
+              참조 {ccList.length > 0 ? ccList.length + '명' : '없음'} <Users className="w-2.5 h-2.5" />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-xs">
+            {ccList.length > 0 ? (
+              <>
+                <p className="text-xs font-medium mb-1">참조 목록:</p>
+                {ccList.map((email, i) => (
+                  <p key={i} className="text-xs">{email}</p>
+                ))}
+                <p className="text-[10px] text-muted-foreground mt-1">클릭하여 편집</p>
+              </>
+            ) : (
+              <p className="text-xs">참조 없음 (클릭하여 추가)</p>
+            )}
+          </TooltipContent>
+        </Tooltip>
+      </div>
+      {showCcEdit && (
+        <Input
+          placeholder="참조 (CC): 이메일 주소, 쉼표로 구분"
+          value={cc}
+          onChange={(e) => setCc(e.target.value)}
+          className="mb-2 text-sm"
+          autoFocus
+          data-testid="input-email-cc"
+        />
       )}
       <div className="flex gap-2">
         <Textarea 
@@ -725,14 +736,6 @@ function MessageComposer({ conversationId, influencerEmail, lastMessageCc, onSen
             data-testid="button-send-message"
           >
             {sendMessage.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-          </Button>
-          <Button 
-            size="icon" 
-            variant="outline"
-            onClick={() => setIsExpanded(!isExpanded)}
-            data-testid="button-expand-composer"
-          >
-            <MoreHorizontal className="w-4 h-4" />
           </Button>
         </div>
       </div>
