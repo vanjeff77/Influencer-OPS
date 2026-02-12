@@ -80,6 +80,7 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
   const [testEmail, setTestEmail] = useState('');
   const [allowResend, setAllowResend] = useState(false);
   const [validation, setValidation] = useState<ValidationResult | null>(null);
+  const [checkedLineItemIds, setCheckedLineItemIds] = useState<Set<number>>(() => new Set(lineItems.map(li => li.id)));
   
   
   const { data: emailAccounts, isLoading: isLoadingAccounts } = useQuery<any[]>({
@@ -137,13 +138,43 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
     },
   });
   
+  const lineItemsWithEmail = useMemo(() => {
+    return lineItems.filter(li => li.influencer?.email);
+  }, [lineItems]);
+
+  const allChecked = lineItemsWithEmail.length > 0 && lineItemsWithEmail.every(li => checkedLineItemIds.has(li.id));
+  const someChecked = lineItemsWithEmail.some(li => checkedLineItemIds.has(li.id));
+  const checkedCount = lineItemsWithEmail.filter(li => checkedLineItemIds.has(li.id)).length;
+
+  const toggleAll = (checked: boolean) => {
+    if (checked) {
+      setCheckedLineItemIds(new Set(lineItemsWithEmail.map(li => li.id)));
+    } else {
+      setCheckedLineItemIds(new Set());
+    }
+  };
+
+  const toggleOne = (lineItemId: number, checked: boolean) => {
+    setCheckedLineItemIds(prev => {
+      const next = new Set(prev);
+      if (checked) {
+        next.add(lineItemId);
+      } else {
+        next.delete(lineItemId);
+      }
+      return next;
+    });
+  };
+
   const validateMutation = useMutation({
     mutationFn: async (resend?: boolean) => {
+      const selectedLineItemIds = Array.from(checkedLineItemIds);
       const res = await apiRequest('POST', '/api/bulk-email/validate', {
         subject,
         body,
         campaignId,
         allowResend: resend ?? allowResend,
+        lineItemIds: selectedLineItemIds,
       });
       return res.json();
     },
@@ -183,6 +214,7 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
     setPreviewInfluencerId(null);
     setTestEmail('');
     setAllowResend(false);
+    setCheckedLineItemIds(new Set(lineItemsWithEmail.map(li => li.id)));
   };
   
   const handlePreview = (influencerId: number) => {
@@ -336,18 +368,43 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
               <div className="flex-1 overflow-auto">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label className="mb-2 block">{KO.pages.bulkEmail.selectInfluencer}</Label>
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="block">{KO.pages.bulkEmail.recipientList}</Label>
+                      <span className="text-xs text-muted-foreground">{checkedCount}/{lineItemsWithEmail.length}명 선택</span>
+                    </div>
                     <ScrollArea className="h-64 border rounded-md">
                       <div className="divide-y">
-                        {lineItems.filter(li => li.influencer?.email).map(li => (
+                        <div
+                          className="p-2 flex items-center gap-2 border-b bg-muted/30 sticky top-0 z-10"
+                          data-testid="checkbox-select-all"
+                        >
+                          <Checkbox
+                            checked={allChecked ? true : someChecked ? "indeterminate" : false}
+                            onCheckedChange={(checked) => toggleAll(!!checked)}
+                            data-testid="checkbox-select-all-input"
+                          />
+                          <span className="text-sm font-medium">전체 선택</span>
+                        </div>
+                        {lineItemsWithEmail.map(li => (
                           <div
                             key={li.id}
-                            className={`p-2 cursor-pointer hover:bg-muted/50 ${previewInfluencerId === li.influencer?.id ? 'bg-primary/10' : ''}`}
+                            className={`p-2 flex items-center gap-2 cursor-pointer hover-elevate ${previewInfluencerId === li.influencer?.id ? 'bg-primary/10' : ''}`}
                             onClick={() => handlePreview(li.influencer!.id)}
                             data-testid={`preview-influencer-${li.id}`}
                           >
-                            <div className="font-medium text-sm">{li.influencer?.name}</div>
-                            <div className="text-xs text-muted-foreground">{li.influencer?.email}</div>
+                            <Checkbox
+                              checked={checkedLineItemIds.has(li.id)}
+                              onCheckedChange={(checked) => toggleOne(li.id, !!checked)}
+                              onClick={(e) => e.stopPropagation()}
+                              data-testid={`checkbox-recipient-${li.id}`}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-sm truncate">{li.influencer?.name}</div>
+                              <div className="text-xs text-muted-foreground truncate">{li.influencer?.email}</div>
+                            </div>
+                            {li.firstContactCompleted && (
+                              <Badge variant="outline" className="text-xs shrink-0">발송완료</Badge>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -385,8 +442,8 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
                 <Button variant="outline" onClick={() => setStep('template')} data-testid="button-back-template">
                   {KO.pages.bulkEmail.back}
                 </Button>
-                <Button onClick={() => setStep('test')} data-testid="button-next-test">
-                  {KO.pages.bulkEmail.next}
+                <Button onClick={() => setStep('test')} disabled={checkedCount === 0} data-testid="button-next-test">
+                  {KO.pages.bulkEmail.next} ({checkedCount}명)
                 </Button>
               </div>
             </TabsContent>
