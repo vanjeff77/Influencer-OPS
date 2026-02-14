@@ -23,7 +23,7 @@ import { format } from "date-fns";
 import { KO } from "@/i18n/ko";
 import { useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { CampaignLineItem, CampaignContentWithInfluencer } from "@/hooks/use-campaigns";
@@ -1085,8 +1085,6 @@ function SettlementInfoButton({ influencer, lineItem }: { influencer?: any; line
   const [freelancerId, setFreelancerId] = useState(influencer?.freelancerId || "");
   const { toast } = useToast();
 
-  const updateInfluencer = useUpdateCampaignItem();
-
   const isComplete = () => {
     const hasBank = bankName && accountHolder && accountNumber;
     if (settlementType === '사업자') return hasBank && businessName && businessRegNo;
@@ -1102,6 +1100,7 @@ function SettlementInfoButton({ influencer, lineItem }: { influencer?: any; line
         businessName, businessRegNo, freelancerId,
         settlementInfoUpdatedAt: new Date().toISOString()
       });
+      queryClient.invalidateQueries({ queryKey: ['/api/campaigns'] });
       toast({ title: "정산정보가 저장되었습니다." });
       setOpen(false);
     } catch {

@@ -125,8 +125,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
   });
 
   const { data: conversations, isLoading: isLoadingConversations } = useQuery<Conversation[]>({
-    queryKey: ['/api/conversations', 'campaignId', campaignId.toString()],
-    queryFn: () => fetch(`/api/conversations?campaignId=${campaignId}`).then(r => r.json()),
+    queryKey: [`/api/conversations?campaignId=${campaignId}`],
   });
 
   const filteredLineItems = useMemo(() => {
