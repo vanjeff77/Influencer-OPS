@@ -169,12 +169,7 @@ export default function CampaignDetail() {
   const { toast } = useToast();
 
   const { data: clients } = useQuery<Client[]>({
-    queryKey: ['/api/clients', workspaceId],
-    queryFn: async () => {
-      const res = await fetch(`/api/clients?workspaceId=${workspaceId}`);
-      if (!res.ok) throw new Error("Failed to fetch clients");
-      return res.json();
-    },
+    queryKey: [`/api/clients?workspaceId=${workspaceId}`],
     enabled: !!workspaceId,
   });
 
@@ -189,6 +184,15 @@ export default function CampaignDetail() {
   const [editingBudget, setEditingBudget] = useState<string | null>(null);
   const [isDeleteInfluencerOpen, setIsDeleteInfluencerOpen] = useState(false);
   const [selectedInfluencerIds, setSelectedInfluencerIds] = useState<Set<number>>(new Set());
+  const [activeTab, setActiveTab] = useState("influencers");
+
+  const tabDescriptions: Record<string, string> = {
+    influencers: "캠페인에 딱 맞는 인플루언서를 고르고, 단가 / 업로드 일정 / 진행단계를 한눈에 확인하세요!",
+    communication: "한 번에 단체 이메일 보내고, 답장 확인하고, 일정 및 단가 등록까지. 커뮤니케이션을 여기서 한 번에 해결하세요.",
+    operations: "계약서 작성부터, 자동 메일 전달까지. 복잡한 서류관련 작업을 한 번에 편리하게 해요.",
+    content: "<제출 링크>를 인플루언서가 공유받고, 그 링크에 콘텐츠를 올리면 (1) 자동으로 Onedrive에 콘텐츠가 인플루언서별 폴더에 저장되고 (2) 우리는 대시보드에서 한 눈에 제출현황과 파일을 확인할 수 있어요. 초안 확인, 업로드 일정, 검수까지 한 곳에서.",
+    finance: "누구에게 얼마를 지급해야 하는지, 한눈에 파악하세요. 정산 정보와 사업자 여부, 입금여부 등 빠짐없이 관리할 수 있어요.",
+  };
 
   const handleClientChange = () => {
     if (!selectedClientId) return;
@@ -417,42 +421,27 @@ export default function CampaignDetail() {
           </div>
         </div>
 
-        <Tabs defaultValue="influencers" className="w-full">
-          <TabsList className="mb-4 flex-wrap gap-1 w-full justify-start">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="mb-0 flex-wrap gap-1 w-full justify-start">
             <TabsTrigger value="influencers" className="flex items-center gap-1">
               <UserCheck className="w-4 h-4" />
-              <div className="text-left">
-                <div>선정</div>
-                <div className="text-[10px] font-normal text-muted-foreground leading-tight hidden sm:block">인플루언서를 찾고 추가해요</div>
-              </div>
+              선정
             </TabsTrigger>
             <TabsTrigger value="communication" className="flex items-center gap-1">
               <MessageCircle className="w-4 h-4" />
-              <div className="text-left">
-                <div>컨택</div>
-                <div className="text-[10px] font-normal text-muted-foreground leading-tight hidden sm:block">메일로 소통하고 관리해요</div>
-              </div>
+              컨택
             </TabsTrigger>
             <TabsTrigger value="operations" className="flex items-center gap-1">
               <FileSignature className="w-4 h-4" />
-              <div className="text-left">
-                <div>계약</div>
-                <div className="text-[10px] font-normal text-muted-foreground leading-tight hidden sm:block">계약과 일정을 확인해요</div>
-              </div>
+              계약
             </TabsTrigger>
             <TabsTrigger value="content" className="flex items-center gap-1">
               <Film className="w-4 h-4" />
-              <div className="text-left">
-                <div>제작</div>
-                <div className="text-[10px] font-normal text-muted-foreground leading-tight hidden sm:block">콘텐츠 검토와 피드백을 해요</div>
-              </div>
+              제작
             </TabsTrigger>
             <TabsTrigger value="finance" className="flex items-center gap-1">
               <Wallet className="w-4 h-4" />
-              <div className="text-left">
-                <div>정산</div>
-                <div className="text-[10px] font-normal text-muted-foreground leading-tight hidden sm:block">비용을 정리하고 지급해요</div>
-              </div>
+              정산
             </TabsTrigger>
             <div className="flex-1" />
             <TabsTrigger value="settings" className="flex items-center gap-1">
@@ -460,6 +449,11 @@ export default function CampaignDetail() {
               설정
             </TabsTrigger>
           </TabsList>
+          {tabDescriptions[activeTab] && (
+            <div className="mb-4 mt-2 px-3 py-2.5 bg-muted/40 rounded-md border border-border/50" data-testid="tab-description-banner">
+              <p className="text-xs text-muted-foreground leading-relaxed">{tabDescriptions[activeTab]}</p>
+            </div>
+          )}
           
           <TabsContent value="influencers">
             <Card>

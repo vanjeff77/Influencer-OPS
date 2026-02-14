@@ -119,6 +119,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
   const [bulkEmailOpen, setBulkEmailOpen] = useState(false);
   const [bulkEmailLogOpen, setBulkEmailLogOpen] = useState(false);
   const [attachEmailOpen, setAttachEmailOpen] = useState(false);
+  const [isFullSyncRunning, setIsFullSyncRunning] = useState(false);
   
   const { data: gmailStatus, isLoading: isLoadingGmail } = useQuery<{ connected: boolean; email?: string }>({
     queryKey: ['/api/email/gmail/status'],
@@ -259,6 +260,28 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
     }
   };
 
+  const handleFullSyncAll = async () => {
+    if (!conversations || conversations.length === 0) {
+      toast({ title: "동기화할 대화가 없습니다." });
+      return;
+    }
+    setIsFullSyncRunning(true);
+    let syncCount = 0;
+    try {
+      for (const conv of conversations) {
+        try {
+          await apiRequest('POST', `/api/conversations/${conv.id}/sync`, { fullSync: true });
+          syncCount++;
+        } catch {}
+      }
+      queryClient.invalidateQueries({ queryKey: [`/api/conversations?campaignId=${campaignId}`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/conversations'] });
+      toast({ title: `${syncCount}개 대화 동기화 완료` });
+    } finally {
+      setIsFullSyncRunning(false);
+    }
+  };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 min-h-[400px] lg:h-[600px]">
       {/* Left Panel: Line Items List */}
@@ -277,6 +300,25 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                 <Users className="w-3 h-3 mr-1" />
                 {KO.pages.bulkEmail.title}
               </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-xs"
+                    onClick={handleFullSyncAll}
+                    disabled={isFullSyncRunning}
+                    data-testid="button-full-sync-all"
+                  >
+                    {isFullSyncRunning ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-3 h-3" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>전체 대화 동기화</TooltipContent>
+              </Tooltip>
               <Button
                 size="sm"
                 variant="ghost"
@@ -407,25 +449,6 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>새 이메일 동기화</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => existingConv && syncMessages.mutate({ conversationId: existingConv.id, fullSync: true })}
-                      disabled={syncMessages.isPending || !existingConv}
-                      data-testid="button-full-sync"
-                    >
-                      {syncMessages.isPending ? (
-                        <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                      ) : (
-                        <Mail className="w-4 h-4 mr-1" />
-                      )}
-                      <span className="hidden sm:inline">전체 동기화</span>
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>IMAP에서 전체 메일 검색 및 동기화</TooltipContent>
                 </Tooltip>
               </div>
             </div>
@@ -769,7 +792,6 @@ function MessageComposer({ conversationId, influencerEmail, senderEmail, lastMes
 function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: CampaignLineItem['influencer']; lineItem: CampaignLineItem }) {
   const { toast } = useToast();
   const [memo, setMemo] = useState(influencer?.memo || "");
-  const [email, setEmail] = useState(influencer?.email || "");
   
   const [offerFee, setOfferFee] = useState<string>(lineItem.offerFee?.toString() || "");
   const [offerFeeDisplay, setOfferFeeDisplay] = useState<string>(lineItem.offerFee ? Number(lineItem.offerFee).toLocaleString() : "");
@@ -785,8 +807,7 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
 
   useEffect(() => {
     setMemo(influencer?.memo || "");
-    setEmail(influencer?.email || "");
-  }, [influencer?.memo, influencer?.email]);
+  }, [influencer?.memo]);
 
   const [settlementType, setSettlementType] = useState(influencer?.settlementType || "");
   const [bankName, setBankName] = useState(influencer?.bankName || "");
@@ -828,7 +849,7 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
     }
 
     if (influencer?.id) {
-      updateInfluencer.mutate({ memo, email }, {
+      updateInfluencer.mutate({ memo }, {
         onError: () => toast({ title: "인플루언서 정보 저장 실패", variant: "destructive" })
       });
     }
@@ -886,17 +907,6 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
         <Separator />
 
         <div className="space-y-3">
-          <div>
-            <label className="text-xs font-medium text-muted-foreground">이메일</label>
-            <Input 
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="email@example.com"
-              className="mt-1 h-8 text-sm"
-              data-testid="input-influencer-email"
-            />
-          </div>
-          <Separator />
           <div>
             <label className="text-xs font-medium text-muted-foreground">광고료(VAT+)</label>
             <div className="relative mt-1">
