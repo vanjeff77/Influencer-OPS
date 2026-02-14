@@ -1,0 +1,69 @@
+[Goal]
+Fix repeated "EADDRINUSE (port already in use)" + "internal server error" on Replit. 
+We must identify which process binds the port, separate Vite + API ports, and ensure the app listens on Replit's $PORT.
+
+[Current Symptoms]
+- Workflow is sometimes "failed", Stop button does nothing.
+- Restart attempts claim the port is free, but EADDRINUSE still appears.
+- Suspect Vite dev server or orphan node process is holding port 5000, OR backend is hardcoded to 5000 while Replit expects $PORT.
+
+[Top Suspected Root Causes (Hypotheses)]
+H1) Frontend (Vite) and backend (API/Express) are both trying to use the same port (often 5000).
+H2) Vite config forces port 5000 (server.port=5000) while backend also uses 5000.
+H3) Backend ignores process.env.PORT and binds to 5000, conflicting with Replit proxy/runner.
+H4) Orphan processes remain after workflow failure (node/vite still running) so the port is actually occupied.
+H5) Dev script uses concurrently to start multiple servers; one of them reuses the same port.
+H6) Port visibility mismatch (lsof shows nothing but ss does), so use ss to confirm.
+
+[Hard Rules]
+- Do NOT rely on assumptions like "port is free". Always verify with ss.
+- Only restart AFTER confirming the port is free or ports are correctly separated.
+- Prefer using process.env.PORT for the externally exposed server in Replit.
+
+[Step 1: Collect Evidence (run these commands and paste outputs)]
+1) Show scripts & dependency hints:
+   cat package.json
+
+2) Detect Vite config + forced port:
+   find . -maxdepth 3 -name "vite.config.*" -print -exec sed -n '1,220p' {} \;
+
+3) Find server entry & listen() usage:
+   grep -R "listen(" -n . | head -n 80
+   grep -R "process\.env\.PORT|PORT" -n . | head -n 80
+
+4) Confirm port binding (use ss, not only lsof):
+   echo "PORT env is: $PORT"
+   ss -ltnp | egrep ":5000|:5173|:$PORT" || true
+   ps aux | egrep "vite|node|npm|pnpm|yarn" | grep -v egrep
+
+[Step 2: Decide the Architecture]
+A) If this is a "Vite frontend + API backend" monorepo:
+   - Set Vite to 5173 (default) for dev.
+   - Set API backend to 5000 (internal) OR to $PORT if it must be the externally exposed service.
+   - Configure Vite proxy /api -> http://localhost:5000
+B) If this is a single server app that serves frontend too:
+   - Only one server should listen on $PORT. Vite should not bind to that same port in production.
+
+[Step 3: Apply Fixes (conditional)]
+- If vite.config has server.port=5000 => change to 5173 (or remove).
+- If backend has app.listen(5000) => change to:
+    const port = process.env.PORT || 5000;
+    app.listen(port, "0.0.0.0", ...)
+- If dev script runs concurrently and shares ports => ensure frontend and backend ports differ.
+- If orphan processes exist => terminate by PID shown in ss:
+    kill -TERM <PID>; sleep 2; kill -KILL <PID> (only if needed)
+
+[Step 4: Validate]
+- After changes, confirm only expected ports are listening:
+   ss -ltnp | egrep ":5173|:5000|:$PORT" || true
+- Start services in correct order:
+   (1) backend
+   (2) vite
+- Confirm health:
+   curl -I http://127.0.0.1:$PORT || true
+   curl -I http://127.0.0.1:5173 || true
+
+[Deliverable]
+1) Identify exact offender process/port with evidence.
+2) Provide the minimal diff (files + lines) you changed to fix.
+3) Confirm final run command / workflow command for Replit.
