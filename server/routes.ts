@@ -2178,6 +2178,7 @@ export async function registerRoutes(
   app.post('/api/conversations/:id/sync', async (req, res) => {
     try {
       const conversationId = parseInt(req.params.id);
+      const fullSync = req.body?.fullSync === true;
       const conv = await storage.getConversation(conversationId);
       if (!conv) return res.status(404).json({ message: "Conversation not found" });
 
@@ -2187,7 +2188,7 @@ export async function registerRoutes(
         .map(m => m.gmailMessageId)
         .filter((id): id is string => !!id && id.startsWith('<'));
 
-      if (knownMessageIds.length === 0) {
+      if (knownMessageIds.length === 0 && !fullSync) {
         return res.json({ synced: 0, message: "동기화할 메시지 ID가 없습니다" });
       }
 
@@ -2225,9 +2226,30 @@ export async function registerRoutes(
         tls: true,
       };
 
-      const { fetchThreadByMessageIds } = await import('./imap');
-      console.log(`[Sync] Searching IMAP for thread with ${knownMessageIds.length} message IDs for conversation ${conversationId}`);
-      const threadMessages = await fetchThreadByMessageIds(imapConfig, knownMessageIds);
+      const imap = await import('./imap');
+      let threadMessages: any[] = [];
+
+      if (knownMessageIds.length > 0) {
+        console.log(`[Sync] Searching IMAP for thread with ${knownMessageIds.length} message IDs for conversation ${conversationId}`);
+        threadMessages = await imap.fetchThreadByMessageIds(imapConfig, knownMessageIds);
+      }
+
+      if (fullSync && threadMessages.length === 0 && influencer?.email) {
+        console.log(`[FullSync] Searching IMAP by email address: ${influencer.email} for conversation ${conversationId}`);
+        try {
+          const searchResults = await imap.searchThreads(imapConfig, 'email', influencer.email, 50);
+          if (searchResults && searchResults.length > 0) {
+            for (const thread of searchResults) {
+              if (thread.messageId) {
+                const fetched = await imap.fetchThreadByMessageIds(imapConfig, [thread.messageId]);
+                threadMessages.push(...fetched);
+              }
+            }
+          }
+        } catch (searchErr) {
+          console.warn(`[FullSync] Search by email failed:`, searchErr);
+        }
+      }
       console.log(`[Sync] Found ${threadMessages.length} messages in IMAP thread`);
 
       if (threadMessages.length === 0) {

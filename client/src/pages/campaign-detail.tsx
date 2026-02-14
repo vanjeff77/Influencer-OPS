@@ -414,20 +414,6 @@ export default function CampaignDetail() {
               <div className="text-lg font-bold font-mono">{campaign.budget?.toLocaleString()}원</div>
               <div className="text-xs text-muted-foreground">사용률: {budgetUtilization}%</div>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8"
-              onClick={() => {
-                const submitUrl = `${window.location.origin}/submit/${campaign.id}`;
-                navigator.clipboard.writeText(submitUrl);
-                toast({ title: "링크 복사됨", description: "인플루언서에게 이 링크를 공유하세요." });
-              }}
-              data-testid="button-copy-submit-link"
-            >
-              <Upload className="w-3 h-3 mr-1" />
-              제출 링크
-            </Button>
           </div>
         </div>
 
@@ -435,23 +421,38 @@ export default function CampaignDetail() {
           <TabsList className="mb-4 flex-wrap gap-1 w-full justify-start">
             <TabsTrigger value="influencers" className="flex items-center gap-1">
               <UserCheck className="w-4 h-4" />
-              선정
+              <div className="text-left">
+                <div>선정</div>
+                <div className="text-[10px] font-normal text-muted-foreground leading-tight hidden sm:block">인플루언서를 찾고 추가해요</div>
+              </div>
             </TabsTrigger>
             <TabsTrigger value="communication" className="flex items-center gap-1">
               <MessageCircle className="w-4 h-4" />
-              컨택
+              <div className="text-left">
+                <div>컨택</div>
+                <div className="text-[10px] font-normal text-muted-foreground leading-tight hidden sm:block">메일로 소통하고 관리해요</div>
+              </div>
             </TabsTrigger>
             <TabsTrigger value="operations" className="flex items-center gap-1">
               <FileSignature className="w-4 h-4" />
-              계약
+              <div className="text-left">
+                <div>계약</div>
+                <div className="text-[10px] font-normal text-muted-foreground leading-tight hidden sm:block">계약과 일정을 확인해요</div>
+              </div>
             </TabsTrigger>
             <TabsTrigger value="content" className="flex items-center gap-1">
               <Film className="w-4 h-4" />
-              제작
+              <div className="text-left">
+                <div>제작</div>
+                <div className="text-[10px] font-normal text-muted-foreground leading-tight hidden sm:block">콘텐츠 검토와 피드백을 해요</div>
+              </div>
             </TabsTrigger>
             <TabsTrigger value="finance" className="flex items-center gap-1">
               <Wallet className="w-4 h-4" />
-              정산
+              <div className="text-left">
+                <div>정산</div>
+                <div className="text-[10px] font-normal text-muted-foreground leading-tight hidden sm:block">비용을 정리하고 지급해요</div>
+              </div>
             </TabsTrigger>
             <div className="flex-1" />
             <TabsTrigger value="settings" className="flex items-center gap-1">
@@ -1073,6 +1074,122 @@ function AddInfluencerModal({ open, onOpenChange, campaignId, workspaceId, exist
   );
 }
 
+function SettlementInfoButton({ influencer, lineItem }: { influencer?: any; lineItem: any }) {
+  const [open, setOpen] = useState(false);
+  const [settlementType, setSettlementType] = useState(influencer?.settlementType || "");
+  const [bankName, setBankName] = useState(influencer?.bankName || "");
+  const [accountHolder, setAccountHolder] = useState(influencer?.accountHolder || "");
+  const [accountNumber, setAccountNumber] = useState(influencer?.accountNumber || "");
+  const [businessName, setBusinessName] = useState(influencer?.businessName || "");
+  const [businessRegNo, setBusinessRegNo] = useState(influencer?.businessRegNo || "");
+  const [freelancerId, setFreelancerId] = useState(influencer?.freelancerId || "");
+  const { toast } = useToast();
+
+  const updateInfluencer = useUpdateCampaignItem();
+
+  const isComplete = () => {
+    const hasBank = bankName && accountHolder && accountNumber;
+    if (settlementType === '사업자') return hasBank && businessName && businessRegNo;
+    if (settlementType === '프리랜서') return hasBank && freelancerId;
+    return false;
+  };
+
+  const handleSave = async () => {
+    if (!influencer?.id) return;
+    try {
+      await apiRequest('PATCH', `/api/influencers/${influencer.id}`, {
+        settlementType, bankName, accountHolder, accountNumber,
+        businessName, businessRegNo, freelancerId,
+        settlementInfoUpdatedAt: new Date().toISOString()
+      });
+      toast({ title: "정산정보가 저장되었습니다." });
+      setOpen(false);
+    } catch {
+      toast({ title: "저장 실패", variant: "destructive" });
+    }
+  };
+
+  return (
+    <>
+      <Button
+        variant="outline"
+        className="w-full justify-between"
+        onClick={() => setOpen(true)}
+        data-testid="button-settlement-info"
+      >
+        <div className="flex items-center gap-2">
+          <Wallet className="w-4 h-4" />
+          <span>정산 정보</span>
+        </div>
+        {isComplete() ? (
+          <Badge variant="outline" className="text-[10px] bg-green-100 text-green-700 border-0">
+            <CheckCircle2 className="w-2.5 h-2.5 mr-0.5" />입력완료
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="text-[10px] bg-orange-100 text-orange-700 border-0">
+            미입력
+          </Badge>
+        )}
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>정산 정보</DialogTitle>
+            <DialogDescription>{influencer?.name}의 정산 정보를 입력하세요.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">정산 유형</label>
+              <Select value={settlementType} onValueChange={setSettlementType}>
+                <SelectTrigger className="mt-1" data-testid="select-drawer-settlement-type">
+                  <SelectValue placeholder="유형 선택" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="사업자">사업자</SelectItem>
+                  <SelectItem value="프리랜서">프리랜서</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">은행명</label>
+              <Input value={bankName} onChange={e => setBankName(e.target.value)} placeholder="은행명" className="mt-1" data-testid="input-drawer-bank-name" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">예금주</label>
+              <Input value={accountHolder} onChange={e => setAccountHolder(e.target.value)} placeholder="예금주" className="mt-1" data-testid="input-drawer-account-holder" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">계좌번호</label>
+              <Input value={accountNumber} onChange={e => setAccountNumber(e.target.value)} placeholder="계좌번호" className="mt-1" data-testid="input-drawer-account-number" />
+            </div>
+            {settlementType === '사업자' && (
+              <>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">상호명</label>
+                  <Input value={businessName} onChange={e => setBusinessName(e.target.value)} placeholder="상호명" className="mt-1" data-testid="input-drawer-business-name" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">사업자번호</label>
+                  <Input value={businessRegNo} onChange={e => setBusinessRegNo(e.target.value)} placeholder="000-00-00000" className="mt-1" data-testid="input-drawer-business-reg-no" />
+                </div>
+              </>
+            )}
+            {settlementType === '프리랜서' && (
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">주민등록번호</label>
+                <Input value={freelancerId} onChange={e => setFreelancerId(e.target.value)} placeholder="000000-0000000" className="mt-1" data-testid="input-drawer-freelancer-id" />
+              </div>
+            )}
+            <Button onClick={handleSave} className="w-full" data-testid="button-save-drawer-settlement">
+              <Save className="w-4 h-4 mr-2" />정산정보 저장
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 function LineItemDetailDrawer({ item, onClose, onUpdate }: {
   item: CampaignLineItem | null;
   onClose: () => void;
@@ -1093,8 +1210,8 @@ function LineItemDetailDrawer({ item, onClose, onUpdate }: {
 
   return (
     <Sheet open={!!item} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="w-[500px] sm:max-w-[500px] overflow-y-auto">
-        <SheetHeader>
+      <SheetContent className="w-[500px] sm:max-w-[500px] flex flex-col h-full">
+        <SheetHeader className="shrink-0">
           <div className="flex items-center gap-4">
             <Avatar className="h-12 w-12">
               <AvatarFallback>{item.influencer?.name?.substring(0, 2) || 'IN'}</AvatarFallback>
@@ -1106,7 +1223,7 @@ function LineItemDetailDrawer({ item, onClose, onUpdate }: {
           </div>
         </SheetHeader>
 
-        <Tabs defaultValue="overview" className="mt-6">
+        <Tabs defaultValue="overview" className="mt-6 flex-1 overflow-hidden flex flex-col">
           <TabsList className="w-full grid grid-cols-4">
             <TabsTrigger value="overview">개요</TabsTrigger>
             <TabsTrigger value="contract">계약</TabsTrigger>
@@ -1114,7 +1231,7 @@ function LineItemDetailDrawer({ item, onClose, onUpdate }: {
             <TabsTrigger value="content">제작</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="overview" className="space-y-4 mt-4">
+          <TabsContent value="overview" className="space-y-4 mt-4 flex-1 overflow-y-auto pb-4">
             <div className="grid gap-4">
               <div>
                 <label className="text-sm font-medium">진행 상태</label>
@@ -1138,7 +1255,7 @@ function LineItemDetailDrawer({ item, onClose, onUpdate }: {
             </div>
           </TabsContent>
 
-          <TabsContent value="contract" className="space-y-4 mt-4">
+          <TabsContent value="contract" className="space-y-4 mt-4 flex-1 overflow-y-auto pb-4">
             <div>
               <label className="text-sm font-medium">계약 상태</label>
               <Select 
@@ -1157,9 +1274,12 @@ function LineItemDetailDrawer({ item, onClose, onUpdate }: {
               <label className="text-sm font-medium">계약서 업로드</label>
               <Input type="file" className="mt-1" />
             </div>
+            <div className="pt-2 border-t">
+              <SettlementInfoButton influencer={item.influencer} lineItem={item} />
+            </div>
           </TabsContent>
 
-          <TabsContent value="settlement" className="space-y-4 mt-4">
+          <TabsContent value="settlement" className="space-y-4 mt-4 flex-1 overflow-y-auto pb-4">
             <div>
               <label className="text-sm font-medium">지급 상태</label>
               <Select 
@@ -1194,7 +1314,7 @@ function LineItemDetailDrawer({ item, onClose, onUpdate }: {
             </div>
           </TabsContent>
 
-          <TabsContent value="content" className="space-y-4 mt-4">
+          <TabsContent value="content" className="space-y-4 mt-4 flex-1 overflow-y-auto pb-4">
             <div>
               <label className="text-sm font-medium">콘텐츠 링크</label>
               <Input placeholder="https://instagram.com/p/..." defaultValue={item.contentLink || ''} />

@@ -206,15 +206,29 @@ export function CampaignContents({ campaignId, lineItems }: CampaignContentsProp
             </Badge>
           ))}
         </div>
-        <Button
-          variant={showSubmissions ? "default" : "outline"}
-          size="sm"
-          onClick={() => setShowSubmissions(!showSubmissions)}
-          data-testid="button-toggle-submissions"
-        >
-          <Upload className="w-4 h-4 mr-1" />
-          인플루언서 제출 이력 {submissions.length > 0 && `(${submissions.length})`}
-        </Button>
+        <div className="flex flex-wrap gap-2 items-center">
+          <Button
+            size="sm"
+            onClick={() => {
+              const submitUrl = `${window.location.origin}/submit/${campaignId}`;
+              navigator.clipboard.writeText(submitUrl);
+              toast({ title: "링크 복사됨", description: "인플루언서에게 이 링크를 공유하세요." });
+            }}
+            data-testid="button-copy-submit-link"
+          >
+            <ExternalLink className="w-4 h-4 mr-1" />
+            제출 링크 복사
+          </Button>
+          <Button
+            variant={showSubmissions ? "default" : "outline"}
+            size="sm"
+            onClick={() => setShowSubmissions(!showSubmissions)}
+            data-testid="button-toggle-submissions"
+          >
+            <Upload className="w-4 h-4 mr-1" />
+            인플루언서 제출 이력 {submissions.length > 0 && `(${submissions.length})`}
+          </Button>
+        </div>
       </div>
 
       {showSubmissions && (

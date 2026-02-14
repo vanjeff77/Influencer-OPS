@@ -155,8 +155,8 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
   });
 
   const syncMessages = useMutation({
-    mutationFn: async (conversationId: number) => {
-      const res = await apiRequest('POST', `/api/conversations/${conversationId}/sync`);
+    mutationFn: async ({ conversationId, fullSync = false }: { conversationId: number; fullSync?: boolean }) => {
+      const res = await apiRequest('POST', `/api/conversations/${conversationId}/sync`, { fullSync });
       return res.json();
     },
     onSuccess: (data: any) => {
@@ -394,16 +394,40 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                   <Mail className="w-4 h-4 mr-1" />
                   <span className="hidden sm:inline">{KO.pages.attachEmail.title}</span>
                 </Button>
-                <Button 
-                  size="sm" 
-                  variant="outline"
-                  onClick={() => existingConv && syncMessages.mutate(existingConv.id)}
-                  disabled={syncMessages.isPending || !existingConv}
-                  data-testid="button-sync-messages"
-                >
-                  <RefreshCw className={`w-4 h-4 mr-1 ${syncMessages.isPending ? 'animate-spin' : ''}`} />
-                  <span className="hidden sm:inline">{KO.pages.communication.syncMessages}</span>
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => existingConv && syncMessages.mutate({ conversationId: existingConv.id })}
+                      disabled={syncMessages.isPending || !existingConv}
+                      data-testid="button-sync-messages"
+                    >
+                      <RefreshCw className={`w-4 h-4 mr-1 ${syncMessages.isPending ? 'animate-spin' : ''}`} />
+                      <span className="hidden sm:inline">{KO.pages.communication.syncMessages}</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>새 이메일 동기화</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => existingConv && syncMessages.mutate({ conversationId: existingConv.id, fullSync: true })}
+                      disabled={syncMessages.isPending || !existingConv}
+                      data-testid="button-full-sync"
+                    >
+                      {syncMessages.isPending ? (
+                        <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                      ) : (
+                        <Mail className="w-4 h-4 mr-1" />
+                      )}
+                      <span className="hidden sm:inline">전체 동기화</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>IMAP에서 전체 메일 검색 및 동기화</TooltipContent>
+                </Tooltip>
               </div>
             </div>
             <ScrollArea className="relative overflow-hidden flex-1 p-4 bg-[#ffffff]">
@@ -441,7 +465,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
               onSent={() => {
                 refetchConversation();
                 if (existingConv?.id) {
-                  syncMessages.mutate(existingConv.id);
+                  syncMessages.mutate({ conversationId: existingConv.id });
                 }
                 queryClient.invalidateQueries({ queryKey: [api.campaigns.get.path, campaignId] });
                 queryClient.invalidateQueries({ queryKey: ['/api/conversations', 'campaignId', campaignId.toString()] });
@@ -844,14 +868,19 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
     <ScrollArea className="h-full max-h-[600px]">
       <div className="p-4 space-y-4 bg-[#ffffff]">
         <div className="flex items-center gap-3">
-          <Avatar className="h-12 w-12 shrink-0">
-            <AvatarFallback>{influencer.name?.substring(0, 2)}</AvatarFallback>
+          <Avatar className="h-10 w-10 shrink-0">
+            <AvatarFallback className="text-xs">{influencer.name?.substring(0, 2)}</AvatarFallback>
           </Avatar>
           <div className="min-w-0">
-            <h3 className="font-semibold truncate">{influencer.name}</h3>
-            <div className="text-sm text-muted-foreground truncate">
-              {influencer.accounts?.[0] && `@${influencer.accounts[0].handle}`}
+            <div className="flex items-center gap-1.5">
+              <h3 className="font-semibold text-sm truncate">{influencer.name}</h3>
+              {influencer.accounts?.[0] && (
+                <span className="text-xs text-muted-foreground truncate">@{influencer.accounts[0].handle}</span>
+              )}
             </div>
+            {influencer.email && (
+              <div className="text-[11px] text-muted-foreground truncate">{influencer.email}</div>
+            )}
           </div>
         </div>
 
