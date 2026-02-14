@@ -1100,7 +1100,10 @@ function SettlementInfoButton({ influencer, lineItem }: { influencer?: any; line
         businessName, businessRegNo, freelancerId,
         settlementInfoUpdatedAt: new Date().toISOString()
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/campaigns'] });
+      queryClient.invalidateQueries({ predicate: (query) => {
+        const key = query.queryKey[0];
+        return typeof key === 'string' && (key.includes('/api/campaigns') || key.includes('/api/influencers'));
+      }});
       toast({ title: "정산정보가 저장되었습니다." });
       setOpen(false);
     } catch {
