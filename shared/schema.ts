@@ -278,6 +278,7 @@ export const conversations = pgTable("conversations", {
   subjectPrefix: text("subject_prefix"),
   gmailThreadId: text("gmail_thread_id"),
   lastMessageAt: timestamp("last_message_at"),
+  lastReadAt: timestamp("last_read_at"),
   status: text("status").default("active"), // active, unread, replied, no_response
   createdAt: timestamp("created_at").defaultNow(),
 });
