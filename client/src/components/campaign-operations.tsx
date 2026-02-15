@@ -1306,7 +1306,14 @@ function ContractInfoDialog({ item, campaignId, onClose }: ContractInfoDialogPro
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">정산 유형</Label>
-                <Select value={settlementType} onValueChange={setSettlementType}>
+                <Select value={settlementType} onValueChange={(val) => {
+                    setSettlementType(val);
+                    if (val === '사업자') {
+                      setIdNumber(inf?.businessRegNo || '');
+                    } else {
+                      setIdNumber(inf?.freelancerId || '');
+                    }
+                  }}>
                   <SelectTrigger data-testid="select-contract-settlement-type">
                     <SelectValue placeholder="선택" />
                   </SelectTrigger>
