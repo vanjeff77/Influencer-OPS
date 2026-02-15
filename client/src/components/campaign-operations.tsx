@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ScrollArea } from "@/components/ui/scroll-area";
+
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
@@ -226,12 +226,11 @@ export function CampaignOperations({ campaignId, workspaceId = 1, lineItems }: C
 
       <Card>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <ScrollArea className="max-h-[600px]">
+          <div className="overflow-auto max-h-[calc(100vh-320px)]">
               <Table className="min-w-[700px]">
-                <TableHeader>
+                <TableHeader className="sticky top-0 bg-background z-50">
                   <TableRow>
-                    <TableHead className="sticky left-0 bg-background z-10">{KO.pages.operations.influencer}</TableHead>
+                    <TableHead className="sticky left-0 bg-background z-[60]">{KO.pages.operations.influencer}</TableHead>
                     <TableHead>{KO.pages.operations.contractGenerate}</TableHead>
                     <TableHead>{KO.pages.operations.contract}</TableHead>
                     <TableHead>{KO.pages.operations.draftDue}</TableHead>
@@ -366,7 +365,6 @@ export function CampaignOperations({ campaignId, workspaceId = 1, lineItems }: C
                 )}
                 </TableBody>
               </Table>
-            </ScrollArea>
           </div>
         </CardContent>
       </Card>
