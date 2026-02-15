@@ -206,11 +206,16 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
     },
   });
 
-  const handleSelectLineItem = (li: CampaignLineItem) => {
+  const handleSelectLineItem = async (li: CampaignLineItem) => {
     setSelectedLineItemId(li.id);
     const conv = conversations?.find(c => c.campaignLineItemId === li.id);
     if (!conv) {
       startConversation.mutate(li.id);
+    } else if (conv.lastMessageAt && (!conv.lastReadAt || new Date(conv.lastMessageAt) > new Date(conv.lastReadAt))) {
+      try {
+        await apiRequest('PATCH', `/api/conversations/${conv.id}`, { lastReadAt: new Date().toISOString() });
+        queryClient.invalidateQueries({ queryKey: [`/api/conversations?campaignId=${campaignId}`] });
+      } catch {}
     }
   };
 
@@ -300,25 +305,21 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                 <Users className="w-3 h-3 mr-1" />
                 {KO.pages.bulkEmail.title}
               </Button>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 text-xs"
-                    onClick={handleFullSyncAll}
-                    disabled={isFullSyncRunning}
-                    data-testid="button-full-sync-all"
-                  >
-                    {isFullSyncRunning ? (
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                    ) : (
-                      <RefreshCw className="w-3 h-3" />
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>전체 대화 동기화</TooltipContent>
-              </Tooltip>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs"
+                onClick={handleFullSyncAll}
+                disabled={isFullSyncRunning}
+                data-testid="button-full-sync-all"
+              >
+                {isFullSyncRunning ? (
+                  <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-3 h-3 mr-1" />
+                )}
+                동기화
+              </Button>
               <Button
                 size="sm"
                 variant="ghost"
@@ -369,6 +370,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
               {filteredLineItems.map(li => {
                 const conv = conversations?.find(c => c.campaignLineItemId === li.id);
                 const isSelected = selectedLineItemId === li.id;
+                const hasUnread = conv?.lastMessageAt && (!conv?.lastReadAt || new Date(conv.lastMessageAt) > new Date(conv.lastReadAt));
                 return (
                   <div
                     key={li.id}
@@ -377,18 +379,25 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                     data-testid={`conversation-item-${li.id}`}
                   >
                     <div className="flex items-center gap-2">
-                      <Avatar className="h-8 w-8 shrink-0">
-                        <AvatarFallback className="text-xs">{li.influencer?.name?.substring(0, 2) || 'IN'}</AvatarFallback>
-                      </Avatar>
+                      <div className="relative shrink-0">
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback className="text-xs">{li.influencer?.name?.substring(0, 2) || 'IN'}</AvatarFallback>
+                        </Avatar>
+                        {hasUnread && (
+                          <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-destructive rounded-full border-2 border-background flex items-center justify-center text-[7px] font-bold text-destructive-foreground" aria-label="새 메시지" data-testid={`badge-unread-${li.id}`}>
+                            N
+                          </span>
+                        )}
+                      </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-1">
-                          <span className="font-medium text-sm truncate">{li.influencer?.name}</span>
+                          <span className={`text-sm truncate ${hasUnread ? 'font-bold' : 'font-medium'}`}>{li.influencer?.name}</span>
                           <div className="flex items-center gap-1">
                             {getFirstContactBadge(li)}
                             {getStatusBadge(conv)}
                           </div>
                         </div>
-                        <div className="text-xs text-muted-foreground truncate">
+                        <div className={`text-xs truncate ${hasUnread ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
                           {conv?.lastMessage?.snippet || li.influencer?.email || KO.pages.communication.noConversations}
                         </div>
                       </div>
@@ -490,7 +499,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                   syncMessages.mutate({ conversationId: existingConv.id });
                 }
                 queryClient.invalidateQueries({ queryKey: [api.campaigns.get.path, campaignId] });
-                queryClient.invalidateQueries({ queryKey: ['/api/conversations', 'campaignId', campaignId.toString()] });
+                queryClient.invalidateQueries({ queryKey: [`/api/conversations?campaignId=${campaignId}`] });
               }}
             />
           </>

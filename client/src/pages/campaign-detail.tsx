@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ArrowLeft, CheckCircle2, CircleDollarSign, FileText, Plus, Search, Users, Instagram, Youtube, Twitter, Save, MessageCircle, ExternalLink, Eye, Heart, MessageSquare, Share2, Trash2, Edit3, Image, Pencil, Calendar, Copy, Upload, Settings, UserCheck, FileSignature, Film, Wallet } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Circle, CircleDot, CircleDollarSign, FileText, Plus, Search, Users, Instagram, Youtube, Twitter, Save, MessageCircle, ExternalLink, Eye, Heart, MessageSquare, Share2, Trash2, Edit3, Image, Pencil, Calendar, Copy, Upload, Settings, UserCheck, FileSignature, Film, Wallet } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Link } from "wouter";
@@ -96,7 +96,7 @@ function StepProgressBar({ status, itemId, item, onStatusChange, campaignId }: {
   return (
     <>
       <div
-        className="inline-flex items-center gap-1 rounded-md bg-muted dark:bg-muted/60 p-1 shadow-[inset_0_2px_6px_rgba(0,0,0,0.15)] dark:shadow-[inset_0_2px_6px_rgba(0,0,0,0.4)]"
+        className="inline-flex items-center gap-0.5 rounded-md bg-muted dark:bg-muted/60 p-0.5"
         data-testid={`progress-bar-${itemId}`}
       >
         {STEPS.map((step, idx) => {
@@ -106,15 +106,19 @@ function StepProgressBar({ status, itemId, item, onStatusChange, campaignId }: {
           return (
             <Button
               key={step.key}
-              variant={isCurrent ? "default" : isCompleted ? "outline" : "ghost"}
+              variant={isCurrent ? "default" : "ghost"}
               size="sm"
               onClick={() => handleStepClick(step.key)}
-              className={`gap-1 rounded-md shadow-sm
-                ${isCompleted ? 'text-primary font-semibold' : ''}
-                ${isCurrent ? 'shadow-md' : ''}`}
+              className={`gap-1 ${isCompleted ? 'text-primary font-medium' : ''}`}
               data-testid={`step-${step.key}-${itemId}`}
             >
-              {isCompleted && <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />}
+              {isCompleted ? (
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+              ) : isCurrent ? (
+                <CircleDot className="w-3.5 h-3.5 shrink-0" />
+              ) : (
+                <Circle className="w-3.5 h-3.5 shrink-0" />
+              )}
               {step.label}
             </Button>
           );
@@ -480,9 +484,10 @@ export default function CampaignDetail() {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-0">
+                <div className="overflow-auto max-h-[calc(100vh-320px)]">
                 <Table>
-                  <TableHeader>
+                  <TableHeader className="sticky top-0 bg-background z-50">
                     <TableRow>
                       <TableHead className="w-10">
                         <Checkbox 
@@ -582,6 +587,7 @@ export default function CampaignDetail() {
                     )}
                   </TableBody>
                 </Table>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
