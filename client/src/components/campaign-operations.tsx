@@ -25,7 +25,7 @@ import { ko } from "date-fns/locale";
 import { 
   Search, Filter, AlertCircle, Clock, FileText, Calendar, MessageSquare, 
   CheckCircle2, Instagram, Youtube, Twitter,
-  ExternalLink, Save, AlertTriangle, CalendarIcon, Trash2, Send, Download, Mail, Loader2, ArrowLeft, Pencil
+  ExternalLink, Save, AlertTriangle, CalendarIcon, Trash2, Send, Download, Mail, Loader2, ArrowLeft, Pencil, ClipboardList
 } from "lucide-react";
 import type { CampaignInfluencer, Influencer, InfluencerAccount, FeedbackNote, User } from "@shared/schema";
 import { KO } from "@/i18n/ko";
@@ -42,6 +42,28 @@ interface CampaignOperationsProps {
   campaignId: number;
   workspaceId?: number;
   lineItems: LineItemWithDetails[];
+}
+
+const BANK_LIST = [
+  "KB국민은행", "신한은행", "하나은행", "우리은행", "NH농협은행",
+  "IBK기업은행", "카카오뱅크", "토스뱅크", "SC제일은행", "씨티은행",
+  "케이뱅크", "새마을금고", "신협", "우체국", "수협은행",
+  "대구은행", "부산은행", "경남은행", "광주은행", "전북은행", "제주은행"
+];
+
+function getContractInfoCompleteness(item: LineItemWithDetails): { filled: number; total: number } {
+  const total = 8;
+  let filled = 0;
+  if (item.uploadDueAt) filled++;
+  if (item.offerFee) filled++;
+  const inf = item.influencer;
+  if (inf?.bankName) filled++;
+  if (inf?.accountNumber) filled++;
+  if (inf?.accountHolder) filled++;
+  if (inf?.businessName) filled++;
+  if (inf?.freelancerId || inf?.businessRegNo) filled++;
+  if (inf?.settlementType) filled++;
+  return { filled, total };
 }
 
 const STAGES = ["선정완료", "오퍼확정", "계약진행", "일정확정", "초안수신", "피드백중", "완성본확정", "완료"] as const;
@@ -119,6 +141,7 @@ export function CampaignOperations({ campaignId, workspaceId = 1, lineItems }: C
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [contractDialogItem, setContractDialogItem] = useState<LineItemWithDetails | null>(null);
+  const [contractInfoItem, setContractInfoItem] = useState<LineItemWithDetails | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{ id: number; name: string } | null>(null);
   const deleteItem = useDeleteCampaignItem(campaignId);
@@ -227,7 +250,7 @@ export function CampaignOperations({ campaignId, workspaceId = 1, lineItems }: C
       <Card>
         <CardContent className="p-0">
           <div className="overflow-auto max-h-[calc(100vh-320px)]">
-              <Table className="min-w-[700px]">
+              <Table className="min-w-[900px]">
                 <TableHeader className="sticky top-0 bg-background z-50">
                   <TableRow>
                     <TableHead className="sticky left-0 bg-background z-[60]">{KO.pages.operations.influencer}</TableHead>
@@ -270,16 +293,42 @@ export function CampaignOperations({ campaignId, workspaceId = 1, lineItems }: C
                           </div>
                         </TableCell>
                         <TableCell onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs"
-                            onClick={() => setContractDialogItem(item)}
-                            data-testid={`button-contract-generate-${item.id}`}
-                          >
-                            <FileText className="w-3 h-3 mr-1" />
-                            작성
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs"
+                              onClick={() => setContractDialogItem(item)}
+                              data-testid={`button-contract-generate-${item.id}`}
+                            >
+                              <FileText className="w-3 h-3 mr-1" />
+                              작성
+                            </Button>
+                            {(() => {
+                              const { filled, total } = getContractInfoCompleteness(item);
+                              const isComplete = filled === total;
+                              const isLow = filled <= 3;
+                              return (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className={`h-7 text-xs ${
+                                    isComplete
+                                      ? 'border-green-500 text-green-700 dark:border-green-600 dark:text-green-400'
+                                      : isLow
+                                        ? 'border-red-400 text-red-600 dark:border-red-600 dark:text-red-400'
+                                        : 'border-yellow-500 text-yellow-700 dark:border-yellow-600 dark:text-yellow-400'
+                                  }`}
+                                  onClick={() => setContractInfoItem(item)}
+                                  data-testid={`button-contract-info-${item.id}`}
+                                  aria-label={`계약정보 ${filled}/${total}`}
+                                >
+                                  <ClipboardList className="w-3 h-3 mr-1" />
+                                  {isComplete ? '정보완료' : `정보 ${filled}/${total}`}
+                                </Button>
+                              );
+                            })()}
+                          </div>
                         </TableCell>
                         <TableCell>
                           {hasContract ? (
@@ -412,6 +461,14 @@ export function CampaignOperations({ campaignId, workspaceId = 1, lineItems }: C
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {contractInfoItem && (
+        <ContractInfoDialog
+          item={contractInfoItem}
+          campaignId={campaignId}
+          onClose={() => setContractInfoItem(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1048,5 +1105,278 @@ function ContractGenerateDialog({ item, campaignId, workspaceId, onClose }: Cont
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+interface ContractInfoDialogProps {
+  item: LineItemWithDetails;
+  campaignId: number;
+  onClose: () => void;
+}
+
+function ContractInfoDialog({ item, campaignId, onClose }: ContractInfoDialogProps) {
+  const { toast } = useToast();
+  const inf = item.influencer;
+  
+  const [uploadDueAt, setUploadDueAt] = useState<Date | undefined>(
+    item.uploadDueAt ? new Date(item.uploadDueAt) : undefined
+  );
+  const [offerFee, setOfferFee] = useState(item.offerFee?.toString() || '');
+  const [offerUsageMonths, setOfferUsageMonths] = useState(item.offerUsageMonths?.toString() || '');
+  const [offerUsageRenewalFee, setOfferUsageRenewalFee] = useState((item as any).offerUsageRenewalFee?.toString() || '');
+  
+  const [settlementType, setSettlementType] = useState(inf?.settlementType || '');
+  const [bankName, setBankName] = useState(inf?.bankName || '');
+  const [accountNumber, setAccountNumber] = useState(inf?.accountNumber || '');
+  const [accountHolder, setAccountHolder] = useState(inf?.accountHolder || '');
+  const [businessName, setBusinessName] = useState(inf?.businessName || '');
+  const [birthDate, setBirthDate] = useState((inf as any)?.birthDate || '');
+  const [idNumber, setIdNumber] = useState(
+    inf?.settlementType === '사업자' ? (inf?.businessRegNo || '') : (inf?.freelancerId || '')
+  );
+  
+  const [isSaving, setIsSaving] = useState(false);
+  
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      const lineItemUpdates: any = {};
+      if (uploadDueAt) lineItemUpdates.uploadDueAt = uploadDueAt;
+      if (offerFee) lineItemUpdates.offerFee = parseInt(offerFee);
+      if (offerUsageMonths) lineItemUpdates.offerUsageMonths = parseInt(offerUsageMonths);
+      if (offerUsageRenewalFee) lineItemUpdates.offerUsageRenewalFee = parseInt(offerUsageRenewalFee);
+      
+      const influencerUpdates: any = {};
+      if (settlementType) influencerUpdates.settlementType = settlementType;
+      if (bankName) influencerUpdates.bankName = bankName;
+      if (accountNumber) influencerUpdates.accountNumber = accountNumber;
+      if (accountHolder) influencerUpdates.accountHolder = accountHolder;
+      if (businessName) influencerUpdates.businessName = businessName;
+      if (birthDate) influencerUpdates.birthDate = birthDate;
+      if (idNumber) {
+        if (settlementType === '사업자') {
+          influencerUpdates.businessRegNo = idNumber;
+        } else {
+          influencerUpdates.freelancerId = idNumber;
+        }
+      }
+      
+      const promises: Promise<any>[] = [];
+      if (Object.keys(lineItemUpdates).length > 0) {
+        promises.push(apiRequest('PATCH', `/api/line-items/${item.id}/operations`, lineItemUpdates));
+      }
+      if (Object.keys(influencerUpdates).length > 0 && inf?.id) {
+        promises.push(apiRequest('PATCH', `/api/influencers/${inf.id}`, influencerUpdates));
+      }
+      
+      await Promise.all(promises);
+      
+      queryClient.invalidateQueries({ queryKey: [api.campaigns.get.path, campaignId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/line-items', item.id] });
+      if (inf?.id) {
+        queryClient.invalidateQueries({ queryKey: ['/api/influencers', inf.id] });
+      }
+      
+      toast({ title: "계약정보가 저장되었습니다" });
+      onClose();
+    } catch (err) {
+      toast({ title: "저장 실패", variant: "destructive" });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+  
+  const accounts = inf?.accounts || [];
+  const { filled, total } = getContractInfoCompleteness(item);
+  
+  return (
+    <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto" data-testid="dialog-contract-info">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ClipboardList className="w-5 h-5" />
+            계약정보 기입
+          </DialogTitle>
+          <DialogDescription>
+            {inf?.name || '인플루언서'} — 입력 완성도 {filled}/{total}
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="space-y-5">
+          <div className="space-y-3">
+            <h4 className="text-sm font-semibold border-b pb-1.5">캠페인 정보</h4>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">업로드 예정일</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full justify-start font-normal"
+                      data-testid="input-contract-upload-due"
+                    >
+                      <CalendarIcon className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
+                      {uploadDueAt ? format(uploadDueAt, 'yyyy-MM-dd') : <span className="text-muted-foreground">선택</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarComponent
+                      mode="single"
+                      selected={uploadDueAt}
+                      onSelect={(date) => setUploadDueAt(date || undefined)}
+                      locale={ko}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">광고비 (원)</Label>
+                <Input
+                  type="number"
+                  value={offerFee}
+                  onChange={(e) => setOfferFee(e.target.value)}
+                  placeholder="0"
+                  data-testid="input-contract-offer-fee"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">2차활용 기간 (개월)</Label>
+                <Input
+                  type="number"
+                  value={offerUsageMonths}
+                  onChange={(e) => setOfferUsageMonths(e.target.value)}
+                  placeholder="0"
+                  data-testid="input-contract-usage-months"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">2차활용 갱신 비용 (원)</Label>
+                <Input
+                  type="number"
+                  value={offerUsageRenewalFee}
+                  onChange={(e) => setOfferUsageRenewalFee(e.target.value)}
+                  placeholder="0"
+                  data-testid="input-contract-renewal-fee"
+                />
+              </div>
+            </div>
+          </div>
+          
+          <div className="space-y-3">
+            <h4 className="text-sm font-semibold border-b pb-1.5">정산 정보</h4>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">은행명</Label>
+                <Select value={bankName} onValueChange={setBankName}>
+                  <SelectTrigger data-testid="select-contract-bank">
+                    <SelectValue placeholder="선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {BANK_LIST.map(bank => (
+                      <SelectItem key={bank} value={bank}>{bank}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">예금주명</Label>
+                <Input
+                  value={accountHolder}
+                  onChange={(e) => setAccountHolder(e.target.value)}
+                  placeholder="예금주명"
+                  data-testid="input-contract-account-holder"
+                />
+              </div>
+              <div className="col-span-2 space-y-1">
+                <Label className="text-xs">계좌번호</Label>
+                <Input
+                  value={accountNumber}
+                  onChange={(e) => setAccountNumber(e.target.value)}
+                  placeholder="- 없이 입력"
+                  data-testid="input-contract-account-number"
+                />
+              </div>
+            </div>
+          </div>
+          
+          <div className="space-y-3">
+            <h4 className="text-sm font-semibold border-b pb-1.5">신원 정보</h4>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">정산 유형</Label>
+                <Select value={settlementType} onValueChange={setSettlementType}>
+                  <SelectTrigger data-testid="select-contract-settlement-type">
+                    <SelectValue placeholder="선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="사업자">사업자</SelectItem>
+                    <SelectItem value="프리랜서">프리랜서</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">성명 / 사업자명</Label>
+                <Input
+                  value={businessName}
+                  onChange={(e) => setBusinessName(e.target.value)}
+                  placeholder="성명 또는 사업자명"
+                  data-testid="input-contract-business-name"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">생년월일</Label>
+                <Input
+                  value={birthDate}
+                  onChange={(e) => setBirthDate(e.target.value)}
+                  placeholder="YYYY-MM-DD"
+                  data-testid="input-contract-birth-date"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">{settlementType === '사업자' ? '사업자등록번호' : '주민등록번호'}</Label>
+                <Input
+                  value={idNumber}
+                  onChange={(e) => setIdNumber(e.target.value)}
+                  placeholder={settlementType === '사업자' ? '000-00-00000' : '000000-0000000'}
+                  data-testid="input-contract-id-number"
+                />
+              </div>
+            </div>
+          </div>
+          
+          {accounts.length > 0 && (
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold border-b pb-1.5">채널 정보</h4>
+              <div className="space-y-2">
+                {accounts.map(acc => (
+                  <div key={acc.id} className="flex items-center gap-2 text-sm">
+                    <PlatformIcon p={acc.platform} />
+                    <span className="text-muted-foreground">@{acc.handle}</span>
+                    {acc.url && (
+                      <a href={acc.url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary flex items-center gap-0.5">
+                        <ExternalLink className="w-3 h-3" />
+                        링크
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        
+        <DialogFooter className="flex gap-2 mt-4">
+          <Button variant="outline" onClick={onClose} data-testid="button-cancel-contract-info">
+            취소
+          </Button>
+          <Button onClick={handleSave} disabled={isSaving} data-testid="button-save-contract-info">
+            {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-4 h-4 mr-1" />}
+            저장
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -102,9 +102,12 @@ export const influencers = pgTable("influencers", {
   priceMemoUpdatedAt: timestamp("price_memo_updated_at"),
   priceMemoUpdatedByUserId: integer("price_memo_updated_by_user_id"),
   
+  // Personal info
+  birthDate: text("birth_date"), // 생년월일 (YYYY-MM-DD)
+  
   // Settlement info (정산정보)
   settlementType: text("settlement_type"), // 사업자 | 프리랜서
-  businessName: text("business_name"), // 사업자등록명
+  businessName: text("business_name"), // 사업자등록명/성명
   businessRegNo: text("business_reg_no"), // 사업자등록번호
   freelancerId: text("freelancer_id"), // 프리랜서 주민번호
   bankName: text("bank_name"), // 은행명
@@ -202,6 +205,7 @@ export const campaignInfluencers = pgTable("campaign_influencers", {
   offerVatIncluded: boolean("offer_vat_included").default(false),
   offerUsageMonths: integer("offer_usage_months"), // 2차활용 기간(개월)
   offerUsageNote: text("offer_usage_note"), // 범위/조건 메모
+  offerUsageRenewalFee: integer("offer_usage_renewal_fee"), // 2차활용 갱신 비용
   offerDeadlineNote: text("offer_deadline_note"), // 납기 메모
   
   // Contract details (계약)
