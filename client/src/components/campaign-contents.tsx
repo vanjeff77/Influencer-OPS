@@ -193,19 +193,6 @@ export function CampaignContents({ campaignId, lineItems }: CampaignContentsProp
       </div>
 
       <div className="flex flex-wrap gap-2 items-center justify-between">
-        <div className="flex flex-wrap gap-2">
-          {REVIEW_STATUSES.map(status => (
-            <Badge 
-              key={status}
-              variant="outline" 
-              className={`cursor-pointer ${reviewFilter === status ? getReviewStatusColor(status) : ''}`}
-              onClick={() => setReviewFilter(reviewFilter === status ? "all" : status)}
-              data-testid={`badge-filter-${status}`}
-            >
-              {status}: {statusCounts[status]}
-            </Badge>
-          ))}
-        </div>
         <div className="flex flex-wrap gap-2 items-center">
           <Button
             size="sm"
@@ -228,6 +215,19 @@ export function CampaignContents({ campaignId, lineItems }: CampaignContentsProp
             <Upload className="w-4 h-4 mr-1" />
             인플루언서 제출 이력 {submissions.length > 0 && `(${submissions.length})`}
           </Button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {REVIEW_STATUSES.map(status => (
+            <Badge 
+              key={status}
+              variant="outline" 
+              className={`cursor-pointer ${reviewFilter === status ? getReviewStatusColor(status) : ''}`}
+              onClick={() => setReviewFilter(reviewFilter === status ? "all" : status)}
+              data-testid={`badge-filter-${status}`}
+            >
+              {status}: {statusCounts[status]}
+            </Badge>
+          ))}
         </div>
       </div>
 
