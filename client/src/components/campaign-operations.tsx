@@ -249,9 +249,9 @@ export function CampaignOperations({ campaignId, workspaceId = 1, lineItems }: C
 
       <Card>
         <CardContent className="p-0">
-          <div className="overflow-auto max-h-[calc(100vh-320px)]">
+          <div className="overflow-auto">
               <Table className="min-w-[900px]">
-                <TableHeader className="sticky top-0 bg-background z-50">
+                <TableHeader>
                   <TableRow>
                     <TableHead className="sticky left-0 bg-background z-[60]">{KO.pages.operations.influencer}</TableHead>
                     <TableHead>{KO.pages.operations.adFeeVat}</TableHead>

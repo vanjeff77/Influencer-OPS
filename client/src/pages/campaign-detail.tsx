@@ -485,9 +485,9 @@ export default function CampaignDetail() {
                 </div>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="overflow-auto max-h-[calc(100vh-320px)]">
+                <div className="overflow-auto">
                 <Table>
-                  <TableHeader className="sticky top-0 bg-background z-50">
+                  <TableHeader>
                     <TableRow>
                       <TableHead className="w-10">
                         <Checkbox 
