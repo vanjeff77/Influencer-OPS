@@ -1010,7 +1010,6 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
           })}
         </div>
       </div>
-
       {confirmDialog.open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-background rounded-lg p-6 max-w-[400px] shadow-lg space-y-4">
@@ -1038,9 +1037,8 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
           </div>
         </div>
       )}
-
       <ScrollArea className="flex-1">
-        <div className="p-4 space-y-4">
+        <div className="p-4 space-y-4 bg-[#ffffff]">
         <div className="space-y-3">
           <div>
             <label className="text-xs font-medium text-muted-foreground">광고료(VAT+)</label>
