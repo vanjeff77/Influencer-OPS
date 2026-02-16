@@ -253,7 +253,7 @@ export function CampaignOperations({ campaignId, workspaceId = 1, lineItems }: C
               <Table className="min-w-[900px]">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="sticky left-0 z-[60] bg-[transparent]">{KO.pages.operations.influencer}</TableHead>
+                    <TableHead className="sticky left-0 z-10 bg-[transparent]">{KO.pages.operations.influencer}</TableHead>
                     <TableHead>{KO.pages.operations.adFeeVat}</TableHead>
                     <TableHead>{KO.pages.operations.contractInfo} / {KO.pages.operations.contractGenerate}</TableHead>
                     <TableHead>{KO.pages.operations.contract}</TableHead>
