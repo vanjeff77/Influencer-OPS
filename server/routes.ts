@@ -2803,7 +2803,7 @@ export async function registerRoutes(
       const updates = { ...req.body };
       
       // Convert date string fields to Date objects
-      const dateFields = ['draftDueAt', 'uploadDueAt', 'publishedConfirmedAt', 'feedbackSummaryUpdatedAt', 'lastOutboundAt', 'firstContactAt'];
+      const dateFields = ['draftDueAt', 'uploadDueAt', 'publishedConfirmedAt', 'feedbackSummaryUpdatedAt', 'lastOutboundAt', 'firstContactAt', 'settlementRequestedAt'];
       for (const field of dateFields) {
         if (updates[field] !== undefined) {
           updates[field] = updates[field] ? new Date(updates[field]) : null;

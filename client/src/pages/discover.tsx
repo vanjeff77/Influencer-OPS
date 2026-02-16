@@ -315,6 +315,11 @@ export default function Discover() {
 
   const handleCreate = () => {
     if (!newInfluencer.name) return;
+    const hasValidAccount = newInfluencer.accounts.some(acc => acc.handle.trim());
+    if (!hasValidAccount) {
+      toast({ title: "채널 URL을 최소 1개 입력해주세요.", variant: "destructive" });
+      return;
+    }
     const validAccounts = newInfluencer.accounts
       .filter(acc => acc.handle.trim())
       .map(acc => ({
@@ -434,6 +439,87 @@ export default function Discover() {
                       data-testid="input-new-influencer-name" 
                     />
                   </div>
+
+                  {/* 채널 URL (필수) */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-medium">{KO.pages.discover.platformAccounts} <span className="text-destructive">*</span></label>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => setNewInfluencer({
+                          ...newInfluencer, 
+                          accounts: [...newInfluencer.accounts, { platform: "IG", handle: "", followers: 0 }]
+                        })}
+                        data-testid="button-add-new-platform"
+                      >
+                        <Plus className="w-3 h-3 mr-1" />
+                        {KO.pages.discover.addAccount}
+                      </Button>
+                    </div>
+                    {newInfluencer.accounts.map((account, index) => (
+                      <div key={index} className="flex gap-2 items-center flex-wrap">
+                        <Select 
+                          value={account.platform} 
+                          onValueChange={v => {
+                            const newAccounts = [...newInfluencer.accounts];
+                            newAccounts[index] = { ...newAccounts[index], platform: v };
+                            setNewInfluencer({ ...newInfluencer, accounts: newAccounts });
+                          }}
+                        >
+                          <SelectTrigger className="w-24" data-testid={`select-new-platform-${index}`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="IG">Instagram</SelectItem>
+                            <SelectItem value="YT">YouTube</SelectItem>
+                            <SelectItem value="TikTok">TikTok</SelectItem>
+                            <SelectItem value="X">X</SelectItem>
+                            <SelectItem value="Blog">Blog</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Input 
+                          value={account.handle} 
+                          onChange={e => {
+                            const newAccounts = [...newInfluencer.accounts];
+                            newAccounts[index] = { ...newAccounts[index], handle: e.target.value };
+                            setNewInfluencer({ ...newInfluencer, accounts: newAccounts });
+                          }}
+                          placeholder="https://..."
+                          className="flex-1 min-w-[100px]"
+                          data-testid={`input-new-handle-${index}`}
+                        />
+                        <Input 
+                          type="number"
+                          value={account.followers || ''} 
+                          onChange={e => {
+                            const newAccounts = [...newInfluencer.accounts];
+                            newAccounts[index] = { ...newAccounts[index], followers: parseInt(e.target.value) || 0 };
+                            setNewInfluencer({ ...newInfluencer, accounts: newAccounts });
+                          }}
+                          placeholder={KO.pages.discover.followers}
+                          className="w-24"
+                          data-testid={`input-new-followers-${index}`}
+                        />
+                        {newInfluencer.accounts.length > 1 && (
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => {
+                              const newAccounts = newInfluencer.accounts.filter((_, i) => i !== index);
+                              setNewInfluencer({ ...newInfluencer, accounts: newAccounts });
+                            }}
+                            data-testid={`button-remove-new-platform-${index}`}
+                          >
+                            <X className="w-4 h-4 text-destructive" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                    {newInfluencer.accounts.length === 0 && (
+                      <div className="text-sm text-muted-foreground text-center py-2">{KO.pages.discover.noAccounts}</div>
+                    )}
+                  </div>
                   
                   {/* 클라이언트 */}
                   <div>
@@ -540,87 +626,6 @@ export default function Discover() {
                       className="min-h-[80px]" 
                       data-testid="input-new-influencer-price-memo" 
                     />
-                  </div>
-                  
-                  {/* 채널 URL */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <label className="text-sm font-medium">{KO.pages.discover.platformAccounts}</label>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={() => setNewInfluencer({
-                          ...newInfluencer, 
-                          accounts: [...newInfluencer.accounts, { platform: "IG", handle: "", followers: 0 }]
-                        })}
-                        data-testid="button-add-new-platform"
-                      >
-                        <Plus className="w-3 h-3 mr-1" />
-                        {KO.pages.discover.addAccount}
-                      </Button>
-                    </div>
-                    {newInfluencer.accounts.map((account, index) => (
-                      <div key={index} className="flex gap-2 items-center flex-wrap">
-                        <Select 
-                          value={account.platform} 
-                          onValueChange={v => {
-                            const newAccounts = [...newInfluencer.accounts];
-                            newAccounts[index] = { ...newAccounts[index], platform: v };
-                            setNewInfluencer({ ...newInfluencer, accounts: newAccounts });
-                          }}
-                        >
-                          <SelectTrigger className="w-24" data-testid={`select-new-platform-${index}`}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="IG">Instagram</SelectItem>
-                            <SelectItem value="YT">YouTube</SelectItem>
-                            <SelectItem value="TikTok">TikTok</SelectItem>
-                            <SelectItem value="X">X</SelectItem>
-                            <SelectItem value="Blog">Blog</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Input 
-                          value={account.handle} 
-                          onChange={e => {
-                            const newAccounts = [...newInfluencer.accounts];
-                            newAccounts[index] = { ...newAccounts[index], handle: e.target.value };
-                            setNewInfluencer({ ...newInfluencer, accounts: newAccounts });
-                          }}
-                          placeholder="https://..."
-                          className="flex-1 min-w-[100px]"
-                          data-testid={`input-new-handle-${index}`}
-                        />
-                        <Input 
-                          type="number"
-                          value={account.followers || ''} 
-                          onChange={e => {
-                            const newAccounts = [...newInfluencer.accounts];
-                            newAccounts[index] = { ...newAccounts[index], followers: parseInt(e.target.value) || 0 };
-                            setNewInfluencer({ ...newInfluencer, accounts: newAccounts });
-                          }}
-                          placeholder={KO.pages.discover.followers}
-                          className="w-24"
-                          data-testid={`input-new-followers-${index}`}
-                        />
-                        {newInfluencer.accounts.length > 1 && (
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            onClick={() => {
-                              const newAccounts = newInfluencer.accounts.filter((_, i) => i !== index);
-                              setNewInfluencer({ ...newInfluencer, accounts: newAccounts });
-                            }}
-                            data-testid={`button-remove-new-platform-${index}`}
-                          >
-                            <X className="w-4 h-4 text-destructive" />
-                          </Button>
-                        )}
-                      </div>
-                    ))}
-                    {newInfluencer.accounts.length === 0 && (
-                      <div className="text-sm text-muted-foreground text-center py-2">{KO.pages.discover.noAccounts}</div>
-                    )}
                   </div>
                   
                   {/* 저장 버튼 */}
@@ -1503,6 +1508,58 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
                     <label className="text-sm font-medium">{KO.pages.discover.nickname}</label>
                     <Input value={name} onChange={e => setName(e.target.value)} data-testid="input-influencer-name" />
                   </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-medium">{KO.pages.discover.platformAccounts} <span className="text-destructive">*</span></label>
+                      <Button variant="outline" size="sm" onClick={addAccount} data-testid="button-add-account">
+                        <Plus className="w-3 h-3 mr-1" />
+                        {KO.pages.discover.addAccount}
+                      </Button>
+                    </div>
+                    {accounts.map((acc, index) => (
+                      <div key={index} className="flex gap-2 items-center flex-wrap">
+                        <Select value={acc.platform} onValueChange={v => updateAccount(index, 'platform', v)}>
+                          <SelectTrigger className="w-24" data-testid={`select-account-platform-${index}`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="IG">Instagram</SelectItem>
+                            <SelectItem value="YT">YouTube</SelectItem>
+                            <SelectItem value="TikTok">TikTok</SelectItem>
+                            <SelectItem value="X">X</SelectItem>
+                            <SelectItem value="Blog">Blog</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Input 
+                          value={acc.handle} 
+                          onChange={e => updateAccount(index, 'handle', e.target.value)} 
+                          placeholder="https://..."
+                          className="flex-1 min-w-[100px]"
+                          data-testid={`input-account-handle-${index}`}
+                        />
+                        <Input 
+                          type="number"
+                          value={acc.followers || ''} 
+                          onChange={e => updateAccount(index, 'followers', parseInt(e.target.value) || 0)} 
+                          placeholder={KO.pages.discover.followers}
+                          className="w-24"
+                          data-testid={`input-account-followers-${index}`}
+                        />
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => removeAccount(index)}
+                          data-testid={`button-remove-account-${index}`}
+                        >
+                          <X className="w-4 h-4 text-destructive" />
+                        </Button>
+                      </div>
+                    ))}
+                    {accounts.length === 0 && (
+                      <div className="text-sm text-muted-foreground text-center py-2">{KO.pages.discover.noAccounts}</div>
+                    )}
+                  </div>
                   
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -1568,58 +1625,6 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
                       data-testid="input-influencer-price-memo" 
                     />
                   </div>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium">{KO.pages.discover.platformAccounts}</label>
-                    <Button variant="outline" size="sm" onClick={addAccount} data-testid="button-add-account">
-                      <Plus className="w-3 h-3 mr-1" />
-                      {KO.pages.discover.addAccount}
-                    </Button>
-                  </div>
-                  {accounts.map((acc, index) => (
-                    <div key={index} className="flex gap-2 items-center flex-wrap">
-                      <Select value={acc.platform} onValueChange={v => updateAccount(index, 'platform', v)}>
-                        <SelectTrigger className="w-24" data-testid={`select-account-platform-${index}`}>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="IG">Instagram</SelectItem>
-                          <SelectItem value="YT">YouTube</SelectItem>
-                          <SelectItem value="TikTok">TikTok</SelectItem>
-                          <SelectItem value="X">X</SelectItem>
-                          <SelectItem value="Blog">Blog</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Input 
-                        value={acc.handle} 
-                        onChange={e => updateAccount(index, 'handle', e.target.value)} 
-                        placeholder="https://..."
-                        className="flex-1 min-w-[100px]"
-                        data-testid={`input-account-handle-${index}`}
-                      />
-                      <Input 
-                        type="number"
-                        value={acc.followers || ''} 
-                        onChange={e => updateAccount(index, 'followers', parseInt(e.target.value) || 0)} 
-                        placeholder={KO.pages.discover.followers}
-                        className="w-24"
-                        data-testid={`input-account-followers-${index}`}
-                      />
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        onClick={() => removeAccount(index)}
-                        data-testid={`button-remove-account-${index}`}
-                      >
-                        <X className="w-4 h-4 text-destructive" />
-                      </Button>
-                    </div>
-                  ))}
-                  {accounts.length === 0 && (
-                    <div className="text-sm text-muted-foreground text-center py-2">{KO.pages.discover.noAccounts}</div>
-                  )}
                 </div>
 
                 <Button onClick={handleSave} disabled={updateInfluencer.isPending} className="w-full" data-testid="button-save-info">

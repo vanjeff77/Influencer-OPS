@@ -240,6 +240,11 @@ export const campaignInfluencers = pgTable("campaign_influencers", {
   uploadCompletedAt: timestamp("upload_completed_at"),
   uploadCompletedByUserId: integer("upload_completed_by_user_id"),
   
+  // Settlement request (정산 요청)
+  settlementRequested: boolean("settlement_requested").default(false),
+  settlementRequestedAt: timestamp("settlement_requested_at"),
+  settlementRequestedByUserId: integer("settlement_requested_by_user_id"),
+  
   // Payout info (정산 정보)
   payoutStatus: text("payout_status").default("정산정보미비"), // 정산정보미비, 증빙요청, 증빙수령, 지급대기, 지급완료, 보류
   payoutAmountSupply: integer("payout_amount_supply"), // 공급가

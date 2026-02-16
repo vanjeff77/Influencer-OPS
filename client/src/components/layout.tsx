@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useUser, useLogout } from "@/hooks/use-auth";
@@ -60,15 +61,32 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   
   const [isCollapsed, setIsCollapsed] = useState(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('sidebarCollapsed') === 'true';
+      const saved = localStorage.getItem('sidebarCollapsed');
+      return saved === null ? true : saved === 'true';
     }
-    return false;
+    return true;
   });
+  
+  const [isHovered, setIsHovered] = useState(false);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  const handleMouseEnter = () => {
+    if (!isCollapsed) return;
+    hoverTimerRef.current = setTimeout(() => setIsHovered(true), 200);
+  };
+  
+  const handleMouseLeave = () => {
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    setIsHovered(false);
+  };
+  
+  const sidebarExpanded = !isCollapsed || isHovered;
   
   const toggleCollapse = () => {
     setIsCollapsed(prev => {
       const next = !prev;
       localStorage.setItem('sidebarCollapsed', String(next));
+      if (!next) setIsHovered(false);
       return next;
     });
   };
@@ -277,10 +295,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     <div className="flex h-screen bg-background overflow-hidden">
       {/* Desktop Sidebar */}
       <aside
-        className={`hidden md:flex border-r border-border/60 flex-col shadow-md z-10 bg-[#f6f9fa] overflow-hidden transition-[width] duration-200 ${isCollapsed ? 'w-16' : 'w-64'}`}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        className={`hidden md:flex border-r border-border/60 flex-col shadow-md z-30 bg-[#f6f9fa] overflow-hidden transition-[width] duration-200 ${isHovered ? 'absolute left-0 top-0 h-full' : ''} ${sidebarExpanded ? 'w-64' : 'w-16'}`}
       >
-        <SidebarContent collapsed={isCollapsed} onToggleCollapse={toggleCollapse} />
+        <SidebarContent collapsed={!sidebarExpanded} onToggleCollapse={toggleCollapse} />
       </aside>
+      {isHovered && <div className="hidden md:block w-16 flex-shrink-0" />}
       {/* Mobile Header & Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Mobile Header */}
