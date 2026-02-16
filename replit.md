@@ -8,6 +8,21 @@ This is a full-stack influencer management platform MVP designed for agencies to
 
 Preferred communication style: Simple, everyday language.
 
+## Agent Development Guidelines (오류 방지 원칙)
+
+아래 원칙들은 반복된 실수에서 배운 것이다. **기계적으로 모든 상황에 적용하지 말고, 상황에 맞게 유연하게 판단**한다. 예: 방금 읽은 파일은 다시 읽지 않아도 되고, 사소한 수정이면 서버 확인을 건너뛸 수 있다. 핵심은 "안전 vs 속도의 균형"이다.
+
+1. **코드 수정 전 파일 읽기** — 추측으로 편집하면 실패→재시도가 반복된다. 읽고 나서 수정하는 게 총 시간이 짧다.
+2. **점진적 변경** — 여러 파일을 한꺼번에 바꾸면 원인 추적이 어렵다. 단, 서로 의존하는 변경은 묶어서 해도 된다.
+3. **타입/스키마 변경 시 전파** — schema → db:push → API → 프론트 순서. 기존 ID 타입은 절대 변경하지 않는다.
+4. **Null/Falsy 주의** — `!value`는 0도 걸러낸다. 숫자는 `!= null`, "값 지우기"는 `null`로 전송.
+5. **DB 안전** — 파괴적 SQL은 사용자 승인 필요. `npm run db:push` 사용.
+6. **서버 기동 확인** — 큰 변경 후에는 curl로 확인(1초). 사소한 변경은 생략 가능.
+7. **기존 패턴 따르기** — 주변 코드의 import, 상태관리, 에러처리 패턴을 먼저 파악하고 동일하게 작성.
+8. **edit 정확성** — old_string은 파일에서 읽은 그대로. 줄 번호 포함 금지, 충분한 컨텍스트 포함.
+9. **에러 대응** — 로그 확인 → 원인 추적 → 최소 수정. 전체 재작성은 최후의 수단.
+10. **테스트** — API 변경은 curl, UI 변경은 e2e 테스트로 검증. 검증 범위는 변경 규모에 비례.
+
 ## System Architecture
 
 ### Frontend
