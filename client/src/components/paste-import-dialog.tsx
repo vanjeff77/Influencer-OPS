@@ -12,16 +12,16 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 
 const FIXED_COLUMNS = [
   { key: 'nickname', label: '닉네임', required: true },
-  { key: 'handle', label: '채널 URL', required: false },
-  { key: 'platform', label: '플랫폼', required: false },
+  { key: 'platform', label: '플랫폼', required: true },
+  { key: 'handle', label: '채널 URL', required: true },
   { key: 'followers', label: '팔로워', required: false },
+  { key: 'client', label: '클라이언트', required: false },
   { key: 'email', label: '이메일', required: false },
   { key: 'tag1', label: '태그1', required: false },
   { key: 'tag2', label: '태그2', required: false },
   { key: 'tag3', label: '태그3', required: false },
   { key: 'memo', label: '메모', required: false },
   { key: 'priceMemo', label: '단가 메모', required: false },
-  { key: 'client', label: '클라이언트', required: false },
   { key: 'contactStatus', label: '컨택여부', required: false },
   { key: 'replyStatus', label: '회신 여부', required: false },
   { key: 'collabStatus', label: '협업 여부', required: false },
@@ -327,23 +327,12 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
 
       for (let i = startIndex; i < parsedData.length; i++) {
         const cells = parsedData[i];
-        const row: RowData = {
-          nickname: (cells[0] || '').trim(),
-          handle: (cells[1] || '').trim(),
-          platform: (cells[2] || '').trim(),
-          followers: (cells[3] || '').trim(),
-          email: (cells[4] || '').trim(),
-          tag1: (cells[5] || '').trim(),
-          tag2: (cells[6] || '').trim(),
-          tag3: (cells[7] || '').trim(),
-          memo: (cells[8] || '').trim(),
-          priceMemo: (cells[9] || '').trim(),
-          client: (cells[10] || '').trim(),
-          contactStatus: (cells[11] || '').trim(),
-          replyStatus: (cells[12] || '').trim(),
-          collabStatus: (cells[13] || '').trim(),
-          finalContentUrl: (cells[14] || '').trim(),
-        };
+        const row = createEmptyRow();
+        FIXED_COLUMNS.forEach((col, idx) => {
+          if (idx < cells.length) {
+            row[col.key as keyof RowData] = (cells[idx] || '').trim();
+          }
+        });
         if (row.nickname || row.handle || row.platform) {
           parsedRows.push(row);
         }
@@ -414,23 +403,12 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
 
     const parsedRows: RowData[] = [];
     for (const cells of parsedData) {
-      const row: RowData = {
-        nickname: (cells[0] || '').trim(),
-        handle: (cells[1] || '').trim(),
-        platform: (cells[2] || '').trim(),
-        followers: (cells[3] || '').trim(),
-        email: (cells[4] || '').trim(),
-        tag1: (cells[5] || '').trim(),
-        tag2: (cells[6] || '').trim(),
-        tag3: (cells[7] || '').trim(),
-        memo: (cells[8] || '').trim(),
-        priceMemo: (cells[9] || '').trim(),
-        client: (cells[10] || '').trim(),
-        contactStatus: (cells[11] || '').trim(),
-        replyStatus: (cells[12] || '').trim(),
-        collabStatus: (cells[13] || '').trim(),
-        finalContentUrl: (cells[14] || '').trim(),
-      };
+      const row = createEmptyRow();
+      FIXED_COLUMNS.forEach((col, i) => {
+        if (i < cells.length) {
+          row[col.key as keyof RowData] = (cells[i] || '').trim();
+        }
+      });
       if (row.nickname || row.handle || row.platform) {
         parsedRows.push(row);
       }
@@ -455,11 +433,17 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
       if (!row.nickname.trim()) {
         rowError.nickname = '닉네임은 필수입니다';
       }
-      if (row.platform.trim()) {
+      if (!row.platform.trim()) {
+        rowError.platform = '플랫폼은 필수입니다';
+      } else {
         const normalized = normalizePlatform(row.platform);
         if (!normalized) {
           rowError.platform = `허용된 플랫폼: ${ALLOWED_PLATFORMS.join(', ')}`;
         }
+      }
+
+      if (!row.handle.trim()) {
+        rowError.handle = '채널 URL은 필수입니다';
       }
 
       if (row.followers.trim()) {

@@ -304,12 +304,9 @@ export function CampaignOperations({ campaignId, workspaceId = 1, lineItems }: C
                             {(() => {
                               const { filled, total } = getContractInfoCompleteness(item);
                               const isComplete = filled === total;
-                              const isLow = filled <= 3;
                               const colorClass = isComplete
                                 ? 'border-green-500 text-green-700 bg-green-50 dark:border-green-600 dark:text-green-400 dark:bg-green-950/30'
-                                : isLow
-                                  ? 'border-red-400 text-red-600 bg-red-50 dark:border-red-600 dark:text-red-400 dark:bg-red-950/30'
-                                  : 'border-yellow-500 text-yellow-700 bg-yellow-50 dark:border-yellow-600 dark:text-yellow-400 dark:bg-yellow-950/30';
+                                : 'border-yellow-500 text-yellow-700 bg-yellow-50 dark:border-yellow-600 dark:text-yellow-400 dark:bg-yellow-950/30';
                               return (
                                 <button
                                   className={`relative h-7 text-xs font-medium px-2.5 border rounded-l-md rounded-r-none ${colorClass} flex items-center gap-1`}
@@ -318,17 +315,17 @@ export function CampaignOperations({ campaignId, workspaceId = 1, lineItems }: C
                                   aria-label={`계약정보 ${filled}/${total}`}
                                 >
                                   <ClipboardList className="w-3 h-3" />
-                                  {isComplete ? '정보완료' : `${filled}/${total}`}
+                                  {isComplete ? '정보완료' : <>계약 정보 {filled}/{total}</>}
                                 </button>
                               );
                             })()}
                             <button
-                              className="relative h-7 text-xs font-medium px-2.5 border border-l-0 rounded-r-md rounded-l-none bg-muted/50 text-foreground flex items-center gap-1"
+                              className="relative h-7 text-xs font-medium px-2.5 border border-l-0 rounded-r-md rounded-l-none bg-blue-600 text-white flex items-center gap-1"
                               onClick={() => setContractDialogItem(item)}
                               data-testid={`button-contract-generate-${item.id}`}
                             >
                               <FileText className="w-3 h-3" />
-                              작성
+                              계약서 만들기
                             </button>
                           </div>
                         </TableCell>
@@ -1127,7 +1124,6 @@ function ContractInfoDialog({ item, campaignId, onClose }: ContractInfoDialogPro
   const [accountNumber, setAccountNumber] = useState(inf?.accountNumber || '');
   const [accountHolder, setAccountHolder] = useState(inf?.accountHolder || '');
   const [businessName, setBusinessName] = useState(inf?.businessName || '');
-  const [birthDate, setBirthDate] = useState((inf as any)?.birthDate || '');
   const [idNumber, setIdNumber] = useState(
     inf?.settlementType === '사업자' ? (inf?.businessRegNo || '') : (inf?.freelancerId || '')
   );
@@ -1150,7 +1146,6 @@ function ContractInfoDialog({ item, campaignId, onClose }: ContractInfoDialogPro
         accountNumber: accountNumber || null,
         accountHolder: accountHolder || null,
         businessName: businessName || null,
-        birthDate: birthDate || null,
       };
       if (settlementType === '사업자') {
         influencerUpdates.businessRegNo = idNumber || null;
@@ -1330,15 +1325,6 @@ function ContractInfoDialog({ item, campaignId, onClose }: ContractInfoDialogPro
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">생년월일</Label>
-                <Input
-                  value={birthDate}
-                  onChange={(e) => setBirthDate(e.target.value)}
-                  placeholder="YYYY-MM-DD"
-                  data-testid="input-contract-birth-date"
-                />
-              </div>
-              <div className="space-y-1">
                 <Label className="text-xs">{settlementType === '사업자' ? '사업자등록번호' : '주민등록번호'}</Label>
                 <Input
                   value={idNumber}
@@ -1349,26 +1335,6 @@ function ContractInfoDialog({ item, campaignId, onClose }: ContractInfoDialogPro
               </div>
             </div>
           </div>
-          
-          {accounts.length > 0 && (
-            <div className="space-y-3">
-              <h4 className="text-sm font-semibold border-b pb-1.5">채널 정보</h4>
-              <div className="space-y-2">
-                {accounts.map(acc => (
-                  <div key={acc.id} className="flex items-center gap-2 text-sm">
-                    <PlatformIcon p={acc.platform} />
-                    <span className="text-muted-foreground">@{acc.handle}</span>
-                    {acc.url && (
-                      <a href={acc.url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary flex items-center gap-0.5">
-                        <ExternalLink className="w-3 h-3" />
-                        링크
-                      </a>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
         
         <DialogFooter className="flex gap-2 mt-4">

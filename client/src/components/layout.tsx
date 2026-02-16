@@ -59,36 +59,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
-  const [isCollapsed, setIsCollapsed] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('sidebarCollapsed');
-      return saved === null ? true : saved === 'true';
-    }
-    return true;
-  });
-  
   const [isHovered, setIsHovered] = useState(false);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   const handleMouseEnter = () => {
-    if (!isCollapsed) return;
-    hoverTimerRef.current = setTimeout(() => setIsHovered(true), 200);
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    setIsHovered(true);
   };
   
   const handleMouseLeave = () => {
     if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
     setIsHovered(false);
-  };
-  
-  const sidebarExpanded = !isCollapsed || isHovered;
-  
-  const toggleCollapse = () => {
-    setIsCollapsed(prev => {
-      const next = !prev;
-      localStorage.setItem('sidebarCollapsed', String(next));
-      if (!next) setIsHovered(false);
-      return next;
-    });
   };
 
   const { data: myRoleData } = useQuery<{ userId: number; role: string; assignedClientIds: number[] }>({
@@ -134,19 +115,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         href={href} 
         onClick={onClick}
         title={collapsed ? label : undefined}
-        className={`flex items-center ${collapsed ? 'justify-center' : 'gap-2 md:gap-3'} px-3 md:px-4 py-2 md:py-2.5 rounded-lg transition-colors duration-200 group hover-elevate ${
+        className={`flex items-center gap-3 h-9 rounded-lg transition-colors duration-200 group hover-elevate ${collapsed ? 'justify-center px-0' : 'px-3'} ${
           isActive 
             ? 'bg-primary/10 text-primary font-semibold shadow-sm border border-primary/20' 
             : 'text-muted-foreground'
         }`}
       >
-        <Icon className={`w-4 h-4 md:w-5 md:h-5 transition-colors shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
-        {!collapsed && <span className="text-sm md:text-base truncate">{label}</span>}
+        <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground'} ${collapsed ? '' : 'ml-0'}`} />
+        {!collapsed && <span className="text-sm truncate">{label}</span>}
       </Link>
     );
   };
 
-  const SidebarContent = ({ onNavClick, collapsed = false, onToggleCollapse }: { onNavClick?: () => void; collapsed?: boolean; onToggleCollapse?: () => void }) => (
+  const SidebarContent = ({ onNavClick, collapsed = false }: { onNavClick?: () => void; collapsed?: boolean }) => (
     <>
       <div className={`border-b border-border ${collapsed ? 'p-2' : 'p-3 md:p-4'}`}>
         <DropdownMenu>
@@ -221,42 +202,26 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         )}
       </div>
 
-      <div className={`border-t border-border ${collapsed ? 'p-2' : 'p-3 md:p-4'}`}>
+      <div className={`border-t border-border ${collapsed ? 'p-2' : 'p-3'}`}>
         {!collapsed ? (
-          <>
-            <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4 px-1 md:px-2">
-              <Avatar className="h-7 w-7 md:h-9 md:w-9 border border-border">
-                <AvatarFallback className="bg-primary/10 text-primary font-medium text-xs md:text-sm">{user.name.substring(0, 2).toUpperCase()}</AvatarFallback>
-              </Avatar>
-              <div className="flex flex-col overflow-hidden">
-                <span className="text-xs md:text-sm font-medium truncate">{user.name}</span>
-                <span className="text-[10px] md:text-xs text-muted-foreground truncate">{user.email}</span>
-              </div>
+          <div className="flex items-center gap-2 px-1">
+            <Avatar className="h-8 w-8 border border-border shrink-0">
+              <AvatarFallback className="bg-primary/10 text-primary font-medium text-xs">{user.name.substring(0, 2).toUpperCase()}</AvatarFallback>
+            </Avatar>
+            <div className="flex flex-col overflow-hidden flex-1 min-w-0">
+              <span className="text-sm font-medium truncate">{user.name}</span>
+              <span className="text-[10px] text-muted-foreground truncate">{user.email}</span>
             </div>
-            <div className="flex items-center gap-1">
-              <Button 
-                variant="ghost" 
-                size="sm"
-                className="flex-1 justify-start text-muted-foreground"
-                onClick={() => logout.mutate()}
-              >
-                <LogOut className="w-4 h-4 mr-2" />
-                {KO.nav.signOut}
-              </Button>
-              {onToggleCollapse && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={onToggleCollapse}
-                  className="text-muted-foreground shrink-0"
-                  data-testid="button-toggle-sidebar"
-                  title="사이드바 접기"
-                >
-                  <Menu className="w-4 h-4" />
-                </Button>
-              )}
-            </div>
-          </>
+            <Button 
+              variant="ghost" 
+              size="icon"
+              className="text-muted-foreground shrink-0"
+              onClick={() => logout.mutate()}
+              title={KO.nav.signOut}
+            >
+              <LogOut className="w-4 h-4" />
+            </Button>
+          </div>
         ) : (
           <div className="flex flex-col items-center gap-2">
             <Avatar className="h-8 w-8 border border-border" title={user.name}>
@@ -271,18 +236,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             >
               <LogOut className="w-4 h-4" />
             </Button>
-            {onToggleCollapse && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onToggleCollapse}
-                className="text-muted-foreground"
-                data-testid="button-toggle-sidebar"
-                title="사이드바 펼치기"
-              >
-                <Menu className="w-4 h-4" />
-              </Button>
-            )}
           </div>
         )}
       </div>
@@ -292,15 +245,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen bg-background overflow-hidden">
       {/* Desktop Sidebar */}
+      <div className="hidden md:block w-16 flex-shrink-0" />
       <aside
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
-        className={`hidden md:flex border-r border-border/60 flex-col z-30 bg-card overflow-hidden ${isCollapsed && isHovered ? 'absolute left-0 top-0 h-full shadow-xl' : 'shadow-sm'} ${sidebarExpanded ? 'w-64' : 'w-16'}`}
-        style={{ transition: isCollapsed ? (isHovered ? 'width 200ms' : 'width 0ms') : 'width 200ms' }}
+        className={`hidden md:flex absolute left-0 top-0 h-full border-r border-border/60 flex-col z-30 bg-card overflow-hidden ${isHovered ? 'w-64 shadow-xl' : 'w-16 shadow-sm'}`}
+        style={{ transition: isHovered ? 'width 150ms ease-out' : 'width 0ms' }}
       >
-        <SidebarContent collapsed={!sidebarExpanded} onToggleCollapse={toggleCollapse} />
+        <SidebarContent collapsed={!isHovered} />
       </aside>
-      {isCollapsed && <div className="hidden md:block w-16 flex-shrink-0" />}
       {/* Mobile Header & Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Mobile Header */}

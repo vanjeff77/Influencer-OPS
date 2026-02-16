@@ -724,7 +724,7 @@ export default function CampaignDetail() {
                           </TableCell>
                           <TableCell>
                             {item.settlementRequested ? (
-                              <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400 gap-1 w-[100px] justify-center">
+                              <Badge variant="outline" className="h-8 bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400 gap-1 w-[100px] justify-center">
                                 <Check className="w-3 h-3" />
                                 정산요청됨
                               </Badge>
@@ -732,7 +732,7 @@ export default function CampaignDetail() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="w-[100px] text-xs"
+                                className="h-8 w-[100px] text-xs"
                                 onClick={() => {
                                   handleStatusUpdate(item.id, 'settlementRequested', true);
                                   handleStatusUpdate(item.id, 'settlementRequestedAt', new Date().toISOString());

@@ -77,6 +77,7 @@ interface Conversation {
   subjectPrefix: string | null;
   gmailThreadId: string | null;
   lastMessageAt: string | null;
+  lastReadAt: string | null;
   status: string | null;
   messageCount: number;
   lastMessage?: ConversationMessage;
@@ -307,8 +308,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
             <div className="flex items-center gap-1">
               <Button
                 size="sm"
-                variant="outline"
-                className="h-7 text-xs"
+                className="h-7 text-xs bg-blue-600 hover:bg-blue-700 text-white"
                 onClick={() => setBulkEmailOpen(true)}
                 data-testid="button-bulk-email"
               >
@@ -389,16 +389,9 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                     data-testid={`conversation-item-${li.id}`}
                   >
                     <div className="flex items-center gap-2">
-                      <div className="relative shrink-0">
-                        <Avatar className="h-8 w-8">
-                          <AvatarFallback className="text-xs">{li.influencer?.name?.substring(0, 2) || 'IN'}</AvatarFallback>
-                        </Avatar>
-                        {hasUnread && (
-                          <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-destructive rounded-full border-2 border-background flex items-center justify-center text-[7px] font-bold text-destructive-foreground" aria-label="새 메시지" data-testid={`badge-unread-${li.id}`}>
-                            N
-                          </span>
-                        )}
-                      </div>
+                      <Avatar className="h-8 w-8 shrink-0">
+                        <AvatarFallback className="text-xs">{li.influencer?.name?.substring(0, 2) || 'IN'}</AvatarFallback>
+                      </Avatar>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-1">
                           <span className={`text-sm truncate ${hasUnread ? 'font-bold' : 'font-medium'}`}>{li.influencer?.name}</span>
@@ -411,7 +404,11 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                           {conv?.lastMessage?.snippet || li.influencer?.email || KO.pages.communication.noConversations}
                         </div>
                       </div>
-                      <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                      {hasUnread ? (
+                        <span className="w-2.5 h-2.5 bg-destructive rounded-full shrink-0" aria-label="새 메시지" data-testid={`badge-unread-${li.id}`} />
+                      ) : (
+                        <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                      )}
                     </div>
                   </div>
                 );
