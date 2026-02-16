@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ArrowLeft, CheckCircle2, Circle, CircleDot, CircleDollarSign, FileText, Plus, Search, Users, Instagram, Youtube, Twitter, Save, MessageCircle, ExternalLink, Eye, Heart, MessageSquare, Share2, Trash2, Edit3, Image, Pencil, Calendar, Copy, Upload, Settings, UserCheck, FileSignature, Film, Wallet } from "lucide-react";
+import { ArrowLeft, Check, CheckCircle2, Circle, CircleDot, CircleDollarSign, FileText, Plus, Search, Users, Instagram, Youtube, Twitter, Save, MessageCircle, ExternalLink, Eye, Heart, MessageSquare, Share2, Trash2, Edit3, Image, Pencil, Calendar, Copy, Upload, Settings, UserCheck, FileSignature, Film, Wallet } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Link } from "wouter";
@@ -313,7 +313,7 @@ export default function CampaignDetail() {
   const contractedCount = campaign.items?.filter(i => i.contractStatus === 'signed').length || 0;
   const paidCount = campaign.items?.filter(i => i.paymentStatus === 'paid').length || 0;
 
-  const handleStatusUpdate = (itemId: number, field: string, value: string | number | Date | null) => {
+  const handleStatusUpdate = (itemId: number, field: string, value: string | number | boolean | Date | null) => {
     const item = campaign.items?.find(i => i.id === itemId);
     const updates: Record<string, any> = { [field]: value };
     
@@ -657,9 +657,9 @@ export default function CampaignDetail() {
                       <TableHead>예금주</TableHead>
                       <TableHead>계좌번호</TableHead>
                       <TableHead className="text-right">광고료(VAT+)</TableHead>
-                      <TableHead>정산상태</TableHead>
                       <TableHead>지급예정일</TableHead>
                       <TableHead>메모</TableHead>
+                      <TableHead>정산 요청</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -682,30 +682,6 @@ export default function CampaignDetail() {
                           </TableCell>
                           <TableCell className="text-right font-medium">
                             {(item.offerFee || 0).toLocaleString()}원
-                          </TableCell>
-                          <TableCell>
-                            <Select 
-                              value={item.payoutStatus || "대기"} 
-                              onValueChange={(val) => handleStatusUpdate(item.id, 'payoutStatus', val)}
-                            >
-                              <SelectTrigger 
-                                className={`w-[110px] h-7 text-xs border-0 ${
-                                  item.payoutStatus === '입금완료' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
-                                  item.payoutStatus === '정산요청' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
-                                  item.payoutStatus === '정산정보미비' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400' :
-                                  'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400'
-                                }`}
-                                data-testid={`select-payout-status-${item.id}`}
-                              >
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="대기" data-testid={`option-대기-${item.id}`}>대기</SelectItem>
-                                <SelectItem value="정산정보미비" data-testid={`option-정산정보미비-${item.id}`}>정산정보미비</SelectItem>
-                                <SelectItem value="정산요청" data-testid={`option-정산요청-${item.id}`}>정산요청</SelectItem>
-                                <SelectItem value="입금완료" data-testid={`option-입금완료-${item.id}`}>입금완료</SelectItem>
-                              </SelectContent>
-                            </Select>
                           </TableCell>
                           <TableCell>
                             <Popover>
@@ -745,6 +721,27 @@ export default function CampaignDetail() {
                               }}
                               data-testid={`input-memo-${item.id}`}
                             />
+                          </TableCell>
+                          <TableCell>
+                            {item.settlementRequested ? (
+                              <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400 gap-1 w-[100px] justify-center">
+                                <Check className="w-3 h-3" />
+                                정산요청됨
+                              </Badge>
+                            ) : (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="w-[100px] text-xs"
+                                onClick={() => {
+                                  handleStatusUpdate(item.id, 'settlementRequested', true);
+                                  handleStatusUpdate(item.id, 'settlementRequestedAt', new Date().toISOString());
+                                }}
+                                data-testid={`button-settlement-request-${item.id}`}
+                              >
+                                정산 요청하기
+                              </Button>
+                            )}
                           </TableCell>
                         </TableRow>
                     ))}

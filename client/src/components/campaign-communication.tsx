@@ -20,6 +20,8 @@ import {
   RefreshCw, 
   ChevronRight, 
   CheckCircle2, 
+  Circle,
+  CircleDot,
   AlertCircle, 
   Mail, 
   MessageSquare,
@@ -816,7 +818,6 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
   const [uploadDueAt, setUploadDueAt] = useState(lineItem.uploadDueAt ? new Date(lineItem.uploadDueAt).toISOString().split('T')[0] : "");
   const [offerUsageMonths, setOfferUsageMonths] = useState(lineItem.offerUsageMonths?.toString() || "");
   const [offerUsageRenewalFee, setOfferUsageRenewalFee] = useState(lineItem.offerUsageRenewalFee?.toString() || "");
-  const [stage, setStage] = useState(lineItem.stage || "선정완료");
 
   useEffect(() => {
     setOfferFee(lineItem.offerFee?.toString() || "");
@@ -825,8 +826,7 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
     setUploadDueAt(lineItem.uploadDueAt ? new Date(lineItem.uploadDueAt).toISOString().split('T')[0] : "");
     setOfferUsageMonths(lineItem.offerUsageMonths?.toString() || "");
     setOfferUsageRenewalFee(lineItem.offerUsageRenewalFee?.toString() || "");
-    setStage(lineItem.stage || "선정완료");
-  }, [lineItem.offerFee, lineItem.draftDueAt, lineItem.uploadDueAt, lineItem.offerUsageMonths, lineItem.offerUsageRenewalFee, lineItem.stage]);
+  }, [lineItem.offerFee, lineItem.draftDueAt, lineItem.uploadDueAt, lineItem.offerUsageMonths, lineItem.offerUsageRenewalFee]);
 
   useEffect(() => {
     setMemo(influencer?.memo || "");
@@ -839,7 +839,6 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
   const [businessName, setBusinessName] = useState(influencer?.businessName || "");
   const [businessRegNo, setBusinessRegNo] = useState(influencer?.businessRegNo || "");
   const [freelancerId, setFreelancerId] = useState(influencer?.freelancerId || "");
-  const [birthDate, setBirthDate] = useState(influencer?.birthDate || "");
 
   const updateInfluencer = useMutation({
     mutationFn: (data: any) => apiRequest('PATCH', `/api/influencers/${influencer?.id}`, data),
@@ -884,7 +883,6 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
         businessName: businessName || null,
         businessRegNo: businessRegNo || null,
         freelancerId: freelancerId || null,
-        birthDate: birthDate || null,
         settlementInfoUpdatedAt: new Date().toISOString()
       }, {
         onError: () => toast({ title: "인플루언서 정보 저장 실패", variant: "destructive" })
@@ -907,14 +905,61 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
     return false;
   };
 
+  const STEPS = [
+    { key: 'waiting', label: '대기' },
+    { key: 'contacted', label: '컨택' },
+    { key: 'confirmed', label: '확정' },
+    { key: 'contracted', label: '계약' },
+  ] as const;
+
+  const currentStatus = lineItem.status || 'waiting';
+  const currentStepIndex = STEPS.findIndex(s => s.key === currentStatus);
+
+  const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; targetStatus: string; type: 'contact_no_thread' | 'confirm_missing' | null }>({ open: false, targetStatus: '', type: null });
+
+  const handleStepClick = async (stepKey: string) => {
+    if (stepKey === currentStatus) return;
+    const targetIndex = STEPS.findIndex(s => s.key === stepKey);
+
+    if (targetIndex < currentStepIndex) {
+      updateLineItem.mutate({ status: stepKey });
+      return;
+    }
+
+    if (targetIndex >= 1 && currentStepIndex < 1) {
+      try {
+        const res = await fetch(`/api/campaigns/${lineItem.campaignId}/line-items/${lineItem.id}/has-thread`);
+        const data = await res.json();
+        if (!data.hasThread) {
+          setConfirmDialog({ open: true, targetStatus: stepKey, type: 'contact_no_thread' });
+          return;
+        }
+      } catch {
+        setConfirmDialog({ open: true, targetStatus: stepKey, type: 'contact_no_thread' });
+        return;
+      }
+    }
+
+    if (targetIndex >= 2) {
+      const hasFee = lineItem.offerFee && lineItem.offerFee > 0;
+      const hasUploadDate = !!lineItem.uploadDueAt;
+      if (!hasFee || !hasUploadDate) {
+        setConfirmDialog({ open: true, targetStatus: stepKey, type: 'confirm_missing' });
+        return;
+      }
+    }
+
+    updateLineItem.mutate({ status: stepKey });
+  };
+
   return (
-    <ScrollArea className="h-full max-h-[600px]">
-      <div className="p-4 space-y-4 bg-[#ffffff]">
+    <div className="flex flex-col h-full max-h-[600px]">
+      <div className="sticky top-0 z-10 bg-background border-b p-3 space-y-2">
         <div className="flex items-center gap-3">
           <Avatar className="h-10 w-10 shrink-0">
             <AvatarFallback className="text-xs">{influencer.name?.substring(0, 2)}</AvatarFallback>
           </Avatar>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
               <h3 className="font-semibold text-sm truncate">{influencer.name}</h3>
               {influencer.accounts?.[0] && (
@@ -925,30 +970,81 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
               <div className="text-[11px] text-muted-foreground truncate">{influencer.email}</div>
             )}
           </div>
+          <Button 
+            size="sm"
+            onClick={handleSave} 
+            disabled={updateInfluencer.isPending || updateLineItem.isPending}
+            data-testid="button-save-influencer"
+          >
+            {(updateInfluencer.isPending || updateLineItem.isPending) ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Save className="w-3.5 h-3.5 mr-1" />
+            )}
+            저장
+          </Button>
         </div>
+        <div
+          className="inline-flex items-center gap-0.5 rounded-md bg-muted dark:bg-muted/60 p-0.5"
+          data-testid={`progress-bar-detail-${lineItem.id}`}
+        >
+          {STEPS.map((step, idx) => {
+            const isCurrent = step.key === currentStatus;
+            const isCompleted = idx < currentStepIndex;
+            return (
+              <Button
+                key={step.key}
+                variant={isCurrent ? "default" : "ghost"}
+                size="sm"
+                onClick={() => handleStepClick(step.key)}
+                className={`gap-1 ${isCompleted ? 'text-primary font-medium' : ''}`}
+                data-testid={`step-detail-${step.key}-${lineItem.id}`}
+              >
+                {isCompleted ? (
+                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                ) : isCurrent ? (
+                  <CircleDot className="w-3.5 h-3.5 shrink-0" />
+                ) : (
+                  <Circle className="w-3.5 h-3.5 shrink-0" />
+                )}
+                {step.label}
+              </Button>
+            );
+          })}
+        </div>
+      </div>
 
-        <Separator />
-
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs font-medium text-muted-foreground">진행상태</label>
-            <Select 
-              value={stage} 
-              onValueChange={(val) => {
-                setStage(val);
-                updateLineItem.mutate({ stage: val });
-              }}
-            >
-              <SelectTrigger className="mt-1 h-8 text-sm" data-testid="select-lineitem-stage">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {["선정완료", "오퍼확정", "계약진행", "일정확정", "초안수신", "피드백중", "완성본확정", "완료"].map(s => (
-                  <SelectItem key={s} value={s}>{s}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+      {confirmDialog.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-background rounded-lg p-6 max-w-[400px] shadow-lg space-y-4">
+            <h3 className="font-semibold">
+              {confirmDialog.type === 'contact_no_thread' ? '컨택 확인' : '확정 불가'}
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              {confirmDialog.type === 'contact_no_thread'
+                ? '메일에 컨택내역이 없습니다. 컨택으로 기록할까요?'
+                : '확정 처리 전 광고비와 업로드 일정을 입력해주세요'}
+            </p>
+            <div className="flex justify-end gap-2">
+              {confirmDialog.type === 'contact_no_thread' ? (
+                <>
+                  <Button variant="outline" onClick={() => setConfirmDialog({ open: false, targetStatus: '', type: null })}>취소</Button>
+                  <Button onClick={() => {
+                    updateLineItem.mutate({ status: confirmDialog.targetStatus });
+                    setConfirmDialog({ open: false, targetStatus: '', type: null });
+                  }}>확인</Button>
+                </>
+              ) : (
+                <Button onClick={() => setConfirmDialog({ open: false, targetStatus: '', type: null })}>확인</Button>
+              )}
+            </div>
           </div>
+        </div>
+      )}
+
+      <ScrollArea className="flex-1">
+        <div className="p-4 space-y-4">
+        <div className="space-y-3">
           <div>
             <label className="text-xs font-medium text-muted-foreground">광고료(VAT+)</label>
             <div className="relative mt-1">
@@ -1007,19 +1103,6 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
             />
           </div>
         </div>
-
-        <Button 
-          onClick={handleSave} 
-          disabled={updateInfluencer.isPending || updateLineItem.isPending}
-          className="w-full"
-          data-testid="button-save-influencer"
-        >
-          {(updateInfluencer.isPending || updateLineItem.isPending) ? (
-            <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{KO.pages.communication.saving}</>
-          ) : (
-            <><Save className="w-4 h-4 mr-2" />{KO.pages.communication.saveChanges}</>
-          )}
-        </Button>
 
         <Separator />
 
@@ -1088,7 +1171,7 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
                 <Input 
                   value={businessName}
                   onChange={(e) => setBusinessName(e.target.value)}
-                  placeholder="상호명"
+                  placeholder="사업자명"
                   className="mt-1 h-8 text-sm"
                   data-testid="input-business-name"
                 />
@@ -1117,16 +1200,6 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
               />
             </div>
           )}
-          <div>
-            <label className="text-xs font-medium text-muted-foreground">생년월일</label>
-            <Input 
-              value={birthDate}
-              onChange={(e) => setBirthDate(e.target.value)}
-              placeholder="YYYY-MM-DD"
-              className="mt-1 h-8 text-sm"
-              data-testid="input-birth-date"
-            />
-          </div>
         </div>
 
         <Separator />
@@ -1159,6 +1232,7 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
           </div>
         </div>
       </div>
-    </ScrollArea>
+      </ScrollArea>
+    </div>
   );
 }

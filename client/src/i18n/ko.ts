@@ -410,7 +410,7 @@ export const KO = {
       bankName: "은행명",
       accountHolder: "예금주",
       accountNumber: "계좌번호",
-      businessName: "상호명",
+      businessName: "사업자명",
       businessRegNo: "사업자번호",
       freelancerId: "주민등록번호",
       business: "사업자",

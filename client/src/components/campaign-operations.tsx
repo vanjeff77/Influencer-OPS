@@ -259,14 +259,13 @@ export function CampaignOperations({ campaignId, workspaceId = 1, lineItems }: C
                     <TableHead>{KO.pages.operations.contract}</TableHead>
                     <TableHead>{KO.pages.operations.draftDue}</TableHead>
                     <TableHead>{KO.pages.operations.uploadDue}</TableHead>
-                    <TableHead>정산요청</TableHead>
                     <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                 {filteredItems.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       {KO.pages.operations.noItems}
                     </TableCell>
                   </TableRow>
@@ -394,28 +393,6 @@ export function CampaignOperations({ campaignId, workspaceId = 1, lineItems }: C
                               />
                             </PopoverContent>
                           </Popover>
-                        </TableCell>
-                        <TableCell onClick={(e) => e.stopPropagation()}>
-                          {item.settlementRequested ? (
-                            <Badge variant="outline" className="bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400 gap-1">
-                              <Check className="w-3 h-3" />
-                              정산요청됨
-                            </Badge>
-                          ) : (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                updateOperations.mutate({ id: item.id, updates: { 
-                                  settlementRequested: true, 
-                                  settlementRequestedAt: new Date().toISOString()
-                                } });
-                              }}
-                              data-testid={`button-settlement-request-${item.id}`}
-                            >
-                              정산요청
-                            </Button>
-                          )}
                         </TableCell>
                         <TableCell>
                           <Button

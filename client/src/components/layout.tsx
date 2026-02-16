@@ -205,7 +205,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </div>
 
       <div className={`flex-1 overflow-y-auto py-4 md:py-6 space-y-1 ${collapsed ? 'px-1.5' : 'px-2 md:px-3'}`}>
-        {!collapsed && <div className="px-3 md:px-4 mb-2 md:mb-3 text-[10px] md:text-xs font-bold text-muted-foreground/70 uppercase tracking-widest">{KO.nav.platform}</div>}
         {!isClientRole && <NavItem href="/" icon={LayoutDashboard} label={KO.nav.overview} onClick={onNavClick} collapsed={collapsed} />}
         {!isClientRole && <div data-tour="discover"><NavItem href="/discover" icon={Search} label={KO.nav.discover} onClick={onNavClick} collapsed={collapsed} /></div>}
         <div data-tour="campaigns"><NavItem href="/campaigns" icon={Megaphone} label={KO.nav.campaigns} onClick={onNavClick} collapsed={collapsed} /></div>
@@ -215,8 +214,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         
         {!isClientRole && (
           <>
-            {!collapsed && <div className="px-3 md:px-4 mt-6 md:mt-8 mb-2 md:mb-3 text-[10px] md:text-xs font-bold text-muted-foreground/70 uppercase tracking-widest">{KO.nav.management}</div>}
-            {collapsed && <div className="mt-4" />}
+            {collapsed && <div className="mt-2" />}
             <div data-tour="email"><NavItem href="/email" icon={Mail} label={KO.nav.emailCenter} onClick={onNavClick} collapsed={collapsed} /></div>
             <div data-tour="settings"><NavItem href="/settings" icon={Settings} label={KO.nav.settings} onClick={onNavClick} collapsed={collapsed} /></div>
           </>
@@ -297,11 +295,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <aside
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
-        className={`hidden md:flex border-r border-border/60 flex-col shadow-md z-30 bg-[#f6f9fa] overflow-hidden transition-[width] duration-200 ${isHovered ? 'absolute left-0 top-0 h-full' : ''} ${sidebarExpanded ? 'w-64' : 'w-16'}`}
+        className={`hidden md:flex border-r border-border/60 flex-col z-30 bg-card overflow-hidden ${isCollapsed && isHovered ? 'absolute left-0 top-0 h-full shadow-xl' : 'shadow-sm'} ${sidebarExpanded ? 'w-64' : 'w-16'}`}
+        style={{ transition: isCollapsed ? (isHovered ? 'width 200ms' : 'width 0ms') : 'width 200ms' }}
       >
         <SidebarContent collapsed={!sidebarExpanded} onToggleCollapse={toggleCollapse} />
       </aside>
-      {isHovered && <div className="hidden md:block w-16 flex-shrink-0" />}
+      {isCollapsed && <div className="hidden md:block w-16 flex-shrink-0" />}
       {/* Mobile Header & Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Mobile Header */}
@@ -327,7 +326,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </Avatar>
         </header>
 
-        <main className="flex-1 overflow-auto relative bg-[#ffffff]">
+        <main className="flex-1 overflow-auto relative bg-background">
           <div className="max-w-[1600px] mx-auto p-4 md:p-6 lg:p-8">
             {children}
           </div>
