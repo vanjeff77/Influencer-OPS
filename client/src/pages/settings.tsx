@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -58,6 +58,7 @@ export default function SettingsPage() {
   const [userDialogOpen, setUserDialogOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [editingUser, setEditingUser] = useState<WorkspaceUser | null>(null);
+  const [deleteUserTarget, setDeleteUserTarget] = useState<WorkspaceUser | null>(null);
 
   const [clientName, setClientName] = useState("");
   const [clientMemo, setClientMemo] = useState("");
@@ -172,6 +173,19 @@ export default function SettingsPage() {
     },
     onError: (err: any) => {
       toast({ title: KO.toast.saveFailed, description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteUserMutation = useMutation({
+    mutationFn: ({ userId }: { userId: number }) =>
+      apiRequest('DELETE', `/api/workspace-users/${userId}`, { workspaceId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/workspace-users?workspaceId=${workspaceId}`] });
+      toast({ title: "사용자가 삭제되었습니다" });
+      setDeleteUserTarget(null);
+    },
+    onError: (err: any) => {
+      toast({ title: "삭제 실패", description: err.message, variant: "destructive" });
     },
   });
 
@@ -641,6 +655,17 @@ export default function SettingsPage() {
                           >
                             {user.isActive === false ? KO.settings.activate : KO.settings.deactivate}
                           </Button>
+                          {isOwner && user.id !== currentUser?.id && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="text-muted-foreground hover:text-destructive"
+                              onClick={() => setDeleteUserTarget(user)}
+                              data-testid={`button-delete-user-${user.id}`}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -766,6 +791,32 @@ export default function SettingsPage() {
                 </Button>
               </div>
             </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {deleteUserTarget && (
+        <Dialog open={!!deleteUserTarget} onOpenChange={(open) => !open && setDeleteUserTarget(null)}>
+          <DialogContent className="max-w-[90vw] md:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>사용자 삭제</DialogTitle>
+              <DialogDescription>
+                "{deleteUserTarget.name}" 사용자를 이 워크스페이스에서 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="flex gap-2">
+              <Button variant="outline" onClick={() => setDeleteUserTarget(null)} data-testid="button-cancel-delete-user">
+                취소
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => deleteUserMutation.mutate({ userId: deleteUserTarget.id })}
+                disabled={deleteUserMutation.isPending}
+                data-testid="button-confirm-delete-user"
+              >
+                {deleteUserMutation.isPending ? "삭제 중..." : "삭제"}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       )}
