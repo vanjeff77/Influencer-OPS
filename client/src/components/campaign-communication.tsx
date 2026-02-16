@@ -120,6 +120,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
   const [bulkEmailLogOpen, setBulkEmailLogOpen] = useState(false);
   const [attachEmailOpen, setAttachEmailOpen] = useState(false);
   const [isFullSyncRunning, setIsFullSyncRunning] = useState(false);
+  const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0 });
   
   const { data: gmailStatus, isLoading: isLoadingGmail } = useQuery<{ connected: boolean; email?: string }>({
     queryKey: ['/api/email/gmail/status'],
@@ -271,19 +272,23 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
       return;
     }
     setIsFullSyncRunning(true);
+    const total = conversations.length;
+    setSyncProgress({ current: 0, total });
     let syncCount = 0;
     try {
-      for (const conv of conversations) {
+      for (let i = 0; i < conversations.length; i++) {
         try {
-          await apiRequest('POST', `/api/conversations/${conv.id}/sync`, { fullSync: true });
+          await apiRequest('POST', `/api/conversations/${conversations[i].id}/sync`, { fullSync: true });
           syncCount++;
         } catch {}
+        setSyncProgress({ current: i + 1, total });
       }
       queryClient.invalidateQueries({ queryKey: [`/api/conversations?campaignId=${campaignId}`] });
       queryClient.invalidateQueries({ queryKey: ['/api/conversations'] });
       toast({ title: `${syncCount}개 대화 동기화 완료` });
     } finally {
       setIsFullSyncRunning(false);
+      setSyncProgress({ current: 0, total: 0 });
     }
   };
 
@@ -318,7 +323,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                 ) : (
                   <RefreshCw className="w-3 h-3 mr-1" />
                 )}
-                동기화
+                {isFullSyncRunning ? `${syncProgress.current}/${syncProgress.total}` : '동기화'}
               </Button>
               <Button
                 size="sm"

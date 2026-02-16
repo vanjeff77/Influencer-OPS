@@ -3091,6 +3091,7 @@ export async function registerRoutes(
     const defaultVariables: Record<string, string> = {
       '인플루언서명': lineItem.influencer?.name || '',
       '캠페인명': campaign?.name || '',
+      '광고비': (lineItem.offerFee || 0).toLocaleString() + '원',
       '금액': (lineItem.offerFee || 0).toLocaleString() + '원',
       '날짜': new Date().toLocaleDateString('ko-KR'),
       '초안예정일': lineItem.draftDueAt ? new Date(lineItem.draftDueAt).toLocaleDateString('ko-KR') : '',
@@ -3098,6 +3099,15 @@ export async function registerRoutes(
       '클라이언트명': campaign?.client || '',
       '이메일': lineItem.influencer?.email || '',
       '연락처': lineItem.influencer?.phone || lineItem.influencer?.contactPoint || '',
+      '은행명': lineItem.influencer?.bankName || '',
+      '계좌번호': lineItem.influencer?.accountNumber || '',
+      '예금주': lineItem.influencer?.accountHolder || '',
+      '사업자명': lineItem.influencer?.businessName || '',
+      '사업자등록번호': lineItem.influencer?.businessRegNo || '',
+      '정산유형': lineItem.influencer?.settlementType || '',
+      '생년월일': lineItem.influencer?.birthDate || '',
+      '2차활용기간': lineItem.offerUsageMonths ? lineItem.offerUsageMonths + '개월' : '',
+      '2차활용갱신비용': lineItem.offerUsageRenewalFee ? (lineItem.offerUsageRenewalFee).toLocaleString() + '원' : '',
     };
     const allVariables = { ...defaultVariables, ...extraVariables };
     let content = templateContent;

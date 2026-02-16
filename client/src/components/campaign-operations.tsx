@@ -254,11 +254,11 @@ export function CampaignOperations({ campaignId, workspaceId = 1, lineItems }: C
                 <TableHeader className="sticky top-0 bg-background z-50">
                   <TableRow>
                     <TableHead className="sticky left-0 bg-background z-[60]">{KO.pages.operations.influencer}</TableHead>
-                    <TableHead>{KO.pages.operations.contractGenerate}</TableHead>
+                    <TableHead>{KO.pages.operations.adFeeVat}</TableHead>
+                    <TableHead>{KO.pages.operations.contractInfo} / {KO.pages.operations.contractGenerate}</TableHead>
                     <TableHead>{KO.pages.operations.contract}</TableHead>
                     <TableHead>{KO.pages.operations.draftDue}</TableHead>
                     <TableHead>{KO.pages.operations.uploadDue}</TableHead>
-                    <TableHead>{KO.pages.operations.notes}</TableHead>
                     <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -292,42 +292,50 @@ export function CampaignOperations({ campaignId, workspaceId = 1, lineItems }: C
                             </div>
                           </div>
                         </TableCell>
+                        <TableCell className="text-xs">
+                          {item.offerFee != null ? (
+                            <span className="font-medium">{Math.round(item.offerFee * 1.1).toLocaleString()}원</span>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
                         <TableCell onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center gap-1">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-7 text-xs"
-                              onClick={() => setContractDialogItem(item)}
-                              data-testid={`button-contract-generate-${item.id}`}
-                            >
-                              <FileText className="w-3 h-3 mr-1" />
-                              작성
-                            </Button>
+                          <div className="flex items-center gap-0">
                             {(() => {
                               const { filled, total } = getContractInfoCompleteness(item);
                               const isComplete = filled === total;
                               const isLow = filled <= 3;
+                              const colorClass = isComplete
+                                ? 'border-green-500 text-green-700 bg-green-50 dark:border-green-600 dark:text-green-400 dark:bg-green-950/30'
+                                : isLow
+                                  ? 'border-red-400 text-red-600 bg-red-50 dark:border-red-600 dark:text-red-400 dark:bg-red-950/30'
+                                  : 'border-yellow-500 text-yellow-700 bg-yellow-50 dark:border-yellow-600 dark:text-yellow-400 dark:bg-yellow-950/30';
                               return (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className={`h-7 text-xs ${
-                                    isComplete
-                                      ? 'border-green-500 text-green-700 dark:border-green-600 dark:text-green-400'
-                                      : isLow
-                                        ? 'border-red-400 text-red-600 dark:border-red-600 dark:text-red-400'
-                                        : 'border-yellow-500 text-yellow-700 dark:border-yellow-600 dark:text-yellow-400'
-                                  }`}
+                                <button
+                                  className={`relative h-7 text-xs font-medium px-2.5 pr-4 border rounded-l-md rounded-r-none ${colorClass} flex items-center gap-1`}
                                   onClick={() => setContractInfoItem(item)}
                                   data-testid={`button-contract-info-${item.id}`}
                                   aria-label={`계약정보 ${filled}/${total}`}
+                                  style={{
+                                    clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 50%, calc(100% - 8px) 100%, 0 100%)',
+                                  }}
                                 >
-                                  <ClipboardList className="w-3 h-3 mr-1" />
-                                  {isComplete ? '정보완료' : `정보 ${filled}/${total}`}
-                                </Button>
+                                  <ClipboardList className="w-3 h-3" />
+                                  {isComplete ? '정보완료' : `${filled}/${total}`}
+                                </button>
                               );
                             })()}
+                            <button
+                              className="relative h-7 text-xs font-medium px-2.5 pl-4 border border-l-0 rounded-r-md rounded-l-none bg-muted/50 text-foreground flex items-center gap-1"
+                              onClick={() => setContractDialogItem(item)}
+                              data-testid={`button-contract-generate-${item.id}`}
+                              style={{
+                                clipPath: 'polygon(8px 0, 100% 0, 100% 100%, 8px 100%, 0 50%)',
+                              }}
+                            >
+                              <FileText className="w-3 h-3" />
+                              작성
+                            </button>
                           </div>
                         </TableCell>
                         <TableCell>
@@ -391,11 +399,6 @@ export function CampaignOperations({ campaignId, workspaceId = 1, lineItems }: C
                               />
                             </PopoverContent>
                           </Popover>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary" className="text-xs">
-                            {(item as any).feedbackNotes?.length || 0}
-                          </Badge>
                         </TableCell>
                         <TableCell>
                           <Button
@@ -1140,32 +1143,32 @@ function ContractInfoDialog({ item, campaignId, onClose }: ContractInfoDialogPro
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const lineItemUpdates: any = {};
-      if (uploadDueAt) lineItemUpdates.uploadDueAt = uploadDueAt;
-      if (offerFee) lineItemUpdates.offerFee = parseInt(offerFee);
-      if (offerUsageMonths) lineItemUpdates.offerUsageMonths = parseInt(offerUsageMonths);
-      if (offerUsageRenewalFee) lineItemUpdates.offerUsageRenewalFee = parseInt(offerUsageRenewalFee);
+      const lineItemUpdates: any = {
+        uploadDueAt: uploadDueAt || null,
+        offerFee: offerFee ? parseInt(offerFee) : null,
+        offerUsageMonths: offerUsageMonths ? parseInt(offerUsageMonths) : null,
+        offerUsageRenewalFee: offerUsageRenewalFee ? parseInt(offerUsageRenewalFee) : null,
+      };
       
-      const influencerUpdates: any = {};
-      if (settlementType) influencerUpdates.settlementType = settlementType;
-      if (bankName) influencerUpdates.bankName = bankName;
-      if (accountNumber) influencerUpdates.accountNumber = accountNumber;
-      if (accountHolder) influencerUpdates.accountHolder = accountHolder;
-      if (businessName) influencerUpdates.businessName = businessName;
-      if (birthDate) influencerUpdates.birthDate = birthDate;
-      if (idNumber) {
-        if (settlementType === '사업자') {
-          influencerUpdates.businessRegNo = idNumber;
-        } else {
-          influencerUpdates.freelancerId = idNumber;
-        }
+      const influencerUpdates: any = {
+        settlementType: settlementType || null,
+        bankName: bankName || null,
+        accountNumber: accountNumber || null,
+        accountHolder: accountHolder || null,
+        businessName: businessName || null,
+        birthDate: birthDate || null,
+      };
+      if (settlementType === '사업자') {
+        influencerUpdates.businessRegNo = idNumber || null;
+        influencerUpdates.freelancerId = null;
+      } else {
+        influencerUpdates.freelancerId = idNumber || null;
+        influencerUpdates.businessRegNo = null;
       }
       
       const promises: Promise<any>[] = [];
-      if (Object.keys(lineItemUpdates).length > 0) {
-        promises.push(apiRequest('PATCH', `/api/line-items/${item.id}/operations`, lineItemUpdates));
-      }
-      if (Object.keys(influencerUpdates).length > 0 && inf?.id) {
+      promises.push(apiRequest('PATCH', `/api/line-items/${item.id}/operations`, lineItemUpdates));
+      if (inf?.id) {
         promises.push(apiRequest('PATCH', `/api/influencers/${inf.id}`, influencerUpdates));
       }
       
