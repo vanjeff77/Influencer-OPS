@@ -196,6 +196,7 @@ export interface IStorage {
   updateWorkspaceMemberRole(userId: number, workspaceId: number, role: string): Promise<void>;
   createWorkspaceMember(userId: number, workspaceId: number, role: string): Promise<void>;
   getWorkspaceMember(userId: number, workspaceId: number): Promise<{ userId: number; workspaceId: number; role: string } | undefined>;
+  deleteWorkspaceMember(userId: number, workspaceId: number): Promise<void>;
 
   // Contract Templates
   getContractTemplates(workspaceId: number): Promise<ContractTemplate[]>;
@@ -1388,6 +1389,18 @@ export class DatabaseStorage implements IStorage {
         eq(workspaceMembers.workspaceId, workspaceId)
       ));
     return member;
+  }
+
+  async deleteWorkspaceMember(userId: number, workspaceId: number): Promise<void> {
+    await db.delete(clientUserAssignments)
+      .where(and(
+        eq(clientUserAssignments.userId, userId),
+      ));
+    await db.delete(workspaceMembers)
+      .where(and(
+        eq(workspaceMembers.userId, userId),
+        eq(workspaceMembers.workspaceId, workspaceId)
+      ));
   }
 
   // Contract Templates

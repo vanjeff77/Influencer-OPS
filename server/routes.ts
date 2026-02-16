@@ -3888,6 +3888,29 @@ export async function registerRoutes(
     }
   });
 
+  app.delete('/api/workspace-users/:userId', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const { workspaceId } = req.body;
+      const targetUserId = parseInt(req.params.userId);
+      const currentUserId = (req.user as any).id;
+
+      const currentMember = await storage.getWorkspaceMember(currentUserId, workspaceId);
+      if (!currentMember || currentMember.role !== 'WORKSPACE_OWNER') {
+        return res.status(403).json({ message: "워크스페이스 소유자만 사용자를 삭제할 수 있습니다" });
+      }
+
+      if (targetUserId === currentUserId) {
+        return res.status(400).json({ message: "자기 자신을 삭제할 수 없습니다" });
+      }
+
+      await storage.deleteWorkspaceMember(targetUserId, workspaceId);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   // Get current user's role and assigned clients in workspace
   app.get('/api/workspace-users/me', async (req, res) => {
     try {
