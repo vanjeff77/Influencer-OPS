@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { useDeleteCampaignItem } from "@/hooks/use-campaigns";
 import { api } from "@shared/routes";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +24,7 @@ import { ko } from "date-fns/locale";
 import { 
   Search, Filter, AlertCircle, Clock, FileText, Calendar, MessageSquare, 
   CheckCircle2, Instagram, Youtube, Twitter, Check,
-  ExternalLink, Save, AlertTriangle, CalendarIcon, Trash2, Send, Download, Mail, Loader2, ArrowLeft, Pencil, ClipboardList
+  ExternalLink, Save, AlertTriangle, CalendarIcon, Send, Download, Mail, Loader2, ArrowLeft, Pencil, ClipboardList
 } from "lucide-react";
 import type { CampaignInfluencer, Influencer, InfluencerAccount, FeedbackNote, User } from "@shared/schema";
 import { KO } from "@/i18n/ko";
@@ -142,10 +141,6 @@ export function CampaignOperations({ campaignId, workspaceId = 1, lineItems }: C
   const [search, setSearch] = useState("");
   const [contractDialogItem, setContractDialogItem] = useState<LineItemWithDetails | null>(null);
   const [contractInfoItem, setContractInfoItem] = useState<LineItemWithDetails | null>(null);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [itemToDelete, setItemToDelete] = useState<{ id: number; name: string } | null>(null);
-  const deleteItem = useDeleteCampaignItem(campaignId);
-
   const { data: selectedItem, isLoading: isLoadingDetails } = useQuery<LineItemWithDetails>({
     queryKey: ['/api/line-items', selectedItemId],
     enabled: !!selectedItemId,
@@ -209,29 +204,6 @@ export function CampaignOperations({ campaignId, workspaceId = 1, lineItems }: C
     });
   }, [lineItems, search]);
 
-  const handleDeleteClick = (e: React.MouseEvent, item: LineItemWithDetails) => {
-    e.stopPropagation();
-    setItemToDelete({ id: item.id, name: item.influencer?.name || '' });
-    setDeleteDialogOpen(true);
-  };
-
-  const handleDeleteConfirm = () => {
-    if (!itemToDelete) return;
-    deleteItem.mutate(itemToDelete.id, {
-      onSuccess: () => {
-        toast({ title: "인플루언서가 캠페인에서 삭제되었습니다" });
-        setDeleteDialogOpen(false);
-        setItemToDelete(null);
-        if (selectedItemId === itemToDelete.id) {
-          setSelectedItemId(null);
-        }
-      },
-      onError: () => {
-        toast({ title: "삭제 실패", description: "삭제 중 오류가 발생했습니다", variant: "destructive" });
-      }
-    });
-  };
-
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap gap-2 items-center">
@@ -259,13 +231,12 @@ export function CampaignOperations({ campaignId, workspaceId = 1, lineItems }: C
                     <TableHead>{KO.pages.operations.contract}</TableHead>
                     <TableHead>{KO.pages.operations.draftDue}</TableHead>
                     <TableHead>{KO.pages.operations.uploadDue}</TableHead>
-                    <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                 {filteredItems.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                       {KO.pages.operations.noItems}
                     </TableCell>
                   </TableRow>
@@ -391,17 +362,6 @@ export function CampaignOperations({ campaignId, workspaceId = 1, lineItems }: C
                             </PopoverContent>
                           </Popover>
                         </TableCell>
-                        <TableCell>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                            onClick={(e) => handleDeleteClick(e, item)}
-                            data-testid={`button-delete-item-${item.id}`}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </TableCell>
                       </TableRow>
                     );
                   })
@@ -437,24 +397,6 @@ export function CampaignOperations({ campaignId, workspaceId = 1, lineItems }: C
         onClose={() => setContractDialogItem(null)}
       />
 
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent className="max-w-[90vw] md:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>인플루언서 삭제</DialogTitle>
-            <DialogDescription>
-              "{itemToDelete?.name}" 인플루언서를 이 캠페인에서 삭제하시겠습니까?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex gap-2">
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} data-testid="button-cancel-delete-item">
-              취소
-            </Button>
-            <Button variant="destructive" onClick={handleDeleteConfirm} disabled={deleteItem.isPending} data-testid="button-confirm-delete-item">
-              {deleteItem.isPending ? "삭제 중..." : "삭제"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {contractInfoItem && (
         <ContractInfoDialog
