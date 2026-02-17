@@ -463,7 +463,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
       <div className="lg:col-span-5 border rounded-lg overflow-hidden flex flex-col" data-testid="panel-message-thread">
         {selectedLineItem ? (
           <>
-            <div className="p-3 border-b bg-muted/30 flex items-center justify-between gap-2 flex-wrap">
+            <div className="p-3 border-b flex items-center justify-between gap-2 flex-wrap bg-[#ffffff]">
               <div className="flex items-center gap-2 min-w-0">
                 <Avatar className="h-8 w-8 shrink-0">
                   <AvatarFallback className="text-xs">{selectedLineItem.influencer?.name?.substring(0, 2)}</AvatarFallback>
