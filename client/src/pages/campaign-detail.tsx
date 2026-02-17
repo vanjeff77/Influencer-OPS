@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ArrowLeft, Check, CheckCircle2, Circle, CircleDot, CircleDollarSign, FileText, Plus, Search, Users, Instagram, Youtube, Twitter, Save, MessageCircle, ExternalLink, Eye, Heart, MessageSquare, Share2, Trash2, Edit3, Image, Pencil, Calendar, Copy, Upload, Settings, UserCheck, FileSignature, Film, Wallet } from "lucide-react";
+import { ArrowLeft, Check, CheckCircle2, Circle, CircleDot, CircleDollarSign, FileText, Plus, Search, Users, Instagram, Youtube, Twitter, Save, MessageCircle, ExternalLink, Eye, Heart, MessageSquare, Share2, Trash2, Edit3, Image, Pencil, Calendar, Copy, Upload, Settings, UserCheck, FileSignature, Film, Wallet, AlertCircle } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Link } from "wouter";
@@ -313,6 +313,14 @@ export default function CampaignDetail() {
   const contractedCount = campaign.items?.filter(i => i.contractStatus === 'signed').length || 0;
   const paidCount = campaign.items?.filter(i => i.paymentStatus === 'paid').length || 0;
 
+  const STATUS_PRIORITY: Record<string, number> = { contracted: 0, confirmed: 1, contacted: 2, waiting: 3 };
+  const sortedItems = [...(campaign.items || [])].sort((a, b) => {
+    const pa = STATUS_PRIORITY[a.status || 'waiting'] ?? 99;
+    const pb = STATUS_PRIORITY[b.status || 'waiting'] ?? 99;
+    return pa - pb;
+  });
+  const confirmedItems = (campaign.items || []).filter(i => i.status === 'confirmed' || i.status === 'contracted');
+
   const handleStatusUpdate = (itemId: number, field: string, value: string | number | boolean | Date | null) => {
     const item = campaign.items?.find(i => i.id === itemId);
     const updates: Record<string, any> = { [field]: value };
@@ -507,7 +515,7 @@ export default function CampaignDetail() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {campaign.items?.map((item) => (
+                    {sortedItems.map((item) => (
                       <TableRow 
                         key={item.id} 
                         className="cursor-pointer hover:bg-muted/50"
@@ -609,21 +617,39 @@ export default function CampaignDetail() {
           </TabsContent>
           
           <TabsContent value="operations">
-            <CampaignOperations campaignId={id} workspaceId={workspaceId || 1} lineItems={campaign.items || []} />
+            <div className="mb-3 px-3 py-2.5 bg-blue-50 dark:bg-blue-950/30 rounded-md border border-blue-200 dark:border-blue-800/50" data-testid="confirmed-filter-notice-operations">
+              <p className="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
+                <AlertCircle className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" />
+                진행 단계가 '확정' 이상인 사람들만 목록에 표시합니다. 찾는 인플루언서가 없을 경우 선정 탭에서 '확정'으로 설정해주세요.
+              </p>
+            </div>
+            <CampaignOperations campaignId={id} workspaceId={workspaceId || 1} lineItems={confirmedItems} />
           </TabsContent>
 
           <TabsContent value="content">
+            <div className="mb-3 px-3 py-2.5 bg-blue-50 dark:bg-blue-950/30 rounded-md border border-blue-200 dark:border-blue-800/50" data-testid="confirmed-filter-notice-content">
+              <p className="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
+                <AlertCircle className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" />
+                진행 단계가 '확정' 이상인 사람들만 목록에 표시합니다. 찾는 인플루언서가 없을 경우 선정 탭에서 '확정'으로 설정해주세요.
+              </p>
+            </div>
             <CampaignContents 
               campaignId={id} 
-              lineItems={campaign.items?.map(item => ({
+              lineItems={confirmedItems.map(item => ({
                 ...item,
                 firstContactCompleted: item.firstContactCompleted,
                 influencer: item.influencer
-              })) || []}
+              }))}
             />
           </TabsContent>
 
           <TabsContent value="finance">
+            <div className="mb-3 px-3 py-2.5 bg-blue-50 dark:bg-blue-950/30 rounded-md border border-blue-200 dark:border-blue-800/50" data-testid="confirmed-filter-notice-finance">
+              <p className="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
+                <AlertCircle className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" />
+                진행 단계가 '확정' 이상인 사람들만 목록에 표시합니다. 찾는 인플루언서가 없을 경우 선정 탭에서 '확정'으로 설정해주세요.
+              </p>
+            </div>
             <Card>
               <CardHeader>
                 <CardTitle>정산 현황</CardTitle>
@@ -632,18 +658,18 @@ export default function CampaignDetail() {
                 <div className="grid grid-cols-3 gap-4 mb-6">
                   <div className="p-4 bg-muted/30 rounded-lg">
                     <div className="text-sm text-muted-foreground">총 광고료</div>
-                    <div className="text-2xl font-bold">{(campaign.items?.reduce((a, b) => a + (b.offerFee || 0), 0) || 0).toLocaleString()}원</div>
+                    <div className="text-2xl font-bold">{confirmedItems.reduce((a, b) => a + (b.offerFee || 0), 0).toLocaleString()}원</div>
                   </div>
                   <div className="p-4 bg-muted/30 rounded-lg">
                     <div className="text-sm text-muted-foreground">입금 완료</div>
                     <div className="text-2xl font-bold text-green-600">
-                      {(campaign.items?.filter(i => i.payoutStatus === '입금완료').reduce((a, b) => a + (b.offerFee || 0), 0) || 0).toLocaleString()}원
+                      {confirmedItems.filter(i => i.payoutStatus === '입금완료').reduce((a, b) => a + (b.offerFee || 0), 0).toLocaleString()}원
                     </div>
                   </div>
                   <div className="p-4 bg-muted/30 rounded-lg">
                     <div className="text-sm text-muted-foreground">입금 대기</div>
                     <div className="text-2xl font-bold text-orange-600">
-                      {(campaign.items?.filter(i => i.payoutStatus !== '입금완료').reduce((a, b) => a + (b.offerFee || 0), 0) || 0).toLocaleString()}원
+                      {confirmedItems.filter(i => i.payoutStatus !== '입금완료').reduce((a, b) => a + (b.offerFee || 0), 0).toLocaleString()}원
                     </div>
                   </div>
                 </div>
@@ -663,7 +689,7 @@ export default function CampaignDetail() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {campaign.items?.map((item) => (
+                    {confirmedItems.map((item) => (
                         <TableRow key={item.id} data-testid={`row-settlement-${item.id}`}>
                           <TableCell className="py-1.5">
                             <div className="font-medium text-sm">{item.influencer?.name || '-'}</div>
@@ -745,10 +771,10 @@ export default function CampaignDetail() {
                           </TableCell>
                         </TableRow>
                     ))}
-                    {(!campaign.items || campaign.items.length === 0) && (
+                    {confirmedItems.length === 0 && (
                       <TableRow>
                         <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
-                          등록된 인플루언서가 없습니다.
+                          확정된 인플루언서가 없습니다. 선정 탭에서 진행 단계를 '확정'으로 변경해주세요.
                         </TableCell>
                       </TableRow>
                     )}
