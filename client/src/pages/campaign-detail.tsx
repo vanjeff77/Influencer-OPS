@@ -21,7 +21,7 @@ import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Link } from "wouter";
 import { format } from "date-fns";
 import { KO } from "@/i18n/ko";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -1300,6 +1300,14 @@ function LineItemDetailDrawer({ item, onClose, onUpdate }: {
   const { toast } = useToast();
   
   const [adFee, setAdFee] = useState("");
+  const [contentLink, setContentLink] = useState("");
+
+  useEffect(() => {
+    if (item) {
+      setAdFee(item.offerFee?.toString() || "");
+      setContentLink(item.contentLink || "");
+    }
+  }, [item?.id, item?.offerFee, item?.contentLink]);
 
   if (!item) return null;
 
@@ -1351,7 +1359,12 @@ function LineItemDetailDrawer({ item, onClose, onUpdate }: {
               </div>
               <div>
                 <label className="text-sm font-medium">메모</label>
-                <Textarea placeholder="이 라인아이템에 대한 메모..." className="min-h-[100px]" />
+                <Textarea 
+                  placeholder="이 라인아이템에 대한 메모..." 
+                  className="min-h-[100px]" 
+                  defaultValue={item.influencer?.memo || ''}
+                  readOnly
+                />
               </div>
             </div>
           </TabsContent>
@@ -1400,7 +1413,7 @@ function LineItemDetailDrawer({ item, onClose, onUpdate }: {
               <div className="flex gap-2">
                 <Input 
                   type="number" 
-                  value={adFee || item.offerFee?.toString() || ''} 
+                  value={adFee} 
                   onChange={e => setAdFee(e.target.value)}
                   placeholder="500000"
                 />
@@ -1418,7 +1431,11 @@ function LineItemDetailDrawer({ item, onClose, onUpdate }: {
           <TabsContent value="content" className="space-y-4 mt-4 flex-1 overflow-y-auto pb-4">
             <div>
               <label className="text-sm font-medium">콘텐츠 링크</label>
-              <Input placeholder="https://instagram.com/p/..." defaultValue={item.contentLink || ''} />
+              <Input 
+                placeholder="https://instagram.com/p/..." 
+                value={contentLink}
+                onChange={e => setContentLink(e.target.value)}
+              />
             </div>
           </TabsContent>
         </Tabs>
