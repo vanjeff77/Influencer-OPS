@@ -117,6 +117,31 @@ interface CampaignCommunicationProps {
   lineItems: CampaignLineItem[];
 }
 
+function formatConversationDate(dateStr: string | null): string {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today.getTime() - 86400000);
+  const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+  if (dateOnly.getTime() === today.getTime()) {
+    const hours = date.getHours();
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const ampm = hours < 12 ? '오전' : '오후';
+    return `${ampm} ${hours % 12 || 12}:${minutes}`;
+  }
+  if (dateOnly.getTime() === yesterday.getTime()) return '어제';
+  const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+  if (date.getFullYear() === now.getFullYear()) {
+    return `${date.getMonth() + 1}/${date.getDate()}(${dayNames[date.getDay()]})`;
+  }
+  const y = String(date.getFullYear()).slice(-2);
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}.${m}.${d}`;
+}
+
 export function CampaignCommunication({ campaignId, campaignName, workspaceId, lineItems }: CampaignCommunicationProps) {
   const { toast } = useToast();
   const [selectedLineItemId, setSelectedLineItemId] = useState<number | null>(null);
@@ -400,8 +425,15 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                             {getStatusBadge(conv)}
                           </div>
                         </div>
-                        <div className={`text-xs truncate ${hasUnread ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
-                          {conv?.lastMessage?.snippet || li.influencer?.email || KO.pages.communication.noConversations}
+                        <div className={`text-xs flex items-center gap-1 ${hasUnread ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
+                          <span className="truncate flex-1 min-w-0">
+                            {conv?.lastMessage?.snippet || li.influencer?.email || KO.pages.communication.noConversations}
+                          </span>
+                          {conv?.lastMessageAt && (
+                            <span className="text-[10px] text-muted-foreground shrink-0 tabular-nums" data-testid={`text-last-message-date-${li.id}`}>
+                              {formatConversationDate(conv.lastMessageAt)}
+                            </span>
+                          )}
                         </div>
                       </div>
                       {hasUnread ? (

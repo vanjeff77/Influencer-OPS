@@ -137,14 +137,9 @@ const PlatformIcon = ({ p }: { p: string }) => {
 
 export function CampaignOperations({ campaignId, workspaceId = 1, lineItems }: CampaignOperationsProps) {
   const { toast } = useToast();
-  const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [contractDialogItem, setContractDialogItem] = useState<LineItemWithDetails | null>(null);
   const [contractInfoItem, setContractInfoItem] = useState<LineItemWithDetails | null>(null);
-  const { data: selectedItem, isLoading: isLoadingDetails } = useQuery<LineItemWithDetails>({
-    queryKey: ['/api/line-items', selectedItemId],
-    enabled: !!selectedItemId,
-  });
 
   const updateOperations = useMutation({
     mutationFn: async (data: { id: number; updates: Partial<CampaignInfluencer> }) => {
@@ -246,8 +241,8 @@ export function CampaignOperations({ campaignId, workspaceId = 1, lineItems }: C
                     return (
                       <TableRow 
                         key={item.id} 
-                        className={`cursor-pointer hover:bg-muted/50 ${selectedItemId === item.id ? 'bg-muted' : ''}`}
-                        onClick={() => setSelectedItemId(item.id)}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => setContractDialogItem(item)}
                         data-testid={`row-operations-item-${item.id}`}
                       >
                         <TableCell className="py-1.5">
@@ -371,24 +366,6 @@ export function CampaignOperations({ campaignId, workspaceId = 1, lineItems }: C
           </div>
         </CardContent>
       </Card>
-
-      <Dialog open={!!selectedItemId} onOpenChange={(open) => !open && setSelectedItemId(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          {isLoadingDetails ? (
-            <div className="space-y-4 p-4">
-              <Skeleton className="h-8 w-48" />
-              <Skeleton className="h-32 w-full" />
-              <Skeleton className="h-32 w-full" />
-            </div>
-          ) : selectedItem ? (
-            <OperationsPanel 
-              item={selectedItem} 
-              onUpdate={(updates) => updateOperations.mutate({ id: selectedItem.id, updates })}
-              isSaving={updateOperations.isPending}
-            />
-          ) : null}
-        </DialogContent>
-      </Dialog>
 
       <ContractGenerateDialog 
         item={contractDialogItem}

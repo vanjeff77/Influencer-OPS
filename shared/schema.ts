@@ -178,6 +178,7 @@ export const campaigns = pgTable("campaigns", {
   startDate: timestamp("start_date"),
   endDate: timestamp("end_date"),
   status: text("status").default("대기중"), // 대기중, 진행중, 완료
+  tabDescriptions: jsonb("tab_descriptions").$type<Record<string, string>>(), // Custom tab descriptions by workspace owner
   createdAt: timestamp("created_at").defaultNow(),
 });
 
