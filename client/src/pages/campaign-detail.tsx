@@ -479,28 +479,28 @@ export default function CampaignDetail() {
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="mb-0 flex-wrap gap-1 w-full justify-start">
-            <TabsTrigger value="influencers" className="flex items-center gap-1 text-[18px]">
+            <TabsTrigger value="influencers" className="flex items-center gap-1">
               <UserCheck className="w-4 h-4" />
               선정
             </TabsTrigger>
-            <TabsTrigger value="communication" className="flex items-center gap-1 text-[18px]">
+            <TabsTrigger value="communication" className="flex items-center gap-1">
               <MessageCircle className="w-4 h-4" />
               컨택
             </TabsTrigger>
-            <TabsTrigger value="operations" className="flex items-center gap-1 text-[18px]">
+            <TabsTrigger value="operations" className="flex items-center gap-1">
               <FileSignature className="w-4 h-4" />
               계약
             </TabsTrigger>
-            <TabsTrigger value="content" className="flex items-center gap-1 text-[18px]">
+            <TabsTrigger value="content" className="flex items-center gap-1">
               <Film className="w-4 h-4" />
               제작
             </TabsTrigger>
-            <TabsTrigger value="finance" className="flex items-center gap-1 text-[18px]">
+            <TabsTrigger value="finance" className="flex items-center gap-1">
               <Wallet className="w-4 h-4" />
               정산
             </TabsTrigger>
             <div className="flex-1" />
-            <TabsTrigger value="settings" className="flex items-center gap-1 text-[18px]">
+            <TabsTrigger value="settings" className="flex items-center gap-1">
               <Settings className="w-4 h-4" />
               설정
             </TabsTrigger>
