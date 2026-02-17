@@ -506,7 +506,7 @@ export default function CampaignDetail() {
             </TabsTrigger>
           </TabsList>
           {getTabDescription(activeTab) && (
-            <div className="mb-4 mt-2 px-3 py-2.5 rounded-md border border-border/50 bg-[#fff6bf]" data-testid="tab-description-banner">
+            <div className="mb-4 mt-2 px-3 py-2.5 rounded-md border border-border/50 bg-[#fff8db]" data-testid="tab-description-banner">
               {editingTabDesc === activeTab ? (
                 <div className="space-y-2">
                   <Textarea
