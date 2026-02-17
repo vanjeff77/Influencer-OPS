@@ -77,6 +77,11 @@ Preferred communication style: Simple, everyday language.
     - **Variable Substitution**: Supports placeholders like `{{인플루언서명}}`, `{{캠페인명}}`, etc.
     - **Dual Format Export**: DOCX (using `html-to-docx` with Malgun Gothic font) and PDF (using Puppeteer with embedded Noto Sans KR fonts for full HTML/CSS rendering).
     - **Production Readiness**: Startup preflight checks, font availability checks, singleton browser pattern, HTTP 503 for unavailability, Google Fonts fallback disabled in production.
+- **Client Logo Management**:
+    - **Image Upload**: Multer-based file upload (POST /api/upload) with auth, 5MB limit, image-only validation (mime + extension whitelist).
+    - **Auth-Protected Static Files**: `/uploads/` route requires authentication.
+    - **Logo UI**: Square image upload in Settings client dialogs (create/edit), rounded-xl display.
+    - **Campaign Integration**: Client logos shown in campaign list cards and campaign detail headers.
 - **User Onboarding System**:
     - **TourGuide Component**: Step-by-step walkthrough overlay for new users (5 steps).
     - **FeatureHint Component**: Contextual page-level hint cards with dismiss functionality.
