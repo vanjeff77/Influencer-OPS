@@ -56,6 +56,7 @@ Preferred communication style: Simple, everyday language.
 ### Core Features & Technical Implementations
 - **Campaign Operations**: Comprehensive management of influencer line items, stages, communication, review, and deadlines.
 - **Influencer Import**: Batch import with fixed columns, TSV paste support, cell-level validation, platform normalization, auto URL generation, duplicate detection, and partial success handling.
+- **Instagram URL Normalization**: Shared utility (`shared/utils.ts`) normalizes IG handles across all save paths (create, update, bulk import). Strips query params/fragments, rejects content URLs (`/p/`, `/reel/`, etc.), extracts handles from full URLs, and cleans `@` prefixes. Admin migration endpoint (`POST /api/admin/migrate-instagram-urls`) cleans existing DB data.
 - **Email Communication**:
     - **Attach Existing Email Thread**: Wizard for linking external email threads via IMAP search, importing all messages.
     - **Bulk Email Sending**: Queue-based 1:1 delivery with throttling, WYSIWYG editor, variable substitution, validation, and first contact tracking.

@@ -7,9 +7,10 @@ import { api } from "@shared/routes";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
-import { campaignInfluencers, campaigns, influencers, users, workspaceMembers, workspaces, emailAccounts } from "@shared/schema";
+import { campaignInfluencers, campaigns, influencers, influencerAccounts, users, workspaceMembers, workspaces, emailAccounts } from "@shared/schema";
 import { eq, and, or, inArray } from "drizzle-orm";
 import { getImapSmtpSettings } from "./smtp";
+import { normalizeInstagramHandle, normalizeInstagramUrl } from "@shared/utils";
 
 // Singleton browser instance for PDF generation
 let sharedBrowser: any = null;
@@ -427,14 +428,13 @@ export async function registerRoutes(
           continue;
         }
 
-        // Generate URL based on platform and handle
         const generateUrl = (platform: string, handle: string): string => {
           if (!handle) return '';
           const cleanHandle = handle.replace(/^@/, '');
           const platformLower = platform.toLowerCase();
           switch (platformLower) {
             case 'ig': 
-            case 'instagram': return `https://instagram.com/${cleanHandle}`;
+            case 'instagram': return normalizeInstagramUrl(cleanHandle);
             case 'yt':
             case 'youtube': return `https://youtube.com/@${cleanHandle}`;
             case 'tiktok': return `https://tiktok.com/@${cleanHandle}`;
@@ -444,26 +444,34 @@ export async function registerRoutes(
           }
         };
 
-        // Check if platform is provided (handle is optional now)
         const hasPlatform = item.platform?.trim();
         const hasHandle = item.handle?.trim();
         const normalizedPlatform = hasPlatform ? normalizePlatform(item.platform) : '';
         
-        // Check for duplicates only if both handle and platform are provided
+        let finalHandle = hasHandle ? item.handle.replace(/^@/, '') : '';
+        if (hasHandle && (normalizedPlatform === 'IG' || normalizedPlatform === 'Instagram')) {
+          const normalized = normalizeInstagramHandle(item.handle);
+          if (normalized === null) {
+            results.push({ index: i, status: 'failed', reason: `잘못된 인스타그램 URL입니다 (콘텐츠 URL은 사용할 수 없습니다)` });
+            failedCount++;
+            continue;
+          }
+          finalHandle = normalized;
+        }
+        
         if (hasPlatform && hasHandle) {
-          const handleKey = `${normalizedPlatform.toLowerCase()}:${item.handle.toLowerCase().replace(/^@/, '')}`;
+          const handleKey = `${normalizedPlatform.toLowerCase()}:${finalHandle.toLowerCase()}`;
           if (existingHandles.has(handleKey)) {
-            results.push({ index: i, status: 'failed', reason: `이미 존재하는 계정입니다 (${normalizedPlatform}: ${item.handle})` });
+            results.push({ index: i, status: 'failed', reason: `이미 존재하는 계정입니다 (${normalizedPlatform}: ${finalHandle})` });
             failedCount++;
             continue;
           }
         }
 
-        // Build accounts array if platform is provided (handle is optional)
         const accounts = hasPlatform ? [{
           platform: normalizedPlatform,
-          handle: hasHandle ? item.handle.replace(/^@/, '') : '',
-          url: hasHandle ? generateUrl(normalizedPlatform, item.handle) : '',
+          handle: finalHandle,
+          url: finalHandle ? generateUrl(normalizedPlatform, finalHandle) : '',
           followers: item.followers || undefined,
         }] : [];
 
@@ -487,7 +495,7 @@ export async function registerRoutes(
         });
 
         if (hasPlatform && hasHandle) {
-          const handleKey = `${normalizedPlatform.toLowerCase()}:${item.handle.toLowerCase().replace(/^@/, '')}`;
+          const handleKey = `${normalizedPlatform.toLowerCase()}:${finalHandle.toLowerCase()}`;
           existingHandles.add(handleKey);
         }
         results.push({ index: i, status: 'created', influencerId: inf.id });
@@ -4210,6 +4218,53 @@ export async function registerRoutes(
       }));
       
       res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post('/api/admin/migrate-instagram-urls', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const user = req.user as any;
+      if (!user.isPlatformAdmin) return res.status(403).json({ message: "Admin only" });
+
+      const allAccounts = await db.select().from(influencerAccounts).where(
+        or(eq(influencerAccounts.platform, 'IG'), eq(influencerAccounts.platform, 'Instagram'))
+      );
+      let cleaned = 0;
+      let skipped = 0;
+      let rejected = 0;
+      const details: string[] = [];
+
+      for (const acc of allAccounts) {
+        const rawHandle = acc.handle || '';
+        const rawUrl = acc.url || '';
+        
+        const inputForNormalization = rawHandle || rawUrl;
+        if (!inputForNormalization) { skipped++; continue; }
+
+        const normalizedHandle = normalizeInstagramHandle(inputForNormalization);
+        if (normalizedHandle === null) {
+          rejected++;
+          details.push(`ID ${acc.id}: rejected (content URL or invalid) - handle: "${rawHandle}", url: "${rawUrl}"`);
+          continue;
+        }
+
+        const normalizedUrl = normalizeInstagramUrl(normalizedHandle);
+        const needsPlatformFix = acc.platform !== 'IG';
+        if (normalizedHandle !== rawHandle || normalizedUrl !== rawUrl || needsPlatformFix) {
+          await db.update(influencerAccounts)
+            .set({ platform: 'IG', handle: normalizedHandle, url: normalizedUrl })
+            .where(eq(influencerAccounts.id, acc.id));
+          cleaned++;
+          details.push(`ID ${acc.id}: "${rawHandle}" -> "${normalizedHandle}"`);
+        } else {
+          skipped++;
+        }
+      }
+
+      res.json({ total: allAccounts.length, cleaned, skipped, rejected, details });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }

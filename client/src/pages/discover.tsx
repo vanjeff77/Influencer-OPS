@@ -27,6 +27,7 @@ import { useLocation, useSearch } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CampaignInfluencer } from "@shared/schema";
 import { PasteImportDialog } from "@/components/paste-import-dialog";
+import { normalizeInstagramHandle, normalizeInstagramUrl } from "@shared/utils";
 import { BulkEditDialog } from "@/components/bulk-edit-dialog";
 import { FeatureHint } from "@/components/onboarding";
 import { Pencil } from "lucide-react";
@@ -320,15 +321,27 @@ export default function Discover() {
       toast({ title: "채널 URL을 최소 1개 입력해주세요.", variant: "destructive" });
       return;
     }
+    const igAccounts = newInfluencer.accounts.filter(acc => acc.platform === 'IG' && acc.handle.trim());
+    for (const acc of igAccounts) {
+      if (normalizeInstagramHandle(acc.handle) === null) {
+        toast({ title: "잘못된 인스타그램 URL입니다. 콘텐츠 URL(게시물, 릴스 등)은 사용할 수 없습니다.", variant: "destructive" });
+        return;
+      }
+    }
     const validAccounts = newInfluencer.accounts
       .filter(acc => acc.handle.trim())
-      .map(acc => ({
-        platform: acc.platform,
-        handle: acc.handle,
-        url: `https://${platformUrlMap[acc.platform] || 'example.com'}/${acc.handle}`,
-        followers: acc.followers || 0,
-        verified: false
-      }));
+      .map(acc => {
+        let handle = acc.handle.replace(/^@/, '');
+        let url = `https://${platformUrlMap[acc.platform] || 'example.com'}/${handle}`;
+        if (acc.platform === 'IG') {
+          const normalized = normalizeInstagramHandle(acc.handle);
+          if (normalized) {
+            handle = normalized;
+            url = normalizeInstagramUrl(normalized);
+          }
+        }
+        return { platform: acc.platform, handle, url, followers: acc.followers || 0, verified: false };
+      });
     createInfluencer.mutate({
       name: newInfluencer.name,
       client: newInfluencer.client || undefined,
@@ -1365,14 +1378,27 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
 
   const handleSave = () => {
     if (!influencerId) return;
+    const igAccs = accounts.filter(acc => acc.platform === 'IG' && acc.handle.trim());
+    for (const acc of igAccs) {
+      if (normalizeInstagramHandle(acc.handle) === null) {
+        toast({ title: "잘못된 인스타그램 URL입니다. 콘텐츠 URL(게시물, 릴스 등)은 사용할 수 없습니다.", variant: "destructive" });
+        return;
+      }
+    }
     const validAccounts = accounts
       .filter(acc => acc.handle.trim())
-      .map(acc => ({
-        platform: acc.platform,
-        handle: acc.handle,
-        url: `https://${platformUrlMap[acc.platform] || ''}${acc.handle.replace('@', '')}`,
-        followers: acc.followers || 0
-      }));
+      .map(acc => {
+        let handle = acc.handle.replace(/^@/, '');
+        let url = `https://${platformUrlMap[acc.platform] || ''}${handle}`;
+        if (acc.platform === 'IG') {
+          const normalized = normalizeInstagramHandle(acc.handle);
+          if (normalized) {
+            handle = normalized;
+            url = normalizeInstagramUrl(normalized);
+          }
+        }
+        return { platform: acc.platform, handle, url, followers: acc.followers || 0 };
+      });
     updateInfluencer.mutate({
       id: influencerId,
       data: {
