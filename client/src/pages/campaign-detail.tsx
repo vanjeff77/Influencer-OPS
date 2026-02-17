@@ -547,7 +547,7 @@ export default function CampaignDetail() {
                   }}
                   data-testid="tab-description-text"
                 >
-                  <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-line flex-1">{getTabDescription(activeTab)}</p>
+                  <p className="whitespace-pre-line flex-1 text-[#242424] text-[13px] font-medium">{getTabDescription(activeTab)}</p>
                   {isOwner && (
                     <Pencil className="w-3 h-3 text-muted-foreground/50 shrink-0 mt-0.5 invisible group-hover:visible" />
                   )}
@@ -1021,7 +1021,6 @@ export default function CampaignDetail() {
           </TabsContent>
         </Tabs>
       </div>
-
       {/* Add Influencer Modal */}
       <AddInfluencerModal 
         open={isAddModalOpen}
@@ -1030,14 +1029,12 @@ export default function CampaignDetail() {
         workspaceId={workspaceId || 0}
         existingInfluencerIds={campaign.items?.map(i => i.influencerId) || []}
       />
-
       {/* Line Item Detail Drawer */}
       <LineItemDetailDrawer 
         item={selectedLineItem}
         onClose={() => setSelectedLineItem(null)}
         onUpdate={handleStatusUpdate}
       />
-
       {/* Delete Campaign Confirmation Dialog */}
       <Dialog open={isDeleteCampaignOpen} onOpenChange={setIsDeleteCampaignOpen}>
         <DialogContent className="max-w-sm">
@@ -1057,7 +1054,6 @@ export default function CampaignDetail() {
           </div>
         </DialogContent>
       </Dialog>
-
       {/* Delete Influencer from Campaign Confirmation Dialog */}
       <Dialog open={isDeleteInfluencerOpen} onOpenChange={setIsDeleteInfluencerOpen}>
         <DialogContent className="max-w-sm">
