@@ -279,7 +279,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </Avatar>
         </header>
 
-        <main className="flex-1 overflow-auto relative bg-background">
+        <main className="flex-1 overflow-auto relative bg-[#ebeded]">
           <div className="max-w-[1600px] mx-auto p-4 md:p-6 lg:p-8">
             {children}
           </div>
