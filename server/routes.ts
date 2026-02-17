@@ -8,7 +8,7 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
 import { campaignInfluencers, campaigns, influencers, influencerAccounts, users, workspaceMembers, workspaces, emailAccounts } from "@shared/schema";
-import { eq, and, or, inArray } from "drizzle-orm";
+import { eq, and, or, inArray, sql } from "drizzle-orm";
 import { getImapSmtpSettings } from "./smtp";
 import { normalizeInstagramHandle, normalizeInstagramUrl } from "@shared/utils";
 
@@ -2163,6 +2163,8 @@ export async function registerRoutes(
         sentAt: new Date()
       });
       
+      await storage.updateConversation(conversationId, { lastMessageAt: new Date() });
+
       if (influencer) {
         await storage.createTimelineEvent({
           workspaceId: influencer.workspaceId,
@@ -2332,12 +2334,26 @@ export async function registerRoutes(
       }
 
       if (syncedCount > 0) {
+        const maxDate = threadMessages.reduce((max, m) => {
+          const d = m.date ? new Date(m.date) : null;
+          return d && (!max || d > max) ? d : max;
+        }, null as Date | null);
+        const updateData: any = {};
+        if (maxDate) {
+          const currentConv = await storage.getConversation(conversationId);
+          if (!currentConv?.lastMessageAt || maxDate > new Date(currentConv.lastMessageAt)) {
+            updateData.lastMessageAt = maxDate;
+          }
+        }
         const hasInbound = threadMessages.some(m =>
           influencer?.email && m.from.toLowerCase().includes(influencer.email.toLowerCase())
           && !existingMessages.some(em => em.gmailMessageId === m.messageId)
         );
         if (hasInbound) {
-          await storage.updateConversation(conversationId, { status: 'replied' });
+          updateData.status = 'replied';
+        }
+        if (Object.keys(updateData).length > 0) {
+          await storage.updateConversation(conversationId, updateData);
         }
       }
 
@@ -3639,6 +3655,8 @@ export async function registerRoutes(
         return res.status(500).json({ message: '계약서 이메일 발송에 실패했습니다.' });
       }
 
+      await storage.updateConversation(conversation.id, { lastMessageAt: new Date() });
+
       res.json({ success: true, message: '계약서가 이메일로 발송되었습니다.' });
     } catch (err: any) {
       console.error('Send contract email error:', err);
@@ -4273,7 +4291,30 @@ export async function registerRoutes(
   // SEED DATA
   seedDatabase();
 
+  // Backfill lastMessageAt for conversations where it's missing or stale
+  backfillLastMessageAt();
+
   return httpServer;
+}
+
+async function backfillLastMessageAt() {
+  try {
+    await db.execute(sql`
+      UPDATE conversations c
+      SET last_message_at = sub.actual_last
+      FROM (
+        SELECT cm.conversation_id, GREATEST(MAX(cm.sent_at), MAX(cm.received_at)) as actual_last
+        FROM conversation_messages cm
+        GROUP BY cm.conversation_id
+      ) sub
+      WHERE c.id = sub.conversation_id
+        AND sub.actual_last IS NOT NULL
+        AND (c.last_message_at IS NULL OR c.last_message_at != sub.actual_last)
+    `);
+    console.log('Backfill lastMessageAt completed');
+  } catch (err) {
+    console.error('Backfill lastMessageAt error:', err);
+  }
 }
 
 async function seedDatabase() {
