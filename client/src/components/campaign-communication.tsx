@@ -755,7 +755,7 @@ function MessageComposer({ conversationId, influencerEmail, senderEmail, lastMes
   }
 
   return (
-    <div className="p-3 border-t">
+    <div className="p-3 border-t bg-[#ffffff]">
       <div className="flex items-center gap-1.5 mb-2 flex-wrap">
         {senderEmail && (
           <Tooltip>
