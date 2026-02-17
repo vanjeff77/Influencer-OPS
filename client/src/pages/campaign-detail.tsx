@@ -506,7 +506,7 @@ export default function CampaignDetail() {
             </TabsTrigger>
           </TabsList>
           {getTabDescription(activeTab) && (
-            <div className="mb-4 mt-2 px-3 py-2.5 rounded-md border border-border/50 bg-[#fff8db]" data-testid="tab-description-banner">
+            <div className="mb-4 mt-2 px-3 py-2.5 rounded-md border border-border/50 bg-[#fffbed]" data-testid="tab-description-banner">
               {editingTabDesc === activeTab ? (
                 <div className="space-y-2">
                   <Textarea
@@ -547,7 +547,7 @@ export default function CampaignDetail() {
                   }}
                   data-testid="tab-description-text"
                 >
-                  <p className="whitespace-pre-line flex-1 text-[#242424] text-[13px] font-medium">{getTabDescription(activeTab)}</p>
+                  <p className="whitespace-pre-line flex-1 text-[13px] text-[#363636] font-medium">{getTabDescription(activeTab)}</p>
                   {isOwner && (
                     <Pencil className="w-3 h-3 text-muted-foreground/50 shrink-0 mt-0.5 invisible group-hover:visible" />
                   )}
