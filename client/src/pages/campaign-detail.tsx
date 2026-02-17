@@ -206,23 +206,33 @@ export default function CampaignDetail() {
     finance: "누구에게 얼마를 지급해야 하는지, 한눈에 파악하세요. 정산 정보와 사업자 여부, 입금여부 등 빠짐없이 관리할 수 있어요.",
   };
 
+  const campaignWorkspaceId = (campaign as any)?.workspaceId || workspaceId;
+  const currentWorkspace = workspaces?.find(w => w.id === campaignWorkspaceId);
+
   const getTabDescription = (tab: string) => {
-    const custom = (campaign as any)?.tabDescriptions;
+    const custom = (currentWorkspace as any)?.tabDescriptions;
     if (custom && typeof custom === 'object' && custom[tab]) return custom[tab] as string;
     return defaultTabDescriptions[tab] || "";
   };
 
-  const handleSaveTabDescription = (tab: string, value: string) => {
-    const current = (campaign as any)?.tabDescriptions || {};
+  const handleSaveTabDescription = async (tab: string, value: string) => {
+    if (!campaignWorkspaceId) return;
+    const current = (currentWorkspace as any)?.tabDescriptions || {};
     const updated = { ...current, [tab]: value || undefined };
     if (!value) delete updated[tab];
-    updateCampaign.mutate({ id, data: { tabDescriptions: updated } as any }, {
-      onSuccess: () => {
-        toast({ title: "탭 설명이 저장되었습니다." });
-        setEditingTabDesc(null);
-      },
-      onError: () => toast({ variant: "destructive", title: "저장 실패" }),
-    });
+    try {
+      const res = await fetch(`/api/workspaces/${campaignWorkspaceId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tabDescriptions: updated }),
+      });
+      if (!res.ok) throw new Error();
+      queryClient.invalidateQueries({ queryKey: ['/api/workspaces'] });
+      toast({ title: "탭 설명이 저장되었습니다." });
+      setEditingTabDesc(null);
+    } catch {
+      toast({ variant: "destructive", title: "저장 실패" });
+    }
   };
 
   const handleClientChange = () => {

@@ -316,17 +316,30 @@ export async function registerRoutes(
       return res.status(403).json({ message: '워크스페이스 소유자만 이름을 변경할 수 있습니다.' });
     }
 
-    const { name } = req.body as { name?: string };
-    if (!name || !name.trim()) {
-      return res.status(400).json({ message: '워크스페이스 이름을 입력해주세요.' });
+    const { name, tabDescriptions } = req.body as { name?: string; tabDescriptions?: Record<string, string> };
+
+    const updateData: any = {};
+
+    if (name !== undefined) {
+      if (!name.trim()) {
+        return res.status(400).json({ message: '워크스페이스 이름을 입력해주세요.' });
+      }
+      const trimmedName = name.trim();
+      if (trimmedName.length > 100) {
+        return res.status(400).json({ message: '워크스페이스 이름은 100자를 초과할 수 없습니다.' });
+      }
+      updateData.name = trimmedName;
     }
 
-    const trimmedName = name.trim();
-    if (trimmedName.length > 100) {
-      return res.status(400).json({ message: '워크스페이스 이름은 100자를 초과할 수 없습니다.' });
+    if (tabDescriptions !== undefined) {
+      updateData.tabDescriptions = tabDescriptions;
     }
 
-    const updated = await storage.updateWorkspace(workspaceId, { name: trimmedName });
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({ message: '변경할 내용이 없습니다.' });
+    }
+
+    const updated = await storage.updateWorkspace(workspaceId, updateData);
     res.json(updated);
   });
 
