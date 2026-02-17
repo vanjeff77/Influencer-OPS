@@ -37,6 +37,7 @@ interface Client {
   id: number;
   workspaceId: number;
   name: string;
+  logoUrl?: string | null;
 }
 
 const STEPS = [
@@ -420,6 +421,12 @@ export default function CampaignDetail() {
         <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 flex-wrap">
+              {(() => {
+                const client = clients?.find(c => c.id === campaign.clientId);
+                return client?.logoUrl ? (
+                  <img src={client.logoUrl} alt={client.name} className="w-12 h-12 rounded-xl object-cover border shrink-0" />
+                ) : null;
+              })()}
               <h1 className="text-2xl font-bold tracking-tight">{campaign.name}</h1>
               <Badge 
                 variant="outline" 

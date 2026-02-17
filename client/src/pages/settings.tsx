@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { KO } from "@/i18n/ko";
-import { Plus, Pencil, Trash2, Building2, Users, Shield, FileText, Star, Settings, RotateCcw, Mail } from "lucide-react";
+import { Plus, Pencil, Trash2, Building2, Users, Shield, FileText, Star, Settings, RotateCcw, Mail, X } from "lucide-react";
 import { useResetOnboarding } from "@/hooks/use-auth";
 
 
@@ -63,6 +63,8 @@ export default function SettingsPage() {
   const [clientName, setClientName] = useState("");
   const [clientMemo, setClientMemo] = useState("");
   const [clientStatus, setClientStatus] = useState("active");
+  const [clientLogoUrl, setClientLogoUrl] = useState<string | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
 
   const [workspaceName, setWorkspaceName] = useState("");
 
@@ -96,7 +98,7 @@ export default function SettingsPage() {
   });
 
   const createClientMutation = useMutation({
-    mutationFn: (data: { workspaceId: number; name: string; memo?: string; status?: string }) =>
+    mutationFn: (data: { workspaceId: number; name: string; memo?: string; status?: string; logoUrl?: string | null }) =>
       apiRequest('POST', '/api/clients', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/clients?workspaceId=${workspaceId}`] });
@@ -207,6 +209,7 @@ export default function SettingsPage() {
     setClientName("");
     setClientMemo("");
     setClientStatus("active");
+    setClientLogoUrl(null);
     setEditingClient(null);
   };
 
@@ -224,6 +227,7 @@ export default function SettingsPage() {
     setClientName(client.name);
     setClientMemo(client.memo || "");
     setClientStatus(client.status || "active");
+    setClientLogoUrl(client.logoUrl || null);
     setClientDialogOpen(true);
   };
 
@@ -234,13 +238,31 @@ export default function SettingsPage() {
     setUserDialogOpen(true);
   };
 
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLogoUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/upload', { method: 'POST', body: formData });
+      if (!res.ok) throw new Error('Upload failed');
+      const data = await res.json();
+      setClientLogoUrl(data.url);
+    } catch {
+      toast({ title: "이미지 업로드 실패", variant: "destructive" });
+    } finally {
+      setLogoUploading(false);
+    }
+  };
+
   const handleClientSubmit = () => {
     if (!clientName.trim()) return;
 
     if (editingClient) {
       updateClientMutation.mutate({
         id: editingClient.id,
-        data: { name: clientName, memo: clientMemo, status: clientStatus },
+        data: { name: clientName, memo: clientMemo, status: clientStatus, logoUrl: clientLogoUrl },
       });
     } else {
       createClientMutation.mutate({
@@ -248,6 +270,7 @@ export default function SettingsPage() {
         name: clientName,
         memo: clientMemo,
         status: clientStatus,
+        logoUrl: clientLogoUrl,
       });
     }
   };
@@ -429,6 +452,31 @@ export default function SettingsPage() {
                           data-testid="input-client-memo"
                         />
                       </div>
+                      <div>
+                        <Label>로고</Label>
+                        <div className="flex items-center gap-3 mt-1">
+                          {clientLogoUrl ? (
+                            <div className="relative">
+                              <img src={clientLogoUrl} alt="logo" className="w-14 h-14 rounded-xl object-cover border" />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-destructive text-destructive-foreground"
+                                onClick={() => setClientLogoUrl(null)}
+                              >
+                                <X className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <label className="w-14 h-14 rounded-xl border-2 border-dashed border-muted-foreground/30 flex items-center justify-center cursor-pointer hover:border-primary/50 transition-colors">
+                              <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} disabled={logoUploading} />
+                              {logoUploading ? <span className="text-xs text-muted-foreground">...</span> : <Plus className="w-5 h-5 text-muted-foreground" />}
+                            </label>
+                          )}
+                          <span className="text-xs text-muted-foreground">정방형 이미지 권장 (5MB 이하)</span>
+                        </div>
+                      </div>
                       <div className="flex justify-end gap-2">
                         <Button variant="outline" onClick={() => setClientDialogOpen(false)}>{KO.common.cancel}</Button>
                         <Button onClick={handleClientSubmit} disabled={createClientMutation.isPending} data-testid="button-submit-client">
@@ -454,9 +502,13 @@ export default function SettingsPage() {
                       data-testid={`row-client-${client.id}`}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-bold">
-                          {client.name.substring(0, 1)}
-                        </div>
+                        {client.logoUrl ? (
+                          <img src={client.logoUrl} alt={client.name} className="w-10 h-10 rounded-xl object-cover border" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-bold">
+                            {client.name.substring(0, 1)}
+                          </div>
+                        )}
                         <div>
                           <p className="font-medium text-sm">{client.name}</p>
                           {client.memo && <p className="text-xs text-muted-foreground">{client.memo}</p>}
@@ -717,6 +769,31 @@ export default function SettingsPage() {
                     <SelectItem value="inactive">{KO.settings.inactive}</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              <div>
+                <Label>로고</Label>
+                <div className="flex items-center gap-3 mt-1">
+                  {clientLogoUrl ? (
+                    <div className="relative">
+                      <img src={clientLogoUrl} alt="logo" className="w-14 h-14 rounded-xl object-cover border" />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-destructive text-destructive-foreground"
+                        onClick={() => setClientLogoUrl(null)}
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <label className="w-14 h-14 rounded-xl border-2 border-dashed border-muted-foreground/30 flex items-center justify-center cursor-pointer hover:border-primary/50 transition-colors">
+                      <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} disabled={logoUploading} />
+                      {logoUploading ? <span className="text-xs text-muted-foreground">...</span> : <Plus className="w-5 h-5 text-muted-foreground" />}
+                    </label>
+                  )}
+                  <span className="text-xs text-muted-foreground">정방형 이미지 권장 (5MB 이하)</span>
+                </div>
               </div>
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={resetClientForm}>{KO.common.cancel}</Button>

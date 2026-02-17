@@ -20,6 +20,7 @@ interface Client {
   id: number;
   workspaceId: number;
   name: string;
+  logoUrl?: string | null;
 }
 
 export default function Campaigns() {
@@ -235,9 +236,21 @@ export default function Campaigns() {
               <Link key={campaign.id} href={`/campaigns/${campaign.id}`} className="block">
                 <Card className="hover:border-primary/50 transition-all hover:shadow-md cursor-pointer group h-full" data-testid={`card-campaign-${campaign.id}`}>
                   <CardHeader className="flex flex-row items-start justify-between space-y-0 p-3 md:p-4 pb-1 md:pb-2 gap-2">
-                    <div className="space-y-0.5 min-w-0 flex-1">
-                      <CardTitle className="font-semibold tracking-tight md:text-base group-hover:text-primary transition-colors truncate text-[21px]">{campaign.name}</CardTitle>
-                      <CardDescription className="text-[10px] md:text-xs">{campaign.client} • {format(new Date(campaign.createdAt || new Date()), 'yyyy.MM.dd')}</CardDescription>
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      {(() => {
+                        const client = clients?.find(c => c.id === campaign.clientId);
+                        return client?.logoUrl ? (
+                          <img src={client.logoUrl} alt={client.name} className="w-10 h-10 rounded-xl object-cover border shrink-0" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-bold text-sm shrink-0">
+                            {(campaign.client || '?').substring(0, 1)}
+                          </div>
+                        );
+                      })()}
+                      <div className="space-y-0.5 min-w-0 flex-1">
+                        <CardTitle className="font-semibold tracking-tight md:text-base group-hover:text-primary transition-colors truncate text-[21px]">{campaign.name}</CardTitle>
+                        <CardDescription className="text-[10px] md:text-xs">{campaign.client} • {format(new Date(campaign.createdAt || new Date()), 'yyyy.MM.dd')}</CardDescription>
+                      </div>
                     </div>
                     <div className="flex items-center gap-1">
                       <Badge variant="outline" className={`capitalize border-0 text-[10px] shrink-0 ${getStatusColor(campaign.status || 'draft')}`}>
