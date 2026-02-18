@@ -317,35 +317,36 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
                   )}
                 </div>
 
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">{KO.pages.bulkEmail.subject}</Label>
-                  <Input
-                    value={subject}
-                    onChange={(e) => setSubject(e.target.value)}
-                    placeholder={KO.pages.bulkEmail.subjectPlaceholder}
-                    data-testid="input-subject"
-                  />
-                  {!subject.includes('{{influencer_name}}') ? (
-                    <p className="text-xs text-orange-600 dark:text-orange-400 flex items-center gap-1">
-                      <AlertCircle className="w-3 h-3 shrink-0" />
-                      {KO.pages.bulkEmail.subjectVariableGuide}
-                    </p>
-                  ) : (
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Check className="w-3 h-3 shrink-0" />
-                      {KO.pages.bulkEmail.variableHint}
-                    </p>
-                  )}
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">{KO.pages.bulkEmail.cc}</Label>
-                  <Input
-                    value={cc}
-                    onChange={(e) => setCc(e.target.value)}
-                    placeholder={KO.pages.bulkEmail.ccPlaceholder}
-                    data-testid="input-cc"
-                  />
+                <div className="flex flex-wrap items-start gap-2">
+                  <div className="flex-[2] min-w-[180px] space-y-1">
+                    <Label className="text-xs text-muted-foreground">{KO.pages.bulkEmail.subject}</Label>
+                    <Input
+                      value={subject}
+                      onChange={(e) => setSubject(e.target.value)}
+                      placeholder={KO.pages.bulkEmail.subjectPlaceholder}
+                      data-testid="input-subject"
+                    />
+                    {!subject.includes('{{influencer_name}}') ? (
+                      <p className="text-xs text-orange-600 dark:text-orange-400 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        {KO.pages.bulkEmail.subjectVariableGuide}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Check className="w-3 h-3 shrink-0" />
+                        {KO.pages.bulkEmail.variableHint}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-[140px] space-y-1">
+                    <Label className="text-xs text-muted-foreground">{KO.pages.bulkEmail.cc}</Label>
+                    <Input
+                      value={cc}
+                      onChange={(e) => setCc(e.target.value)}
+                      placeholder={KO.pages.bulkEmail.ccPlaceholder}
+                      data-testid="input-cc"
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-1">

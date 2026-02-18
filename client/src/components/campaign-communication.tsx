@@ -324,7 +324,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 min-h-[400px] lg:h-[600px]">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 min-h-[400px] lg:h-[calc(100vh-220px)]">
       {/* Left Panel: Line Items List */}
       <div className="lg:col-span-3 border rounded-lg overflow-hidden flex flex-col bg-[#ffffff]" data-testid="panel-conversations-list">
         <div className="p-3 border-b bg-muted/30">
@@ -975,7 +975,7 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
   };
 
   return (
-    <div className="flex flex-col h-full max-h-[85vh]">
+    <div className="flex flex-col h-full">
       <div className="sticky top-0 z-10 bg-background border-b p-3 space-y-2">
         <div className="flex items-center gap-3">
           <Avatar className="h-10 w-10 shrink-0">
