@@ -22,7 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { 
-  Search, Filter, AlertCircle, Clock, FileText, Calendar, MessageSquare, 
+  Filter, AlertCircle, Clock, FileText, Calendar, MessageSquare, 
   CheckCircle2, Instagram, Youtube, Twitter, Check,
   ExternalLink, Save, AlertTriangle, CalendarIcon, Send, Download, Mail, Loader2, ArrowLeft, Pencil, ClipboardList
 } from "lucide-react";
@@ -201,19 +201,6 @@ export function CampaignOperations({ campaignId, workspaceId = 1, lineItems }: C
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap gap-2 items-center">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder={KO.pages.operations.searchPlaceholder}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-            data-testid="input-search-operations"
-          />
-        </div>
-      </div>
-
       <Card>
         <CardContent className="p-0">
           <div className="overflow-auto">

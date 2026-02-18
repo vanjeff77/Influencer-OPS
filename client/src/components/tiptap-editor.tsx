@@ -20,13 +20,18 @@ import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough,
   List, ListOrdered, AlignLeft, AlignCenter, AlignRight,
   Link as LinkIcon, Image as ImageIcon, Palette, Eraser,
-  Heading1, Heading2, Heading3, Type
+  Heading1, Heading2, Heading3, Type, Highlighter
 } from 'lucide-react';
 
 const COLORS = [
   '#000000', '#434343', '#666666', '#999999', '#cccccc',
   '#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6',
   '#8b5cf6', '#ec4899', '#14b8a6', '#6366f1', '#a855f7',
+];
+
+const HIGHLIGHT_COLORS = [
+  '#fef08a', '#bbf7d0', '#bfdbfe', '#fbcfe8', '#fde68a',
+  '#c4b5fd', '#fed7aa', '#99f6e4', '#fecdd3', '#e9d5ff',
 ];
 
 interface TiptapEditorProps {
@@ -156,6 +161,38 @@ function EditorToolbar({ editor, toolbar = 'full' }: { editor: any; toolbar?: st
             onClick={() => editor.chain().focus().unsetColor().run()}
           >
             기본 색상
+          </button>
+        </PopoverContent>
+      </Popover>
+
+      <Popover>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className={`p-1.5 rounded-sm transition-colors ${editor.isActive('highlight') ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
+            title="형광펜"
+          >
+            <Highlighter className="w-3.5 h-3.5" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-2" align="start">
+          <div className="grid grid-cols-5 gap-1">
+            {HIGHLIGHT_COLORS.map((color) => (
+              <button
+                key={color}
+                type="button"
+                className="w-6 h-6 rounded-sm border border-border hover:scale-110 transition-transform"
+                style={{ backgroundColor: color }}
+                onClick={() => editor.chain().focus().toggleHighlight({ color }).run()}
+              />
+            ))}
+          </div>
+          <button
+            type="button"
+            className="mt-1 text-xs text-muted-foreground hover:text-foreground w-full text-center"
+            onClick={() => editor.chain().focus().unsetHighlight().run()}
+          >
+            형광펜 제거
           </button>
         </PopoverContent>
       </Popover>

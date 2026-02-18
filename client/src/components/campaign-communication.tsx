@@ -379,13 +379,6 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
               </Badge>
             )}
           </div>
-          <Input 
-            placeholder="검색..." 
-            className="h-8 text-sm" 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            data-testid="input-search-conversations" 
-          />
         </div>
         <ScrollArea className="flex-1">
           {isLoadingConversations ? (
@@ -982,7 +975,7 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
   };
 
   return (
-    <div className="flex flex-col h-full max-h-[600px]">
+    <div className="flex flex-col h-full max-h-[85vh]">
       <div className="sticky top-0 z-10 bg-background border-b p-3 space-y-2">
         <div className="flex items-center gap-3">
           <Avatar className="h-10 w-10 shrink-0">

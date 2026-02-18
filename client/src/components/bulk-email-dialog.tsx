@@ -263,57 +263,59 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
           <div className="flex-1 min-h-0 relative">
             <TabsContent value="template" className="absolute inset-0 flex flex-col p-1 overflow-hidden data-[state=inactive]:pointer-events-none">
               <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pb-2">
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">{KO.pages.bulkEmail.selectAccount}</Label>
-                  {isLoadingAccounts ? (
-                    <Skeleton className="h-10 w-full" />
-                  ) : availableAccounts.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">{KO.pages.bulkEmail.noImapAccount}</p>
-                  ) : (
-                    <Select value={selectedEmailAccountId} onValueChange={setSelectedEmailAccountId}>
-                      <SelectTrigger data-testid="select-email-account">
-                        <SelectValue placeholder={KO.pages.bulkEmail.selectAccountPlaceholder} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableAccounts.map((acc: any) => (
-                          <SelectItem key={acc.id} value={acc.id.toString()}>{acc.email}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="flex-1 min-w-[180px] space-y-1">
+                    <Label className="text-xs text-muted-foreground">{KO.pages.bulkEmail.selectAccount}</Label>
+                    {isLoadingAccounts ? (
+                      <Skeleton className="h-9 w-full" />
+                    ) : availableAccounts.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">{KO.pages.bulkEmail.noImapAccount}</p>
+                    ) : (
+                      <Select value={selectedEmailAccountId} onValueChange={setSelectedEmailAccountId}>
+                        <SelectTrigger data-testid="select-email-account">
+                          <SelectValue placeholder={KO.pages.bulkEmail.selectAccountPlaceholder} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableAccounts.map((acc: any) => (
+                            <SelectItem key={acc.id} value={acc.id.toString()}>{acc.email}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+
+                  {emailTemplates.length > 0 && (
+                    <div className="flex-1 min-w-[180px] space-y-1">
+                      <Label className="text-xs text-muted-foreground">{KO.emailTemplates.loadTemplate}</Label>
+                      <Select
+                        value=""
+                        onValueChange={(templateId) => {
+                          const tmpl = emailTemplates.find((t: any) => t.id.toString() === templateId);
+                          if (tmpl) {
+                            setSubject(tmpl.subject);
+                            setBody(tmpl.bodyHtml);
+                            toast({ title: KO.emailTemplates.applied });
+                          }
+                        }}
+                      >
+                        <SelectTrigger data-testid="select-email-template">
+                          <SelectValue placeholder={KO.emailTemplates.loadTemplate} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {emailTemplates.map((tmpl: any) => (
+                            <SelectItem key={tmpl.id} value={tmpl.id.toString()}>
+                              <span className="flex items-center gap-2">
+                                {tmpl.isDefault && <Star className="w-3 h-3 text-yellow-500 shrink-0" />}
+                                {tmpl.name}
+                                <span className="text-muted-foreground text-xs">— {tmpl.subject}</span>
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   )}
                 </div>
-
-                {emailTemplates.length > 0 && (
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">{KO.emailTemplates.loadTemplate}</Label>
-                    <Select
-                      value=""
-                      onValueChange={(templateId) => {
-                        const tmpl = emailTemplates.find((t: any) => t.id.toString() === templateId);
-                        if (tmpl) {
-                          setSubject(tmpl.subject);
-                          setBody(tmpl.bodyHtml);
-                          toast({ title: KO.emailTemplates.applied });
-                        }
-                      }}
-                    >
-                      <SelectTrigger data-testid="select-email-template">
-                        <SelectValue placeholder={KO.emailTemplates.loadTemplate} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {emailTemplates.map((tmpl: any) => (
-                          <SelectItem key={tmpl.id} value={tmpl.id.toString()}>
-                            <span className="flex items-center gap-2">
-                              {tmpl.isDefault && <Star className="w-3 h-3 text-yellow-500 shrink-0" />}
-                              {tmpl.name}
-                              <span className="text-muted-foreground text-xs">— {tmpl.subject}</span>
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
 
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">{KO.pages.bulkEmail.subject}</Label>
@@ -347,7 +349,6 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">{KO.pages.bulkEmail.body}</Label>
                   <TiptapEditor
                     value={body}
                     onChange={setBody}

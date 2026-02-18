@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { 
-  Search, ExternalLink, Save, FileText, CheckCircle2, Image,
+  ExternalLink, Save, FileText, CheckCircle2, Image,
   Instagram, Youtube, Twitter, Copy, Upload, Download
 } from "lucide-react";
 import type { CampaignInfluencer, Influencer, InfluencerAccount, FeedbackNote, User } from "@shared/schema";
@@ -169,16 +169,6 @@ export function CampaignContents({ campaignId, lineItems }: CampaignContentsProp
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap gap-2 items-center">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="인플루언서 검색..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="pl-9"
-            data-testid="input-content-search"
-          />
-        </div>
         <Select value={reviewFilter} onValueChange={setReviewFilter}>
           <SelectTrigger className="w-32" data-testid="select-content-review-filter">
             <SelectValue placeholder="검토 상태" />
