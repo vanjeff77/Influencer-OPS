@@ -11,30 +11,6 @@ import { campaignInfluencers, campaigns, influencers, influencerAccounts, users,
 import { eq, and, or, inArray, sql } from "drizzle-orm";
 import { getImapSmtpSettings } from "./smtp";
 import { normalizeInstagramHandle, normalizeInstagramUrl } from "@shared/utils";
-import multer from "multer";
-import path from "path";
-import fs from "fs";
-
-const uploadDir = path.join(process.cwd(), 'uploads');
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-
-const uploadStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadDir),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ext}`);
-  },
-});
-const ALLOWED_IMAGE_EXTS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];
-const upload = multer({
-  storage: uploadStorage,
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    if (file.mimetype.startsWith('image/') && ALLOWED_IMAGE_EXTS.includes(ext)) cb(null, true);
-    else cb(new Error('Only image files are allowed'));
-  },
-});
 
 // Singleton browser instance for PDF generation
 let sharedBrowser: any = null;
@@ -244,19 +220,6 @@ export async function registerRoutes(
   setupAuth(app);
   
   await ensureWorkspaceMembers();
-
-  app.use('/uploads', (req, res, next) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: 'Unauthorized' });
-    next();
-  }, (await import('express')).default.static(uploadDir));
-
-  // === FILE UPLOAD ===
-  app.post('/api/upload', upload.single('file'), (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: 'Unauthorized' });
-    if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
-    const url = `/uploads/${req.file.filename}`;
-    res.json({ url, filename: req.file.filename });
-  });
 
   // === AUTH ===
   app.post(api.auth.login.path, (req, res, next) => {

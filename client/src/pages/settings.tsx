@@ -64,7 +64,6 @@ export default function SettingsPage() {
   const [clientMemo, setClientMemo] = useState("");
   const [clientStatus, setClientStatus] = useState("active");
   const [clientLogoUrl, setClientLogoUrl] = useState<string | null>(null);
-  const [logoUploading, setLogoUploading] = useState(false);
 
   const [workspaceName, setWorkspaceName] = useState("");
 
@@ -238,23 +237,6 @@ export default function SettingsPage() {
     setUserDialogOpen(true);
   };
 
-  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setLogoUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch('/api/upload', { method: 'POST', body: formData });
-      if (!res.ok) throw new Error('Upload failed');
-      const data = await res.json();
-      setClientLogoUrl(data.url);
-    } catch {
-      toast({ title: "이미지 업로드 실패", variant: "destructive" });
-    } finally {
-      setLogoUploading(false);
-    }
-  };
 
   const handleClientSubmit = () => {
     if (!clientName.trim()) return;
@@ -453,11 +435,11 @@ export default function SettingsPage() {
                         />
                       </div>
                       <div>
-                        <Label>로고</Label>
+                        <Label>로고 이미지 URL</Label>
                         <div className="flex items-center gap-3 mt-1">
-                          {clientLogoUrl ? (
-                            <div className="relative">
-                              <img src={clientLogoUrl} alt="logo" className="w-14 h-14 rounded-xl object-cover border" />
+                          {clientLogoUrl && (
+                            <div className="relative shrink-0">
+                              <img src={clientLogoUrl} alt="logo" className="w-14 h-14 rounded-xl object-cover border" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                               <Button
                                 type="button"
                                 variant="ghost"
@@ -468,13 +450,13 @@ export default function SettingsPage() {
                                 <X className="w-3 h-3" />
                               </Button>
                             </div>
-                          ) : (
-                            <label className="w-14 h-14 rounded-xl border-2 border-dashed border-muted-foreground/30 flex items-center justify-center cursor-pointer hover:border-primary/50 transition-colors">
-                              <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} disabled={logoUploading} />
-                              {logoUploading ? <span className="text-xs text-muted-foreground">...</span> : <Plus className="w-5 h-5 text-muted-foreground" />}
-                            </label>
                           )}
-                          <span className="text-xs text-muted-foreground">정방형 이미지 권장 (5MB 이하)</span>
+                          <Input
+                            placeholder="https://example.com/logo.png"
+                            value={clientLogoUrl || ""}
+                            onChange={(e) => setClientLogoUrl(e.target.value || null)}
+                            data-testid="input-client-logo-url"
+                          />
                         </div>
                       </div>
                       <div className="flex justify-end gap-2">
@@ -771,11 +753,11 @@ export default function SettingsPage() {
                 </Select>
               </div>
               <div>
-                <Label>로고</Label>
+                <Label>로고 이미지 URL</Label>
                 <div className="flex items-center gap-3 mt-1">
-                  {clientLogoUrl ? (
-                    <div className="relative">
-                      <img src={clientLogoUrl} alt="logo" className="w-14 h-14 rounded-xl object-cover border" />
+                  {clientLogoUrl && (
+                    <div className="relative shrink-0">
+                      <img src={clientLogoUrl} alt="logo" className="w-14 h-14 rounded-xl object-cover border" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                       <Button
                         type="button"
                         variant="ghost"
@@ -786,13 +768,13 @@ export default function SettingsPage() {
                         <X className="w-3 h-3" />
                       </Button>
                     </div>
-                  ) : (
-                    <label className="w-14 h-14 rounded-xl border-2 border-dashed border-muted-foreground/30 flex items-center justify-center cursor-pointer hover:border-primary/50 transition-colors">
-                      <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} disabled={logoUploading} />
-                      {logoUploading ? <span className="text-xs text-muted-foreground">...</span> : <Plus className="w-5 h-5 text-muted-foreground" />}
-                    </label>
                   )}
-                  <span className="text-xs text-muted-foreground">정방형 이미지 권장 (5MB 이하)</span>
+                  <Input
+                    placeholder="https://example.com/logo.png"
+                    value={clientLogoUrl || ""}
+                    onChange={(e) => setClientLogoUrl(e.target.value || null)}
+                    data-testid="input-edit-client-logo-url"
+                  />
                 </div>
               </div>
               <div className="flex justify-end gap-2">
