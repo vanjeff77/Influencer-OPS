@@ -7,10 +7,30 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Upload, CheckCircle, Loader2, FileVideo, FileImage, File, AlertCircle } from "lucide-react";
 
-type Step = 'email' | 'upload' | 'complete';
+type Step = 'email' | 'settlement' | 'upload' | 'complete';
+
+interface SettlementInfo {
+  bankName: string;
+  accountHolder: string;
+  accountNumber: string;
+  settlementType: string;
+  businessName: string;
+  businessRegNo: string;
+  freelancerId: string;
+}
+
+const BANK_LIST = [
+  "KB국민은행", "신한은행", "하나은행", "우리은행", "NH농협은행",
+  "IBK기업은행", "카카오뱅크", "토스뱅크", "케이뱅크",
+  "SC제일은행", "씨티은행", "DGB대구은행", "BNK부산은행",
+  "광주은행", "제주은행", "전북은행", "경남은행",
+  "수협은행", "신협", "새마을금고", "우체국",
+  "산업은행", "저축은행"
+];
 
 export default function SubmitPage() {
   const { campaignId } = useParams<{ campaignId: string }>();
@@ -18,12 +38,17 @@ export default function SubmitPage() {
   
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
-  const [verifiedData, setVerifiedData] = useState<{ influencerId: number; influencerName: string; lineItemId: number } | null>(null);
+  const [verifiedData, setVerifiedData] = useState<{ influencerId: number; influencerName: string; lineItemId: number; settlementInfo: SettlementInfo; hasSettlementInfo: boolean } | null>(null);
   const [submissionType, setSubmissionType] = useState<'draft' | 'final'>('draft');
   const [memo, setMemo] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
+
+  const [settlement, setSettlement] = useState<SettlementInfo>({
+    bankName: '', accountHolder: '', accountNumber: '',
+    settlementType: '', businessName: '', businessRegNo: '', freelancerId: ''
+  });
 
   const { data: campaignInfo, isLoading: isLoadingCampaign, error: campaignError } = useQuery<{
     id: number;
@@ -55,12 +80,68 @@ export default function SubmitPage() {
     },
     onSuccess: (data) => {
       setVerifiedData(data);
-      setStep('upload');
+      const info = data.settlementInfo;
+      setSettlement({
+        bankName: info.bankName,
+        accountHolder: info.accountHolder,
+        accountNumber: data.hasSettlementInfo ? '' : info.accountNumber,
+        settlementType: info.settlementType,
+        businessName: info.businessName,
+        businessRegNo: '',
+        freelancerId: '',
+      });
+      setStep('settlement');
     },
     onError: (error: Error) => {
       toast({ title: "인증 실패", description: error.message, variant: "destructive" });
     }
   });
+
+  const saveSettlement = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/submit/${campaignId}/settlement`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, ...settlement })
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || '정산정보 저장 실패');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      setStep('upload');
+    },
+    onError: (error: Error) => {
+      toast({ title: "저장 실패", description: error.message, variant: "destructive" });
+    }
+  });
+
+  const handleAccountNumberChange = (value: string) => {
+    const cleaned = value.replace(/[^0-9]/g, '');
+    setSettlement(prev => ({ ...prev, accountNumber: cleaned }));
+  };
+
+  const formatResidentId = (value: string) => {
+    const nums = value.replace(/[^0-9]/g, '');
+    if (nums.length <= 6) return nums;
+    return nums.slice(0, 6) + '-' + nums.slice(6, 13);
+  };
+
+  const formatBusinessRegNo = (value: string) => {
+    const nums = value.replace(/[^0-9]/g, '');
+    if (nums.length <= 3) return nums;
+    if (nums.length <= 5) return nums.slice(0, 3) + '-' + nums.slice(3);
+    return nums.slice(0, 3) + '-' + nums.slice(3, 5) + '-' + nums.slice(5, 10);
+  };
+
+  const isSettlementValid = () => {
+    if (!settlement.bankName || !settlement.accountHolder || !settlement.accountNumber || !settlement.settlementType || !settlement.businessName) return false;
+    if (settlement.settlementType === '프리랜서' && !settlement.freelancerId) return false;
+    if (settlement.settlementType === '사업자' && !settlement.businessRegNo) return false;
+    return true;
+  };
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -76,7 +157,6 @@ export default function SubmitPage() {
     setUploadProgress(0);
 
     try {
-      // 1. 업로드 세션 생성 (이메일로 재검증)
       const sessionRes = await fetch(`/api/submit/${campaignId}/upload-session`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -94,8 +174,7 @@ export default function SubmitPage() {
 
       const session = await sessionRes.json();
 
-      // 2. OneDrive에 직접 업로드 (청크 단위)
-      const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB chunks
+      const CHUNK_SIZE = 10 * 1024 * 1024;
       const totalChunks = Math.ceil(selectedFile.size / CHUNK_SIZE);
       let uploadedFileId: string | null = null;
       
@@ -117,7 +196,6 @@ export default function SubmitPage() {
           throw new Error('파일 업로드 실패');
         }
 
-        // 마지막 청크 업로드 완료 시 파일 ID 추출
         if (uploadRes.status === 200 || uploadRes.status === 201) {
           try {
             const uploadedFile = await uploadRes.json();
@@ -130,7 +208,6 @@ export default function SubmitPage() {
         setUploadProgress(Math.round(((i + 1) / totalChunks) * 100));
       }
 
-      // 3. 제출 완료 기록 (이메일로 재검증) - 파일 ID 포함하여 초안/완성본 링크 자동 업데이트
       const completeRes = await fetch(`/api/submit/${campaignId}/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -172,6 +249,9 @@ export default function SubmitPage() {
     return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
   };
 
+  const stepIndex = step === 'email' ? 1 : step === 'settlement' ? 2 : step === 'upload' ? 3 : 3;
+  const totalSteps = 3;
+
   if (isLoadingCampaign) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-muted/30">
@@ -202,6 +282,17 @@ export default function SubmitPage() {
           <p className="text-muted-foreground">{campaignInfo.name}</p>
         </div>
 
+        {step !== 'complete' && (
+          <div className="flex items-center gap-2 mb-6 px-4" data-testid="step-indicator">
+            {[1, 2, 3].map((s) => (
+              <div key={s} className="flex-1">
+                <div className={`h-1.5 rounded-full transition-colors ${s < stepIndex ? 'bg-primary' : s === stepIndex ? 'bg-primary/50' : 'bg-muted'}`} />
+              </div>
+            ))}
+            <span className="text-xs text-muted-foreground ml-1">{stepIndex}/{totalSteps}</span>
+          </div>
+        )}
+
         {step === 'email' && (
           <Card>
             <CardHeader>
@@ -231,6 +322,127 @@ export default function SubmitPage() {
               >
                 {verifyEmail.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 확인
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {step === 'settlement' && verifiedData && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">정산 정보 확인</CardTitle>
+              <CardDescription>
+                {verifiedData.influencerName}님, 정산에 필요한 정보를 {verifiedData.hasSettlementInfo ? '확인해주세요. 보안을 위해 계좌번호와 등록번호는 다시 입력해주세요.' : '입력해주세요'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>은행명 <span className="text-destructive">*</span></Label>
+                <Select
+                  value={settlement.bankName}
+                  onValueChange={(v) => setSettlement(prev => ({ ...prev, bankName: v }))}
+                >
+                  <SelectTrigger data-testid="select-bank">
+                    <SelectValue placeholder="은행을 선택해주세요" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {BANK_LIST.map(bank => (
+                      <SelectItem key={bank} value={bank}>{bank}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="accountHolder">예금주명 <span className="text-destructive">*</span></Label>
+                <Input
+                  id="accountHolder"
+                  placeholder="예금주명을 입력해주세요"
+                  value={settlement.accountHolder}
+                  onChange={(e) => setSettlement(prev => ({ ...prev, accountHolder: e.target.value }))}
+                  data-testid="input-account-holder"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="accountNumber">계좌번호 <span className="text-destructive">*</span></Label>
+                <Input
+                  id="accountNumber"
+                  placeholder="숫자만 입력 (하이픈, 공백 없이)"
+                  value={settlement.accountNumber}
+                  onChange={(e) => handleAccountNumberChange(e.target.value)}
+                  inputMode="numeric"
+                  data-testid="input-account-number"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>정산유형 <span className="text-destructive">*</span></Label>
+                <Select
+                  value={settlement.settlementType}
+                  onValueChange={(v) => setSettlement(prev => ({ ...prev, settlementType: v, businessRegNo: '', freelancerId: '' }))}
+                >
+                  <SelectTrigger data-testid="select-settlement-type">
+                    <SelectValue placeholder="정산유형을 선택해주세요" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="사업자">사업자</SelectItem>
+                    <SelectItem value="프리랜서">프리랜서</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="businessName">
+                  {settlement.settlementType === '사업자' ? '사업자명' : '성명'} <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="businessName"
+                  placeholder={settlement.settlementType === '사업자' ? '사업자명을 입력해주세요' : '성명을 입력해주세요'}
+                  value={settlement.businessName}
+                  onChange={(e) => setSettlement(prev => ({ ...prev, businessName: e.target.value }))}
+                  data-testid="input-business-name"
+                />
+              </div>
+
+              {settlement.settlementType === '사업자' && (
+                <div className="space-y-2">
+                  <Label htmlFor="businessRegNo">사업자등록번호 <span className="text-destructive">*</span></Label>
+                  <Input
+                    id="businessRegNo"
+                    placeholder="000-00-00000"
+                    value={settlement.businessRegNo}
+                    onChange={(e) => setSettlement(prev => ({ ...prev, businessRegNo: formatBusinessRegNo(e.target.value) }))}
+                    inputMode="numeric"
+                    maxLength={12}
+                    data-testid="input-business-reg-no"
+                  />
+                </div>
+              )}
+
+              {settlement.settlementType === '프리랜서' && (
+                <div className="space-y-2">
+                  <Label htmlFor="freelancerId">주민등록번호 <span className="text-destructive">*</span></Label>
+                  <Input
+                    id="freelancerId"
+                    placeholder="000000-0000000"
+                    value={settlement.freelancerId}
+                    onChange={(e) => setSettlement(prev => ({ ...prev, freelancerId: formatResidentId(e.target.value) }))}
+                    inputMode="numeric"
+                    maxLength={14}
+                    data-testid="input-freelancer-id"
+                  />
+                </div>
+              )}
+
+              <Button
+                className="w-full"
+                onClick={() => saveSettlement.mutate()}
+                disabled={!isSettlementValid() || saveSettlement.isPending}
+                data-testid="button-save-settlement"
+              >
+                {saveSettlement.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                확인 후 다음
               </Button>
             </CardContent>
           </Card>

@@ -4058,11 +4058,91 @@ export async function registerRoutes(
         return res.status(404).json({ message: "등록되지 않은 이메일입니다. 담당자에게 문의해주세요." });
       }
       
+      const inf = result.influencer;
+      const maskValue = (val: string | null | undefined, visibleEnd = 4) => {
+        if (!val) return '';
+        if (val.length <= visibleEnd) return val;
+        return '*'.repeat(val.length - visibleEnd) + val.slice(-visibleEnd);
+      };
       res.json({
-        influencerId: result.influencer.id,
-        influencerName: result.influencer.name,
-        lineItemId: result.lineItem.id
+        influencerId: inf.id,
+        influencerName: inf.name,
+        lineItemId: result.lineItem.id,
+        settlementInfo: {
+          bankName: inf.bankName || '',
+          accountHolder: inf.accountHolder || '',
+          accountNumber: maskValue(inf.accountNumber),
+          settlementType: inf.settlementType || '',
+          businessName: inf.businessName || '',
+          businessRegNo: maskValue(inf.businessRegNo),
+          freelancerId: maskValue(inf.freelancerId),
+        },
+        hasSettlementInfo: !!(inf.bankName && inf.accountHolder && inf.accountNumber && inf.settlementType && inf.businessName && (inf.settlementType === '프리랜서' ? inf.freelancerId : inf.businessRegNo))
       });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Public: 정산정보 저장
+  app.post('/api/submit/:campaignId/settlement', async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.campaignId);
+      const { email, bankName, accountHolder, accountNumber, settlementType, businessName, businessRegNo, freelancerId } = req.body;
+
+      if (!email) {
+        return res.status(400).json({ message: "이메일이 필요합니다" });
+      }
+
+      if (!bankName || !accountHolder || !accountNumber || !settlementType || !businessName) {
+        return res.status(400).json({ message: "필수 항목을 모두 입력해주세요" });
+      }
+
+      if (!['사업자', '프리랜서'].includes(settlementType)) {
+        return res.status(400).json({ message: "정산유형이 올바르지 않습니다" });
+      }
+
+      if (!/^\d+$/.test(accountNumber)) {
+        return res.status(400).json({ message: "계좌번호는 숫자만 입력해주세요" });
+      }
+
+      if (settlementType === '프리랜서') {
+        if (!freelancerId || !/^\d{6}-\d{7}$/.test(freelancerId)) {
+          return res.status(400).json({ message: "주민등록번호 형식이 올바르지 않습니다 (000000-0000000)" });
+        }
+      }
+
+      if (settlementType === '사업자') {
+        if (!businessRegNo || !/^\d{3}-\d{2}-\d{5}$/.test(businessRegNo)) {
+          return res.status(400).json({ message: "사업자등록번호 형식이 올바르지 않습니다 (000-00-00000)" });
+        }
+      }
+
+      const result = await storage.findInfluencerByEmailInCampaign(campaignId, email.toLowerCase().trim());
+      if (!result) {
+        return res.status(403).json({ message: "이 캠페인에 등록된 이메일이 아닙니다" });
+      }
+
+      const updateData: any = {
+        bankName,
+        accountHolder,
+        accountNumber,
+        settlementType,
+        businessName,
+        settlementInfoUpdatedAt: new Date(),
+      };
+
+      if (settlementType === '프리랜서') {
+        updateData.freelancerId = freelancerId;
+        updateData.businessRegNo = null;
+      } else if (settlementType === '사업자') {
+        updateData.businessRegNo = businessRegNo;
+        updateData.freelancerId = null;
+      }
+
+      await db.update(influencers).set(updateData).where(eq(influencers.id, result.influencer.id));
+
+      res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
