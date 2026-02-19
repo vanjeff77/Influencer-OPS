@@ -4078,7 +4078,9 @@ export async function registerRoutes(
           freelancerId: maskValue(inf.freelancerId),
         },
         hasSettlementInfo: !!(inf.bankName && inf.accountHolder && inf.accountNumber && inf.settlementType && inf.businessName && (inf.settlementType === '프리랜서' ? inf.freelancerId : inf.businessRegNo)),
-        settlementConfirmed: !!result.lineItem.settlementConfirmedAt
+        settlementConfirmed: !!result.lineItem.settlementConfirmedAt,
+        postUrl: result.lineItem.postUrl || '',
+        metaPartnershipCode: result.lineItem.metaPartnershipCode || '',
       });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
@@ -4381,6 +4383,42 @@ export async function registerRoutes(
     }
   });
 
+  // Public: 게시물 URL 및 Meta 파트너십 코드 저장 (이메일 기반)
+  app.post('/api/submit/:campaignId/post-info', async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.campaignId);
+      const { email, postUrl, metaPartnershipCode } = req.body;
+      if (!email) return res.status(400).json({ message: "이메일을 입력해주세요" });
+
+      const influencer = await db.select().from(influencers)
+        .where(eq(influencers.email, email.trim().toLowerCase()))
+        .limit(1);
+      if (!influencer.length) return res.status(404).json({ message: "등록된 인플루언서를 찾을 수 없습니다" });
+
+      const lineItem = await db.select().from(campaignInfluencers)
+        .where(
+          and(
+            eq(campaignInfluencers.campaignId, campaignId),
+            eq(campaignInfluencers.influencerId, influencer[0].id)
+          )
+        )
+        .limit(1);
+      if (!lineItem.length) return res.status(404).json({ message: "캠페인 참여 정보를 찾을 수 없습니다" });
+
+      const updates: any = {};
+      if (postUrl !== undefined) updates.postUrl = postUrl || null;
+      if (metaPartnershipCode !== undefined) updates.metaPartnershipCode = metaPartnershipCode || null;
+
+      await db.update(campaignInfluencers)
+        .set(updates)
+        .where(eq(campaignInfluencers.id, lineItem[0].id));
+
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   // Public: 인플루언서 본인의 제출 이력 조회 (이메일 기반)
   app.post('/api/submit/:campaignId/history', async (req, res) => {
     try {
@@ -4409,6 +4447,7 @@ export async function registerRoutes(
         fileSize: s.fileSize,
         memo: s.memo,
         submittedAt: s.submittedAt,
+        oneDriveLink: s.oneDriveLink,
       })));
     } catch (err: any) {
       res.status(500).json({ message: err.message });

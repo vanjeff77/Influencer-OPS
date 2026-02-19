@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -6,10 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, CheckCircle, Loader2, FileVideo, FileImage, File, AlertCircle, Clock, FileText } from "lucide-react";
+import { Upload, CheckCircle, Loader2, FileVideo, FileImage, File, AlertCircle, Clock, FileText, ExternalLink, Link2, Copy } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 
@@ -23,6 +22,16 @@ interface SettlementInfo {
   businessName: string;
   businessRegNo: string;
   freelancerId: string;
+}
+
+interface SubmissionHistoryItem {
+  id: number;
+  submissionType: string;
+  fileName: string;
+  fileSize: number;
+  memo: string | null;
+  submittedAt: string;
+  oneDriveLink: string | null;
 }
 
 const BANK_LIST = [
@@ -40,13 +49,14 @@ export default function SubmitPage() {
   
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
-  const [verifiedData, setVerifiedData] = useState<{ influencerId: number; influencerName: string; lineItemId: number; settlementInfo: SettlementInfo; hasSettlementInfo: boolean; settlementConfirmed: boolean } | null>(null);
-  const [submissionType, setSubmissionType] = useState<'draft' | 'final'>('draft');
+  const [verifiedData, setVerifiedData] = useState<{ influencerId: number; influencerName: string; lineItemId: number; settlementInfo: SettlementInfo; hasSettlementInfo: boolean; settlementConfirmed: boolean; postUrl: string; metaPartnershipCode: string } | null>(null);
   const [memo, setMemo] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
-  const [submissionHistory, setSubmissionHistory] = useState<{ id: number; submissionType: string; fileName: string; fileSize: number; memo: string | null; submittedAt: string }[]>([]);
+  const [submissionHistory, setSubmissionHistory] = useState<SubmissionHistoryItem[]>([]);
+  const [postUrl, setPostUrl] = useState('');
+  const [metaPartnershipCode, setMetaPartnershipCode] = useState('');
 
   const [settlement, setSettlement] = useState<SettlementInfo>({
     bankName: '', accountHolder: '', accountNumber: '',
@@ -68,6 +78,23 @@ export default function SubmitPage() {
     enabled: !!campaignId
   });
 
+  const fetchHistory = useCallback(async () => {
+    if (!email || !campaignId) return;
+    try {
+      const res = await fetch(`/api/submit/${campaignId}/history`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSubmissionHistory(data);
+      }
+    } catch (e) {
+      console.error('Failed to fetch history:', e);
+    }
+  }, [email, campaignId]);
+
   const verifyEmail = useMutation({
     mutationFn: async (email: string) => {
       const res = await fetch(`/api/submit/${campaignId}/verify`, {
@@ -83,6 +110,8 @@ export default function SubmitPage() {
     },
     onSuccess: (data) => {
       setVerifiedData(data);
+      setPostUrl(data.postUrl || '');
+      setMetaPartnershipCode(data.metaPartnershipCode || '');
       const info = data.settlementInfo;
       setSettlement({
         bankName: info.bankName,
@@ -104,6 +133,12 @@ export default function SubmitPage() {
     }
   });
 
+  useEffect(() => {
+    if (verifiedData && email) {
+      fetchHistory();
+    }
+  }, [verifiedData, email, fetchHistory]);
+
   const saveSettlement = useMutation({
     mutationFn: async () => {
       const res = await fetch(`/api/submit/${campaignId}/settlement`, {
@@ -119,6 +154,27 @@ export default function SubmitPage() {
     },
     onSuccess: () => {
       setStep('upload');
+    },
+    onError: (error: Error) => {
+      toast({ title: "저장 실패", description: error.message, variant: "destructive" });
+    }
+  });
+
+  const savePostInfo = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/submit/${campaignId}/post-info`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, postUrl, metaPartnershipCode })
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || '저장 실패');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "저장 완료", description: "게시물 정보가 저장되었습니다." });
     },
     onError: (error: Error) => {
       toast({ title: "저장 실패", description: error.message, variant: "destructive" });
@@ -150,23 +206,6 @@ export default function SubmitPage() {
     return true;
   };
 
-  const fetchHistory = useCallback(async () => {
-    if (!email || !campaignId) return;
-    try {
-      const res = await fetch(`/api/submit/${campaignId}/history`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setSubmissionHistory(data);
-      }
-    } catch (e) {
-      console.error('Failed to fetch history:', e);
-    }
-  }, [email, campaignId]);
-
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -187,7 +226,7 @@ export default function SubmitPage() {
         body: JSON.stringify({
           email,
           fileName: selectedFile.name,
-          submissionType
+          submissionType: 'file'
         })
       });
 
@@ -237,7 +276,7 @@ export default function SubmitPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email,
-          submissionType,
+          submissionType: 'file',
           fileName: session.finalFileName,
           fileSize: selectedFile.size,
           folderId: session.folderId,
@@ -483,20 +522,6 @@ export default function SubmitPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label>제출 유형</Label>
-                <RadioGroup value={submissionType} onValueChange={(v) => setSubmissionType(v as 'draft' | 'final')}>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="draft" id="draft" data-testid="radio-draft" />
-                    <Label htmlFor="draft" className="font-normal">초안</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="final" id="final" data-testid="radio-final" />
-                    <Label htmlFor="final" className="font-normal">완성본</Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              <div className="space-y-2">
                 <Label>파일 선택</Label>
                 <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
                   <input
@@ -601,52 +626,104 @@ export default function SubmitPage() {
               </CardContent>
             </Card>
 
-            {submissionHistory.length > 0 && (
-              <Card>
-                <CardContent className="pt-4">
-                  <h3 className="font-semibold mb-3 flex items-center gap-2">
-                    <Clock className="w-4 h-4" />
-                    제출 내역 ({submissionHistory.length}건)
-                  </h3>
-                  <div className="overflow-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>유형</TableHead>
-                          <TableHead>파일명</TableHead>
-                          <TableHead>크기</TableHead>
-                          <TableHead>메모</TableHead>
-                          <TableHead>제출일시</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {submissionHistory.map((sub) => (
-                          <TableRow key={sub.id} data-testid={`row-history-${sub.id}`}>
-                            <TableCell>
-                              <Badge variant={sub.submissionType === 'final' ? 'default' : 'outline'}>
-                                {sub.submissionType === 'final' ? '완성본' : '초안'}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="max-w-[200px] truncate">
-                              <div className="flex items-center gap-1">
-                                <FileText className="w-3 h-3 flex-shrink-0" />
-                                {sub.fileName}
-                              </div>
-                            </TableCell>
-                            <TableCell>{formatFileSize(sub.fileSize)}</TableCell>
-                            <TableCell className="max-w-[150px] truncate">{sub.memo || '-'}</TableCell>
-                            <TableCell className="text-xs">
-                              {sub.submittedAt ? new Date(sub.submittedAt).toLocaleString('ko-KR') : '-'}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Link2 className="w-4 h-4" />
+                  게시물 정보
+                </CardTitle>
+                <CardDescription>
+                  콘텐츠 게시 후 아래 정보를 입력해주세요
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="postUrl">게시물 URL</Label>
+                  <Input
+                    id="postUrl"
+                    placeholder="https://instagram.com/p/... 또는 https://youtube.com/..."
+                    value={postUrl}
+                    onChange={(e) => setPostUrl(e.target.value)}
+                    data-testid="input-post-url"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="metaPartnershipCode">Meta 파트너십 코드</Label>
+                  <Input
+                    id="metaPartnershipCode"
+                    placeholder="파트너십 코드를 입력해주세요"
+                    value={metaPartnershipCode}
+                    onChange={(e) => setMetaPartnershipCode(e.target.value)}
+                    data-testid="input-meta-partnership-code"
+                  />
+                </div>
+                <Button
+                  className="w-full"
+                  onClick={() => savePostInfo.mutate()}
+                  disabled={savePostInfo.isPending}
+                  data-testid="button-save-post-info"
+                >
+                  {savePostInfo.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  저장
+                </Button>
+              </CardContent>
+            </Card>
           </div>
+        )}
+
+        {verifiedData && submissionHistory.length > 0 && (
+          <Card className="mt-4">
+            <CardContent className="pt-4">
+              <h3 className="font-semibold mb-3 flex items-center gap-2">
+                <Clock className="w-4 h-4" />
+                제출 내역 ({submissionHistory.length}건)
+              </h3>
+              <div className="overflow-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>파일명</TableHead>
+                      <TableHead>크기</TableHead>
+                      <TableHead>제출일시</TableHead>
+                      <TableHead>파일</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {submissionHistory.map((sub) => (
+                      <TableRow key={sub.id} data-testid={`row-history-${sub.id}`}>
+                        <TableCell className="max-w-[200px] truncate">
+                          <div className="flex items-center gap-1">
+                            <FileText className="w-3 h-3 flex-shrink-0" />
+                            {sub.fileName}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-xs whitespace-nowrap">{formatFileSize(sub.fileSize)}</TableCell>
+                        <TableCell className="text-xs whitespace-nowrap">
+                          {sub.submittedAt ? new Date(sub.submittedAt).toLocaleString('ko-KR') : '-'}
+                        </TableCell>
+                        <TableCell>
+                          {sub.oneDriveLink ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2"
+                              onClick={() => window.open(sub.oneDriveLink!, '_blank')}
+                              data-testid={`button-view-file-${sub.id}`}
+                            >
+                              <ExternalLink className="w-3 h-3 mr-1" />
+                              열기
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
         )}
       </div>
     </div>
