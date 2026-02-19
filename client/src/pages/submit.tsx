@@ -38,7 +38,7 @@ export default function SubmitPage() {
   
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
-  const [verifiedData, setVerifiedData] = useState<{ influencerId: number; influencerName: string; lineItemId: number; settlementInfo: SettlementInfo; hasSettlementInfo: boolean } | null>(null);
+  const [verifiedData, setVerifiedData] = useState<{ influencerId: number; influencerName: string; lineItemId: number; settlementInfo: SettlementInfo; hasSettlementInfo: boolean; settlementConfirmed: boolean } | null>(null);
   const [submissionType, setSubmissionType] = useState<'draft' | 'final'>('draft');
   const [memo, setMemo] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);

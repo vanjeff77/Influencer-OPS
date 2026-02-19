@@ -4077,7 +4077,8 @@ export async function registerRoutes(
           businessRegNo: maskValue(inf.businessRegNo),
           freelancerId: maskValue(inf.freelancerId),
         },
-        hasSettlementInfo: !!(inf.bankName && inf.accountHolder && inf.accountNumber && inf.settlementType && inf.businessName && (inf.settlementType === '프리랜서' ? inf.freelancerId : inf.businessRegNo))
+        hasSettlementInfo: !!(inf.bankName && inf.accountHolder && inf.accountNumber && inf.settlementType && inf.businessName && (inf.settlementType === '프리랜서' ? inf.freelancerId : inf.businessRegNo)),
+        settlementConfirmed: !!result.lineItem.settlementConfirmedAt
       });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
@@ -4141,6 +4142,7 @@ export async function registerRoutes(
       }
 
       await db.update(influencers).set(updateData).where(eq(influencers.id, result.influencer.id));
+      await db.update(campaignInfluencers).set({ settlementConfirmedAt: new Date() }).where(eq(campaignInfluencers.id, result.lineItem.id));
 
       res.json({ success: true });
     } catch (err: any) {
