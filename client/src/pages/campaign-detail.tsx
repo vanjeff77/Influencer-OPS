@@ -1004,7 +1004,15 @@ export default function CampaignDetail() {
                   campaignId: item.campaignId,
                   influencerId: item.influencerId,
                   status: item.status,
+                  offerFee: item.offerFee,
+                  draftDueAt: item.draftDueAt ? new Date(item.draftDueAt).toISOString() : null,
+                  uploadDueAt: item.uploadDueAt ? new Date(item.uploadDueAt).toISOString() : null,
                   firstContactCompleted: item.firstContactCompleted,
+                  firstContactAt: item.firstContactAt ? new Date(item.firstContactAt).toISOString() : null,
+                  firstContactMethod: item.firstContactMethod,
+                  offerUsageMonths: item.offerUsageMonths,
+                  offerUsageRenewalFee: item.offerUsageRenewalFee,
+                  stage: item.stage,
                   influencer: item.influencer,
                 })) || []
               }

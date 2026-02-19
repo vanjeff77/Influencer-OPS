@@ -848,11 +848,11 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
     setUploadDueAt(lineItem.uploadDueAt ? new Date(lineItem.uploadDueAt).toISOString().split('T')[0] : "");
     setOfferUsageMonths(lineItem.offerUsageMonths?.toString() || "");
     setOfferUsageRenewalFee(lineItem.offerUsageRenewalFee?.toString() || "");
-  }, [lineItem.offerFee, lineItem.draftDueAt, lineItem.uploadDueAt, lineItem.offerUsageMonths, lineItem.offerUsageRenewalFee]);
+  }, [lineItem.id, lineItem.offerFee, lineItem.draftDueAt, lineItem.uploadDueAt, lineItem.offerUsageMonths, lineItem.offerUsageRenewalFee]);
 
   useEffect(() => {
     setMemo(influencer?.memo || "");
-  }, [influencer?.memo]);
+  }, [influencer?.id, influencer?.memo]);
 
   const [settlementType, setSettlementType] = useState(influencer?.settlementType || "");
   const [bankName, setBankName] = useState(influencer?.bankName || "");
@@ -861,6 +861,16 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
   const [businessName, setBusinessName] = useState(influencer?.businessName || "");
   const [businessRegNo, setBusinessRegNo] = useState(influencer?.businessRegNo || "");
   const [freelancerId, setFreelancerId] = useState(influencer?.freelancerId || "");
+
+  useEffect(() => {
+    setSettlementType(influencer?.settlementType || "");
+    setBankName(influencer?.bankName || "");
+    setAccountHolder(influencer?.accountHolder || "");
+    setAccountNumber(influencer?.accountNumber || "");
+    setBusinessName(influencer?.businessName || "");
+    setBusinessRegNo(influencer?.businessRegNo || "");
+    setFreelancerId(influencer?.freelancerId || "");
+  }, [influencer?.id, influencer?.settlementType, influencer?.bankName, influencer?.accountHolder, influencer?.accountNumber, influencer?.businessName, influencer?.businessRegNo, influencer?.freelancerId]);
 
   const updateInfluencer = useMutation({
     mutationFn: (data: any) => apiRequest('PATCH', `/api/influencers/${influencer?.id}`, data),
