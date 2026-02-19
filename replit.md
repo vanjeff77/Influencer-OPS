@@ -22,6 +22,8 @@ Preferred communication style: Simple, everyday language.
 8. **edit 정확성** — old_string은 파일에서 읽은 그대로. 줄 번호 포함 금지, 충분한 컨텍스트 포함.
 9. **에러 대응** — 로그 확인 → 원인 추적 → 최소 수정. 전체 재작성은 최후의 수단.
 10. **테스트** — API 변경은 curl, UI 변경은 e2e 테스트로 검증. 검증 범위는 변경 규모에 비례.
+11. **Port conflict 대응** — 워크플로우 재시작 실패 시: (1) `lsof -i :5000`으로 포트 점유 프로세스 확인 (2) 좀비 프로세스가 있으면 `kill` 후 워크플로우 재시작 (3) curl로 서버 정상 응답 확인되면 재시도 루프를 멈추고 사용자에게 상황 보고. 포트 충돌 후 워크플로우 상태가 꼬일 수 있으므로 완전한 프로세스 정리 후 재시작이 핵심.
+12. **도구 실패 시 재시도 제한** — `restart_workflow`나 `mark_completed_and_get_feedback`이 2회 연속 실패하면, curl로 서버 상태만 확인하고 사용자에게 현재 상황을 보고한다. 무한 재시도 루프 금지.
 
 ## System Architecture
 
