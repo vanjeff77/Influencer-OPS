@@ -7,8 +7,8 @@ import { api } from "@shared/routes";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
-import { campaignInfluencers, campaigns, influencers, influencerAccounts, users, workspaceMembers, workspaces, emailAccounts } from "@shared/schema";
-import { eq, and, or, inArray, sql } from "drizzle-orm";
+import { campaignInfluencers, campaigns, influencers, influencerAccounts, users, workspaceMembers, workspaces, emailAccounts, contentSubmissions } from "@shared/schema";
+import { eq, and, or, inArray, sql, isNull, desc } from "drizzle-orm";
 import { getImapSmtpSettings } from "./smtp";
 import { normalizeInstagramHandle, normalizeInstagramUrl } from "@shared/utils";
 
@@ -4314,23 +4314,102 @@ export async function registerRoutes(
     }
   });
 
-  // Authenticated: 캠페인별 제출 이력 조회
+  // Authenticated: 캠페인별 제출 이력 조회 (미조회 건수 포함)
   app.get('/api/campaigns/:id/submissions', async (req, res) => {
     try {
       if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
       const campaignId = parseInt(req.params.id);
       const submissions = await storage.getContentSubmissions(campaignId);
       
-      // 인플루언서 정보 추가
       const result = await Promise.all(submissions.map(async (sub) => {
         const influencer = await storage.getInfluencer(sub.influencerId);
         return {
-          ...sub,
-          influencerName: influencer?.name || '알 수 없음'
+          id: sub.id,
+          campaignId: sub.campaignId,
+          lineItemId: sub.lineItemId,
+          influencerId: sub.influencerId,
+          influencerName: influencer?.name || '알 수 없음',
+          submissionType: sub.submissionType,
+          fileName: sub.fileName,
+          fileSize: sub.fileSize,
+          oneDriveFileId: sub.oneDriveFileId,
+          oneDriveLink: sub.oneDriveLink,
+          memo: sub.memo,
+          submittedAt: sub.submittedAt,
+          reviewedAt: sub.reviewedAt,
+          reviewedByUserId: sub.reviewedByUserId,
         };
       }));
       
-      res.json(result);
+      // 라인아이템별 미조회 건수 계산
+      const unreviewedByLineItem: Record<number, number> = {};
+      for (const sub of result) {
+        if (!sub.reviewedAt) {
+          unreviewedByLineItem[sub.lineItemId] = (unreviewedByLineItem[sub.lineItemId] || 0) + 1;
+        }
+      }
+      
+      res.json({ submissions: result, unreviewedByLineItem });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Authenticated: 특정 인플루언서의 제출 이력 조회 완료 마킹
+  app.post('/api/campaigns/:id/submissions/mark-reviewed', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const user = req.user as any;
+      const campaignId = parseInt(req.params.id);
+      const { lineItemId } = req.body;
+      
+      if (!lineItemId) return res.status(400).json({ message: "lineItemId is required" });
+      
+      await db.update(contentSubmissions)
+        .set({ reviewedAt: new Date(), reviewedByUserId: user.id })
+        .where(
+          and(
+            eq(contentSubmissions.campaignId, campaignId),
+            eq(contentSubmissions.lineItemId, lineItemId),
+            isNull(contentSubmissions.reviewedAt)
+          )
+        );
+      
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Public: 인플루언서 본인의 제출 이력 조회 (이메일 기반)
+  app.post('/api/submit/:campaignId/history', async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.campaignId);
+      const { email } = req.body;
+      if (!email) return res.status(400).json({ message: "이메일을 입력해주세요" });
+      
+      const influencer = await db.select().from(influencers)
+        .where(eq(influencers.email, email.trim().toLowerCase()))
+        .limit(1);
+      if (!influencer.length) return res.json([]);
+      
+      const subs = await db.select().from(contentSubmissions)
+        .where(
+          and(
+            eq(contentSubmissions.campaignId, campaignId),
+            eq(contentSubmissions.influencerId, influencer[0].id)
+          )
+        )
+        .orderBy(desc(contentSubmissions.submittedAt));
+      
+      res.json(subs.map(s => ({
+        id: s.id,
+        submissionType: s.submissionType,
+        fileName: s.fileName,
+        fileSize: s.fileSize,
+        memo: s.memo,
+        submittedAt: s.submittedAt,
+      })));
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }

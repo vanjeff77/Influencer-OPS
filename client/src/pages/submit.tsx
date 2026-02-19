@@ -9,7 +9,9 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, CheckCircle, Loader2, FileVideo, FileImage, File, AlertCircle } from "lucide-react";
+import { Upload, CheckCircle, Loader2, FileVideo, FileImage, File, AlertCircle, Clock, FileText } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 
 type Step = 'email' | 'settlement' | 'upload' | 'complete';
 
@@ -44,6 +46,7 @@ export default function SubmitPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
+  const [submissionHistory, setSubmissionHistory] = useState<{ id: number; submissionType: string; fileName: string; fileSize: number; memo: string | null; submittedAt: string }[]>([]);
 
   const [settlement, setSettlement] = useState<SettlementInfo>({
     bankName: '', accountHolder: '', accountNumber: '',
@@ -90,7 +93,11 @@ export default function SubmitPage() {
         businessRegNo: '',
         freelancerId: '',
       });
-      setStep('settlement');
+      if (data.settlementConfirmed && data.hasSettlementInfo) {
+        setStep('upload');
+      } else {
+        setStep('settlement');
+      }
     },
     onError: (error: Error) => {
       toast({ title: "인증 실패", description: error.message, variant: "destructive" });
@@ -142,6 +149,23 @@ export default function SubmitPage() {
     if (settlement.settlementType === '사업자' && !settlement.businessRegNo) return false;
     return true;
   };
+
+  const fetchHistory = useCallback(async () => {
+    if (!email || !campaignId) return;
+    try {
+      const res = await fetch(`/api/submit/${campaignId}/history`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSubmissionHistory(data);
+      }
+    } catch (e) {
+      console.error('Failed to fetch history:', e);
+    }
+  }, [email, campaignId]);
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -228,6 +252,7 @@ export default function SubmitPage() {
 
       setStep('complete');
       toast({ title: "업로드 완료", description: "파일이 성공적으로 제출되었습니다." });
+      fetchHistory();
 
     } catch (error: any) {
       toast({ title: "업로드 실패", description: error.message, variant: "destructive" });
@@ -551,28 +576,77 @@ export default function SubmitPage() {
         )}
 
         {step === 'complete' && (
-          <Card>
-            <CardContent className="pt-6 text-center">
-              <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
-              <h2 className="text-xl font-semibold mb-2">제출 완료!</h2>
-              <p className="text-muted-foreground mb-4">
-                파일이 성공적으로 업로드되었습니다.<br />
-                담당자가 확인 후 연락드리겠습니다.
-              </p>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setStep('upload');
-                  setSelectedFile(null);
-                  setMemo('');
-                  setUploadProgress(0);
-                }}
-                data-testid="button-upload-another"
-              >
-                추가 파일 업로드
-              </Button>
-            </CardContent>
-          </Card>
+          <div className="space-y-4">
+            <Card>
+              <CardContent className="pt-6 text-center">
+                <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
+                <h2 className="text-xl font-semibold mb-2">제출 완료!</h2>
+                <p className="text-muted-foreground mb-4">
+                  파일이 성공적으로 업로드되었습니다.<br />
+                  담당자가 확인 후 연락드리겠습니다.
+                </p>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setStep('upload');
+                    setSelectedFile(null);
+                    setMemo('');
+                    setUploadProgress(0);
+                  }}
+                  data-testid="button-upload-another"
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  추가 파일 업로드
+                </Button>
+              </CardContent>
+            </Card>
+
+            {submissionHistory.length > 0 && (
+              <Card>
+                <CardContent className="pt-4">
+                  <h3 className="font-semibold mb-3 flex items-center gap-2">
+                    <Clock className="w-4 h-4" />
+                    제출 내역 ({submissionHistory.length}건)
+                  </h3>
+                  <div className="overflow-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>유형</TableHead>
+                          <TableHead>파일명</TableHead>
+                          <TableHead>크기</TableHead>
+                          <TableHead>메모</TableHead>
+                          <TableHead>제출일시</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {submissionHistory.map((sub) => (
+                          <TableRow key={sub.id} data-testid={`row-history-${sub.id}`}>
+                            <TableCell>
+                              <Badge variant={sub.submissionType === 'final' ? 'default' : 'outline'}>
+                                {sub.submissionType === 'final' ? '완성본' : '초안'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="max-w-[200px] truncate">
+                              <div className="flex items-center gap-1">
+                                <FileText className="w-3 h-3 flex-shrink-0" />
+                                {sub.fileName}
+                              </div>
+                            </TableCell>
+                            <TableCell>{formatFileSize(sub.fileSize)}</TableCell>
+                            <TableCell className="max-w-[150px] truncate">{sub.memo || '-'}</TableCell>
+                            <TableCell className="text-xs">
+                              {sub.submittedAt ? new Date(sub.submittedAt).toLocaleString('ko-KR') : '-'}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         )}
       </div>
     </div>

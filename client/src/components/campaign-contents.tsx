@@ -14,7 +14,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { 
   ExternalLink, Save, FileText, CheckCircle2, Image,
-  Instagram, Youtube, Twitter, Copy, Upload, Download
+  Instagram, Youtube, Twitter, Copy, Upload, Download, FolderOpen
 } from "lucide-react";
 import type { CampaignInfluencer, Influencer, InfluencerAccount, FeedbackNote, User } from "@shared/schema";
 import { api } from "@shared/routes";
@@ -56,13 +56,20 @@ interface ContentSubmission {
   lineItemId: number;
   influencerId: number;
   influencerName: string;
-  type: string;
+  submissionType: string;
   fileName: string;
   fileSize: number;
-  oneDriveItemId: string | null;
-  oneDrivePath: string | null;
+  oneDriveFileId: string | null;
+  oneDriveLink: string | null;
   memo: string | null;
   submittedAt: string;
+  reviewedAt: string | null;
+  reviewedByUserId: number | null;
+}
+
+interface SubmissionsResponse {
+  submissions: ContentSubmission[];
+  unreviewedByLineItem: Record<number, number>;
 }
 
 export function CampaignContents({ campaignId, lineItems }: CampaignContentsProps) {
@@ -70,17 +77,18 @@ export function CampaignContents({ campaignId, lineItems }: CampaignContentsProp
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [reviewFilter, setReviewFilter] = useState<string>("all");
-  const [showSubmissions, setShowSubmissions] = useState(false);
+  const [historyItemId, setHistoryItemId] = useState<number | null>(null);
   
   const [draftUrl, setDraftUrl] = useState("");
   const [finalUrl, setFinalUrl] = useState("");
   const [reviewStatus, setReviewStatus] = useState("");
   const [internalFeedback, setInternalFeedback] = useState("");
   
-  const { data: submissions = [], isLoading: submissionsLoading, isError: submissionsError } = useQuery<ContentSubmission[]>({
+  const { data: submissionsData } = useQuery<SubmissionsResponse>({
     queryKey: ['/api/campaigns', campaignId, 'submissions'],
-    enabled: showSubmissions
   });
+  const submissions = submissionsData?.submissions || [];
+  const unreviewedByLineItem = submissionsData?.unreviewedByLineItem || {};
 
   const selectedItem = useMemo(() => {
     return lineItems.find(item => item.id === selectedItemId);
@@ -166,6 +174,39 @@ export function CampaignContents({ campaignId, lineItems }: CampaignContentsProp
     return counts;
   }, [lineItems]);
 
+  const historyItem = useMemo(() => {
+    return lineItems.find(item => item.id === historyItemId);
+  }, [lineItems, historyItemId]);
+
+  const historySubmissions = useMemo(() => {
+    if (!historyItem) return [];
+    return submissions.filter(s => s.lineItemId === historyItem.id);
+  }, [submissions, historyItem]);
+
+  const markReviewed = useMutation({
+    mutationFn: async (lineItemId: number) => {
+      return apiRequest('POST', `/api/campaigns/${campaignId}/submissions/mark-reviewed`, { lineItemId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/campaigns', campaignId, 'submissions'] });
+    }
+  });
+
+  const handleOpenHistory = (itemId: number) => {
+    setHistoryItemId(itemId);
+    if (unreviewedByLineItem[itemId]) {
+      markReviewed.mutate(itemId);
+    }
+  };
+
+  const formatFileSize = (bytes: number | null) => {
+    if (!bytes) return '-';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+  };
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap gap-2 items-center">
@@ -196,15 +237,6 @@ export function CampaignContents({ campaignId, lineItems }: CampaignContentsProp
             <ExternalLink className="w-4 h-4 mr-1" />
             제출 링크 복사
           </Button>
-          <Button
-            variant={showSubmissions ? "default" : "outline"}
-            size="sm"
-            onClick={() => setShowSubmissions(!showSubmissions)}
-            data-testid="button-toggle-submissions"
-          >
-            <Upload className="w-4 h-4 mr-1" />
-            인플루언서 제출 이력 {submissions.length > 0 && `(${submissions.length})`}
-          </Button>
         </div>
         <div className="flex flex-wrap gap-2">
           {REVIEW_STATUSES.map(status => (
@@ -221,55 +253,6 @@ export function CampaignContents({ campaignId, lineItems }: CampaignContentsProp
         </div>
       </div>
 
-      {showSubmissions && (
-        <Card>
-          <CardContent className="p-4">
-            <h3 className="font-semibold mb-3 flex items-center gap-2">
-              <Upload className="w-4 h-4" />
-              인플루언서 제출 이력
-            </h3>
-            {submissionsLoading ? (
-              <div className="text-sm text-muted-foreground">로딩 중...</div>
-            ) : submissionsError ? (
-              <div className="text-sm text-destructive">제출 이력을 불러오는데 실패했습니다.</div>
-            ) : submissions.length === 0 ? (
-              <div className="text-sm text-muted-foreground">제출된 콘텐츠가 없습니다.</div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>인플루언서</TableHead>
-                    <TableHead>유형</TableHead>
-                    <TableHead>파일명</TableHead>
-                    <TableHead>크기</TableHead>
-                    <TableHead>메모</TableHead>
-                    <TableHead>제출일시</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {submissions.map((sub) => (
-                    <TableRow key={sub.id} data-testid={`row-submission-${sub.id}`}>
-                      <TableCell className="font-medium">{sub.influencerName}</TableCell>
-                      <TableCell>
-                        <Badge variant={sub.type === 'final' ? 'default' : 'outline'}>
-                          {sub.type === 'final' ? '완성본' : '초안'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="max-w-[200px] truncate">{sub.fileName}</TableCell>
-                      <TableCell>{(sub.fileSize / 1024 / 1024).toFixed(2)} MB</TableCell>
-                      <TableCell className="max-w-[150px] truncate">{sub.memo || '-'}</TableCell>
-                      <TableCell>
-                        {sub.submittedAt ? format(new Date(sub.submittedAt), 'yyyy-MM-dd HH:mm') : '-'}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
       <Card>
         <CardContent className="p-0">
           <div className="overflow-auto">
@@ -278,6 +261,7 @@ export function CampaignContents({ campaignId, lineItems }: CampaignContentsProp
                 <TableRow>
                   <TableHead className="min-w-[180px]">인플루언서</TableHead>
                   <TableHead className="w-24">검토 상태</TableHead>
+                  <TableHead className="w-24">제출내역</TableHead>
                   <TableHead className="w-32">초안</TableHead>
                   <TableHead className="w-24">피드백</TableHead>
                   <TableHead className="w-32">완성본</TableHead>
@@ -321,6 +305,34 @@ export function CampaignContents({ campaignId, lineItems }: CampaignContentsProp
                           {REVIEW_STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                         </SelectContent>
                       </Select>
+                    </TableCell>
+                    <TableCell>
+                      {(() => {
+                        const subCount = submissions.filter(s => s.lineItemId === item.id).length;
+                        const unreviewed = unreviewedByLineItem[item.id] || 0;
+                        return subCount > 0 ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 relative"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenHistory(item.id);
+                            }}
+                            data-testid={`button-submissions-${item.id}`}
+                          >
+                            <FolderOpen className="w-3 h-3 mr-1" />
+                            {subCount}건
+                            {unreviewed > 0 && (
+                              <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[16px] h-4 px-1 text-[10px] font-bold bg-red-500 text-white rounded-full">
+                                N
+                              </span>
+                            )}
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">-</span>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell>
                       {item.draftUrl ? (
@@ -369,7 +381,7 @@ export function CampaignContents({ campaignId, lineItems }: CampaignContentsProp
                 ))}
                 {filteredItems.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-12">
+                    <TableCell colSpan={6} className="text-center py-12">
                       <Image className="w-12 h-12 mx-auto mb-4 opacity-30" />
                       <p className="text-muted-foreground">등록된 인플루언서가 없습니다</p>
                     </TableCell>
@@ -529,6 +541,79 @@ export function CampaignContents({ campaignId, lineItems }: CampaignContentsProp
                   </Button>
                 </div>
               </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!historyItemId} onOpenChange={(open) => !open && setHistoryItemId(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FolderOpen className="w-5 h-5" />
+              제출 내역
+            </DialogTitle>
+            <DialogDescription>
+              {historyItem?.influencer?.name || "인플루언서"} - 파일 제출 기록
+            </DialogDescription>
+          </DialogHeader>
+
+          {historySubmissions.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              제출된 파일이 없습니다.
+            </div>
+          ) : (
+            <div className="overflow-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>유형</TableHead>
+                    <TableHead>파일명</TableHead>
+                    <TableHead>크기</TableHead>
+                    <TableHead>메모</TableHead>
+                    <TableHead>제출일시</TableHead>
+                    <TableHead>파일</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {historySubmissions.map((sub) => (
+                    <TableRow key={sub.id} data-testid={`row-history-submission-${sub.id}`}>
+                      <TableCell>
+                        <Badge variant={sub.submissionType === 'final' ? 'default' : 'outline'}>
+                          {sub.submissionType === 'final' ? '완성본' : '초안'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="max-w-[200px]">
+                        <div className="flex items-center gap-1">
+                          <FileText className="w-3 h-3 flex-shrink-0" />
+                          <span className="truncate">{sub.fileName}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-xs whitespace-nowrap">{formatFileSize(sub.fileSize)}</TableCell>
+                      <TableCell className="max-w-[150px] truncate text-xs">{sub.memo || '-'}</TableCell>
+                      <TableCell className="text-xs whitespace-nowrap">
+                        {sub.submittedAt ? format(new Date(sub.submittedAt), 'yyyy-MM-dd HH:mm') : '-'}
+                      </TableCell>
+                      <TableCell>
+                        {sub.oneDriveLink ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2"
+                            onClick={() => window.open(sub.oneDriveLink!, '_blank')}
+                            data-testid={`button-view-file-${sub.id}`}
+                          >
+                            <ExternalLink className="w-3 h-3 mr-1" />
+                            열기
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           )}
         </DialogContent>

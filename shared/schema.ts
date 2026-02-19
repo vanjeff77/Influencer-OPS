@@ -678,6 +678,8 @@ export const contentSubmissions = pgTable("content_submissions", {
   memo: text("memo"),
   submittedAt: timestamp("submitted_at").defaultNow(),
   notifiedAt: timestamp("notified_at"), // 담당자에게 알림 발송 시간
+  reviewedAt: timestamp("reviewed_at"), // 담당자 조회 완료 시간
+  reviewedByUserId: integer("reviewed_by_user_id"), // 조회한 담당자 ID
 });
 
 export const insertContentSubmissionSchema = createInsertSchema(contentSubmissions).omit({ id: true, submittedAt: true });

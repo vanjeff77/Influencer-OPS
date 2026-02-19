@@ -65,6 +65,11 @@ Preferred communication style: Simple, everyday language.
     - **Integrated Messenger**: 3-pane layout for real-time campaign communication, Gmail syncing, influencer detail editing, and DOMPurify for content sanitization.
 - **Mobile Optimization**: Fully responsive UI using Tailwind CSS.
 - **Influencer Campaign History**: Displays past campaigns for an influencer within their detail panel, including navigation to campaign details.
+- **Content Submission History**:
+    - **Influencer View**: After upload, influencers see their submission history (type, filename, size, date) with option to upload more files.
+    - **Campaign Production Tab**: Per-influencer submission count button with red "N" badge for unreviewed submissions. Dialog shows full history with OneDrive file links.
+    - **Review Tracking**: Auto-marks submissions as reviewed when staff opens the history dialog. `reviewedAt` and `reviewedByUserId` tracked per submission.
+    - **Settlement Skip**: Returning influencers with confirmed settlement info (`settlementConfirmedAt`) skip the settlement step on re-upload.
 - **Finance & Tracking**: Real-time finance summary, CSV export for tracking data.
 - **Settlement Management**:
     - **Settlement Work Queue**: Finance page with KPI cards and filterable work queue for upload-completed line items.
