@@ -4390,20 +4390,8 @@ export async function registerRoutes(
       const { email, postUrl, metaPartnershipCode } = req.body;
       if (!email) return res.status(400).json({ message: "이메일을 입력해주세요" });
 
-      const influencer = await db.select().from(influencers)
-        .where(eq(influencers.email, email.trim().toLowerCase()))
-        .limit(1);
-      if (!influencer.length) return res.status(404).json({ message: "등록된 인플루언서를 찾을 수 없습니다" });
-
-      const lineItem = await db.select().from(campaignInfluencers)
-        .where(
-          and(
-            eq(campaignInfluencers.campaignId, campaignId),
-            eq(campaignInfluencers.influencerId, influencer[0].id)
-          )
-        )
-        .limit(1);
-      if (!lineItem.length) return res.status(404).json({ message: "캠페인 참여 정보를 찾을 수 없습니다" });
+      const result = await storage.findInfluencerByEmailInCampaign(campaignId, email.toLowerCase().trim());
+      if (!result) return res.status(404).json({ message: "캠페인 참여 정보를 찾을 수 없습니다" });
 
       const updates: any = {};
       if (postUrl !== undefined) updates.postUrl = postUrl || null;
@@ -4411,7 +4399,7 @@ export async function registerRoutes(
 
       await db.update(campaignInfluencers)
         .set(updates)
-        .where(eq(campaignInfluencers.id, lineItem[0].id));
+        .where(eq(campaignInfluencers.id, result.lineItem.id));
 
       res.json({ success: true });
     } catch (err: any) {
@@ -4426,16 +4414,14 @@ export async function registerRoutes(
       const { email } = req.body;
       if (!email) return res.status(400).json({ message: "이메일을 입력해주세요" });
       
-      const influencer = await db.select().from(influencers)
-        .where(eq(influencers.email, email.trim().toLowerCase()))
-        .limit(1);
-      if (!influencer.length) return res.json([]);
+      const result = await storage.findInfluencerByEmailInCampaign(campaignId, email.toLowerCase().trim());
+      if (!result) return res.json([]);
       
       const subs = await db.select().from(contentSubmissions)
         .where(
           and(
             eq(contentSubmissions.campaignId, campaignId),
-            eq(contentSubmissions.influencerId, influencer[0].id)
+            eq(contentSubmissions.influencerId, result.influencer.id)
           )
         )
         .orderBy(desc(contentSubmissions.submittedAt));
