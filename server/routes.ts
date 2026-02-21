@@ -2058,7 +2058,11 @@ export async function registerRoutes(
       const account = (conv.emailAccountId && userAccounts.find(a => a.id === conv.emailAccountId)) || userAccounts[0];
 
       const { convertToGmailCompatibleHtml } = await import('./smtp');
-      let finalBody = convertToGmailCompatibleHtml(body);
+      const isPlainText = !/<[a-z][\s\S]*>/i.test(body);
+      const htmlBody = isPlainText 
+        ? body.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')
+        : body;
+      let finalBody = convertToGmailCompatibleHtml(htmlBody);
       if (account.useSignature && account.signature) {
         finalBody += `<br><br>--<br>${account.signature}`;
       }
@@ -2067,9 +2071,11 @@ export async function registerRoutes(
         ? (Array.isArray(cc) ? cc : cc.split(',').map((e: string) => e.trim()).filter(Boolean))
         : [];
       
-      const existingMessages = await storage.getConversationMessages(conversationId);
+      const existingMsgs = await storage.getConversationMessages(conversationId);
+      const isReply = existingMsgs.length > 0;
+      
       const previousCcSet = new Set<string>();
-      for (const msg of existingMessages) {
+      for (const msg of existingMsgs) {
         if (msg.ccEmails && Array.isArray(msg.ccEmails)) {
           for (const email of msg.ccEmails) {
             if (email) previousCcSet.add(email.toLowerCase().trim());
@@ -2093,7 +2099,16 @@ export async function registerRoutes(
       let gmailMessageId: string | undefined;
       let gmailThreadId: string | undefined;
       let sendStatus = 'sent';
-      const finalSubject = conv.subjectPrefix ? `${conv.subjectPrefix} ${subject || ''}`.trim() : subject;
+      
+      let finalSubject: string;
+      if (isReply && conv.subjectPrefix) {
+        const originalSubject = conv.subjectPrefix;
+        finalSubject = originalSubject.startsWith('Re:') ? originalSubject : `Re: ${originalSubject}`;
+      } else if (conv.subjectPrefix) {
+        finalSubject = subject ? `${conv.subjectPrefix} ${subject}`.trim() : conv.subjectPrefix;
+      } else {
+        finalSubject = subject || '';
+      }
       
       try {
         if (account.provider === 'imap') {
@@ -2114,7 +2129,6 @@ export async function registerRoutes(
             password,
           });
           
-          const existingMsgs = await storage.getConversationMessages(conversationId);
           const lastInbound = existingMsgs.filter(m => m.direction === 'inbound').pop();
           const lastMessageId = lastInbound?.gmailMessageId || existingMsgs[existingMsgs.length - 1]?.gmailMessageId;
           
@@ -2144,7 +2158,26 @@ export async function registerRoutes(
           }
         } else {
           const { sendEmail: sendGmailEmail } = await import('./gmail');
-          const result = await sendGmailEmail(toEmail, finalSubject, finalBody, conv.gmailThreadId || undefined, ccEmails);
+          let threadIdForReply = conv.gmailThreadId;
+          if (!threadIdForReply && isReply) {
+            const msgWithThread = existingMsgs.find(m => m.gmailThreadId);
+            threadIdForReply = msgWithThread?.gmailThreadId || null;
+          }
+          
+          let gmailReplyHeaders: { inReplyTo?: string; references?: string[] } | undefined;
+          if (isReply) {
+            const lastInbound = existingMsgs.filter(m => m.direction === 'inbound').pop();
+            const lastMsgId = lastInbound?.gmailMessageId || existingMsgs[existingMsgs.length - 1]?.gmailMessageId;
+            if (lastMsgId) {
+              gmailReplyHeaders = {
+                inReplyTo: lastMsgId,
+                references: existingMsgs
+                  .map(m => m.gmailMessageId)
+                  .filter((id): id is string => !!id && id.startsWith('<')),
+              };
+            }
+          }
+          const result = await sendGmailEmail(toEmail, finalSubject, finalBody, threadIdForReply || undefined, ccEmails, undefined, gmailReplyHeaders);
           gmailMessageId = result.id || undefined;
           gmailThreadId = result.threadId || undefined;
           

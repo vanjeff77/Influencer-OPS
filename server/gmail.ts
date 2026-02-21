@@ -64,7 +64,7 @@ export interface EmailAttachment {
   mimeType: string;
 }
 
-export async function sendEmail(to: string, subject: string, body: string, threadId?: string, cc?: string[], attachments?: EmailAttachment[]) {
+export async function sendEmail(to: string, subject: string, body: string, threadId?: string, cc?: string[], attachments?: EmailAttachment[], replyHeaders?: { inReplyTo?: string; references?: string[] }) {
   const gmail = await getUncachableGmailClient();
   
   const profile = await gmail.users.getProfile({ userId: 'me' });
@@ -81,6 +81,12 @@ export async function sendEmail(to: string, subject: string, body: string, threa
     ];
     if (cc && cc.length > 0) {
       headerParts.push(`Cc: ${cc.join(', ')}`);
+    }
+    if (replyHeaders?.inReplyTo) {
+      headerParts.push(`In-Reply-To: ${replyHeaders.inReplyTo}`);
+    }
+    if (replyHeaders?.references && replyHeaders.references.length > 0) {
+      headerParts.push(`References: ${replyHeaders.references.join(' ')}`);
     }
     headerParts.push(
       `Subject: =?UTF-8?B?${Buffer.from(subject).toString('base64')}?=`,
@@ -114,6 +120,12 @@ export async function sendEmail(to: string, subject: string, body: string, threa
     ];
     if (cc && cc.length > 0) {
       messageParts.push(`Cc: ${cc.join(', ')}`);
+    }
+    if (replyHeaders?.inReplyTo) {
+      messageParts.push(`In-Reply-To: ${replyHeaders.inReplyTo}`);
+    }
+    if (replyHeaders?.references && replyHeaders.references.length > 0) {
+      messageParts.push(`References: ${replyHeaders.references.join(' ')}`);
     }
     messageParts.push(
       `Subject: ${subject}`,
