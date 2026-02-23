@@ -63,6 +63,7 @@ Preferred communication style: Simple, everyday language.
     - **Attach Existing Email Thread**: Wizard for linking external email threads via IMAP search, importing all messages.
     - **Bulk Email Sending**: Queue-based 1:1 delivery with throttling, WYSIWYG editor, variable substitution, validation, and first contact tracking.
     - **Integrated Messenger**: 3-pane layout for real-time campaign communication, Gmail syncing, influencer detail editing, and DOMPurify for content sanitization.
+    - **Auto Email Sync**: Gmail History API-based incremental sync (`server/email-sync.ts`). Background worker runs every 3 minutes using `lastHistoryId` per account for efficient delta sync. Frontend auto-refreshes conversation list (30s) and messages (15s). Manual sync-all endpoint (`POST /api/campaigns/:id/sync-all`) for immediate batch sync. History 404 fallback triggers thread-based backfill.
 - **Mobile Optimization**: Fully responsive UI using Tailwind CSS.
 - **Influencer Campaign History**: Displays past campaigns for an influencer within their detail panel, including navigation to campaign details.
 - **Content Submission History**:

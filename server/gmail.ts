@@ -261,6 +261,47 @@ export async function getThreads(query?: string, maxResults: number = 50) {
   return response.data.threads || [];
 }
 
+export async function getHistoryId(): Promise<string> {
+  const gmail = await getUncachableGmailClient();
+  const profile = await gmail.users.getProfile({ userId: 'me' });
+  return profile.data.historyId || '';
+}
+
+export async function getHistory(startHistoryId: string): Promise<{ messagesAdded: { id: string; threadId: string }[]; newHistoryId: string }> {
+  const gmail = await getUncachableGmailClient();
+  const messagesAdded: { id: string; threadId: string }[] = [];
+  let pageToken: string | undefined;
+  let newHistoryId = startHistoryId;
+
+  do {
+    const response: any = await gmail.users.history.list({
+      userId: 'me',
+      startHistoryId,
+      historyTypes: ['messageAdded'],
+      pageToken,
+    });
+
+    if (response.data.historyId) {
+      newHistoryId = response.data.historyId;
+    }
+
+    const histories = response.data.history || [];
+    for (const h of histories) {
+      if (h.messagesAdded) {
+        for (const ma of h.messagesAdded) {
+          if (ma.message?.id && ma.message?.threadId) {
+            messagesAdded.push({ id: ma.message.id, threadId: ma.message.threadId });
+          }
+        }
+      }
+    }
+
+    pageToken = response.data.nextPageToken;
+  } while (pageToken);
+
+  return { messagesAdded, newHistoryId };
+}
+
 // Get full thread with all messages
 export async function getThread(threadId: string) {
   const gmail = await getUncachableGmailClient();

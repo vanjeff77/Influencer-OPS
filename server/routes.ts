@@ -2410,6 +2410,18 @@ export async function registerRoutes(
     }
   });
 
+  app.post('/api/campaigns/:id/sync-all', async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.id);
+      const { syncCampaignConversations } = await import('./email-sync');
+      const result = await syncCampaignConversations(campaignId);
+      res.json(result);
+    } catch (err) {
+      console.error('Campaign sync-all error:', err);
+      res.status(500).json({ message: "동기화 실패: " + (err as Error).message });
+    }
+  });
+
   // Start a new conversation for a line item
   app.post('/api/line-items/:id/start-conversation', async (req, res) => {
     try {

@@ -562,6 +562,34 @@ export class DatabaseStorage implements IStorage {
     await db.delete(emailAccounts).where(eq(emailAccounts.id, accountId));
   }
 
+  async getAllGmailAccounts(): Promise<EmailAccount[]> {
+    return await db.select().from(emailAccounts).where(eq(emailAccounts.provider, 'gmail'));
+  }
+
+  async updateEmailAccountHistoryId(accountId: number, historyId: string): Promise<void> {
+    await db.update(emailAccounts)
+      .set({ lastHistoryId: historyId, lastSyncedAt: new Date() })
+      .where(eq(emailAccounts.id, accountId));
+  }
+
+  async getConversationByGmailThreadId(threadId: string): Promise<Conversation | undefined> {
+    const [conv] = await db.select().from(conversations).where(eq(conversations.gmailThreadId, threadId));
+    return conv;
+  }
+
+  async getAllActiveConversationsWithGmailThread(): Promise<(Conversation & { emailAccount?: EmailAccount })[]> {
+    const results = await db
+      .select()
+      .from(conversations)
+      .where(
+        and(
+          sql`${conversations.gmailThreadId} IS NOT NULL`,
+          eq(conversations.status, 'active')
+        )
+      );
+    return results as any;
+  }
+
   async updateEmailAccountSignature(accountId: number, data: { signature?: string | null; useSignature?: boolean }): Promise<EmailAccount> {
     const [updated] = await db.update(emailAccounts)
       .set(data)

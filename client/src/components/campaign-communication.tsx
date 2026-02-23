@@ -159,6 +159,8 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
 
   const { data: conversations, isLoading: isLoadingConversations } = useQuery<Conversation[]>({
     queryKey: [`/api/conversations?campaignId=${campaignId}`],
+    refetchInterval: 30000,
+    refetchIntervalInBackground: false,
   });
 
   const filteredLineItems = useMemo(() => {
@@ -176,6 +178,8 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
   const { data: conversationDetail, isLoading: isLoadingMessages, refetch: refetchConversation } = useQuery<ConversationDetail>({
     queryKey: ['/api/conversations', existingConv?.id?.toString()],
     enabled: !!existingConv?.id,
+    refetchInterval: 15000,
+    refetchIntervalInBackground: false,
   });
 
   const startConversation = useMutation({
@@ -303,20 +307,15 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
       return;
     }
     setIsFullSyncRunning(true);
-    const total = conversations.length;
-    setSyncProgress({ current: 0, total });
-    let syncCount = 0;
+    setSyncProgress({ current: 0, total: conversations.length });
     try {
-      for (let i = 0; i < conversations.length; i++) {
-        try {
-          await apiRequest('POST', `/api/conversations/${conversations[i].id}/sync`, { fullSync: true });
-          syncCount++;
-        } catch {}
-        setSyncProgress({ current: i + 1, total });
-      }
+      const res = await apiRequest('POST', `/api/campaigns/${campaignId}/sync-all`);
+      const result = await res.json();
       queryClient.invalidateQueries({ queryKey: [`/api/conversations?campaignId=${campaignId}`] });
       queryClient.invalidateQueries({ queryKey: ['/api/conversations'] });
-      toast({ title: `${syncCount}개 대화 동기화 완료` });
+      toast({ title: `동기화 완료: ${result.synced}개 새 메시지` });
+    } catch (err) {
+      toast({ title: "동기화 실패", variant: "destructive" });
     } finally {
       setIsFullSyncRunning(false);
       setSyncProgress({ current: 0, total: 0 });

@@ -283,8 +283,9 @@ export const emailAccounts = pgTable("email_accounts", {
   smtpPort: integer("smtp_port"),
   imapPassword: text("imap_password"),
   lastSyncedAt: timestamp("last_synced_at"),
-  signature: text("signature"), // Rich text email signature (HTML)
-  useSignature: boolean("use_signature").default(true), // Whether to append signature to emails
+  lastHistoryId: text("last_history_id"),
+  signature: text("signature"),
+  useSignature: boolean("use_signature").default(true),
 });
 
 // Campaign-LineItem based Conversations (for messenger-style threads)
@@ -296,7 +297,8 @@ export const conversations = pgTable("conversations", {
   gmailThreadId: text("gmail_thread_id"),
   lastMessageAt: timestamp("last_message_at"),
   lastReadAt: timestamp("last_read_at"),
-  status: text("status").default("active"), // active, unread, replied, no_response
+  status: text("status").default("active"),
+  lastSyncedAt: timestamp("last_synced_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -598,7 +600,7 @@ export const insertInfluencerSchema = createInsertSchema(influencers).omit({ id:
 export const insertInfluencerAccountSchema = createInsertSchema(influencerAccounts).omit({ id: true });
 export const insertGroupSchema = createInsertSchema(groups).omit({ id: true, createdAt: true });
 export const insertCampaignSchema = createInsertSchema(campaigns).omit({ id: true, createdAt: true });
-export const insertEmailAccountSchema = createInsertSchema(emailAccounts).omit({ id: true, lastSyncedAt: true });
+export const insertEmailAccountSchema = createInsertSchema(emailAccounts).omit({ id: true, lastSyncedAt: true, lastHistoryId: true });
 export const insertConversationSchema = createInsertSchema(conversations).omit({ id: true, createdAt: true });
 export const insertConversationMessageSchema = createInsertSchema(conversationMessages).omit({ id: true, createdAt: true });
 export const insertEmailTemplateSchema = createInsertSchema(emailTemplates).omit({ id: true, createdAt: true });
