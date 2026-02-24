@@ -13,7 +13,7 @@ export const jobStatusEnum = z.enum(["pending", "processing", "completed", "fail
 export const campaignStatusEnum = z.enum(["대기중", "진행중", "완료"]);
 
 // Campaign line item enums
-export const stageEnum = z.enum(["선정완료", "오퍼확정", "계약진행", "일정확정", "초안수신", "피드백중", "완성본확정", "완료"]);
+export const stageEnum = z.enum(["선정완료", "오퍼확정", "계약진행", "일정확정", "초안수신", "피드백중", "완성본확정", "완료", "보류"]);
 export const commStatusEnum = z.enum(["컨택전", "미응답", "협의중", "수락", "거절", "보류"]);
 export const reviewStatusEnum = z.enum(["초안대기", "검토중", "피드백전달", "승인완료", "업로드완료"]);
 

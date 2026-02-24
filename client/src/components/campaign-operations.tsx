@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -65,7 +65,7 @@ function getContractInfoCompleteness(item: LineItemWithDetails): { filled: numbe
   return { filled, total };
 }
 
-const STAGES = ["선정완료", "오퍼확정", "계약진행", "일정확정", "초안수신", "피드백중", "완성본확정", "완료"] as const;
+const STAGES = ["선정완료", "오퍼확정", "계약진행", "일정확정", "초안수신", "피드백중", "완성본확정", "완료", "보류"] as const;
 const COMM_STATUSES = ["컨택전", "미응답", "협의중", "수락", "거절", "보류"] as const;
 const REVIEW_STATUSES = ["초안대기", "검토중", "피드백전달", "승인완료", "업로드완료"] as const;
 
@@ -75,6 +75,7 @@ const getStageColor = (stage: string) => {
     case "완성본확정": return "bg-blue-100 text-blue-800";
     case "피드백중": return "bg-yellow-100 text-yellow-800";
     case "초안수신": return "bg-purple-100 text-purple-800";
+    case "보류": return "bg-gray-200 text-gray-500";
     default: return "bg-gray-100 text-gray-800";
   }
 };
@@ -448,7 +449,9 @@ function OperationsPanel({ item, onUpdate, isSaving }: OperationsPanelProps) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {STAGES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    {STAGES.filter(s => s !== "보류").map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    <SelectSeparator />
+                    <SelectItem value="보류">보류</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
