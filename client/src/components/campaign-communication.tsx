@@ -31,7 +31,9 @@ import {
   Loader2,
   Users,
   FileText,
-  Wallet
+  Wallet,
+  Reply,
+  ArrowUpRight
 } from "lucide-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
@@ -164,13 +166,25 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
   });
 
   const filteredLineItems = useMemo(() => {
-    if (!searchQuery.trim()) return lineItems;
-    const query = searchQuery.toLowerCase();
-    return lineItems.filter(li => 
-      li.influencer?.name?.toLowerCase().includes(query) ||
-      li.influencer?.email?.toLowerCase().includes(query)
-    );
-  }, [lineItems, searchQuery]);
+    let items = lineItems;
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      items = items.filter(li => 
+        li.influencer?.name?.toLowerCase().includes(query) ||
+        li.influencer?.email?.toLowerCase().includes(query)
+      );
+    }
+    return [...items].sort((a, b) => {
+      const convA = conversations?.find(c => c.campaignLineItemId === a.id);
+      const convB = conversations?.find(c => c.campaignLineItemId === b.id);
+      const unreadA = convA?.lastMessageAt && (!convA?.lastReadAt || new Date(convA.lastMessageAt) > new Date(convA.lastReadAt)) ? 1 : 0;
+      const unreadB = convB?.lastMessageAt && (!convB?.lastReadAt || new Date(convB.lastMessageAt) > new Date(convB.lastReadAt)) ? 1 : 0;
+      if (unreadA !== unreadB) return unreadB - unreadA;
+      const dateA = convA?.lastMessageAt ? new Date(convA.lastMessageAt).getTime() : 0;
+      const dateB = convB?.lastMessageAt ? new Date(convB.lastMessageAt).getTime() : 0;
+      return dateB - dateA;
+    });
+  }, [lineItems, searchQuery, conversations]);
 
   const selectedLineItem = lineItems.find(li => li.id === selectedLineItemId);
   const existingConv = conversations?.find(c => c.campaignLineItemId === selectedLineItemId);
@@ -428,11 +442,30 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                           )}
                         </div>
                       </div>
-                      {hasUnread ? (
-                        <span className="w-2.5 h-2.5 bg-destructive rounded-full shrink-0" aria-label="새 메시지" data-testid={`badge-unread-${li.id}`} />
-                      ) : (
-                        <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-                      )}
+                      <div className="flex flex-col items-center gap-0.5 shrink-0">
+                        {hasUnread && (
+                          <span className="w-2.5 h-2.5 bg-destructive rounded-full" aria-label="새 메시지" data-testid={`badge-unread-${li.id}`} />
+                        )}
+                        {conv?.lastMessage ? (
+                          conv.lastMessage.direction === 'inbound' ? (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Reply className="w-4 h-4 text-orange-500" data-testid={`icon-needs-reply-${li.id}`} />
+                              </TooltipTrigger>
+                              <TooltipContent side="left"><p>답장 필요</p></TooltipContent>
+                            </Tooltip>
+                          ) : (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <ArrowUpRight className="w-4 h-4 text-muted-foreground/50" data-testid={`icon-sent-${li.id}`} />
+                              </TooltipTrigger>
+                              <TooltipContent side="left"><p>발송 완료</p></TooltipContent>
+                            </Tooltip>
+                          )
+                        ) : (
+                          <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
