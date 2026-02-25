@@ -84,6 +84,7 @@ import {
   Film,
   Wallet,
   AlertCircle,
+  PauseCircle,
 } from "lucide-react";
 import {
   Popover,
@@ -143,13 +144,20 @@ function StepProgressBar({
   }>({ open: false, targetStatus: "", type: null });
   const { toast } = useToast();
 
+  const isOnHold = status === "on_hold";
   const currentIndex = STEPS.findIndex((s) => s.key === status);
 
   const handleStepClick = async (stepKey: string) => {
     if (stepKey === status) return;
+
+    if (stepKey === "on_hold") {
+      onStatusChange(stepKey);
+      return;
+    }
+
     const targetIndex = STEPS.findIndex((s) => s.key === stepKey);
 
-    if (targetIndex < currentIndex) {
+    if (isOnHold || targetIndex < currentIndex) {
       onStatusChange(stepKey);
       return;
     }
@@ -201,8 +209,8 @@ function StepProgressBar({
         data-testid={`progress-bar-${itemId}`}
       >
         {STEPS.map((step, idx) => {
-          const isCurrent = step.key === status;
-          const isCompleted = idx < currentIndex;
+          const isCurrent = !isOnHold && step.key === status;
+          const isCompleted = !isOnHold && idx < currentIndex;
 
           return (
             <Button
@@ -210,7 +218,7 @@ function StepProgressBar({
               variant={isCurrent ? "default" : "ghost"}
               size="sm"
               onClick={() => handleStepClick(step.key)}
-              className={`gap-1 ${isCompleted ? "text-primary font-medium" : ""}`}
+              className={`gap-1 ${isCompleted ? "text-primary font-medium" : ""} ${isOnHold ? "opacity-40" : ""}`}
               data-testid={`step-${step.key}-${itemId}`}
             >
               {isCompleted ? (
@@ -224,6 +232,17 @@ function StepProgressBar({
             </Button>
           );
         })}
+        <div className="w-px h-5 bg-border mx-0.5" />
+        <Button
+          variant={isOnHold ? "default" : "ghost"}
+          size="sm"
+          onClick={() => handleStepClick("on_hold")}
+          className={`gap-1 ${isOnHold ? "bg-gray-500 hover:bg-gray-600 text-white" : "text-gray-400 hover:text-gray-600"}`}
+          data-testid={`step-on_hold-${itemId}`}
+        >
+          <PauseCircle className="w-3.5 h-3.5 shrink-0" />
+          보류
+        </Button>
       </div>
 
       <Dialog
