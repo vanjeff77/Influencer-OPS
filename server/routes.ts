@@ -2445,7 +2445,6 @@ export async function registerRoutes(
         campaignLineItemId: lineItemId,
         subjectPrefix,
         status: 'active',
-        lastMessageAt: new Date()
       });
       
       res.status(201).json(conv);

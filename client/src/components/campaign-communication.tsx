@@ -177,11 +177,13 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
     return [...items].sort((a, b) => {
       const convA = conversations?.find(c => c.campaignLineItemId === a.id);
       const convB = conversations?.find(c => c.campaignLineItemId === b.id);
-      const unreadA = convA?.lastMessageAt && (!convA?.lastReadAt || new Date(convA.lastMessageAt) > new Date(convA.lastReadAt)) ? 1 : 0;
-      const unreadB = convB?.lastMessageAt && (!convB?.lastReadAt || new Date(convB.lastMessageAt) > new Date(convB.lastReadAt)) ? 1 : 0;
+      const lastMsgDateA = convA?.lastMessage?.sentAt || convA?.lastMessage?.createdAt;
+      const lastMsgDateB = convB?.lastMessage?.sentAt || convB?.lastMessage?.createdAt;
+      const unreadA = lastMsgDateA && (!convA?.lastReadAt || new Date(lastMsgDateA) > new Date(convA.lastReadAt)) ? 1 : 0;
+      const unreadB = lastMsgDateB && (!convB?.lastReadAt || new Date(lastMsgDateB) > new Date(convB.lastReadAt)) ? 1 : 0;
       if (unreadA !== unreadB) return unreadB - unreadA;
-      const dateA = convA?.lastMessageAt ? new Date(convA.lastMessageAt).getTime() : 0;
-      const dateB = convB?.lastMessageAt ? new Date(convB.lastMessageAt).getTime() : 0;
+      const dateA = lastMsgDateA ? new Date(lastMsgDateA).getTime() : 0;
+      const dateB = lastMsgDateB ? new Date(lastMsgDateB).getTime() : 0;
       return dateB - dateA;
     });
   }, [lineItems, searchQuery, conversations]);
@@ -261,7 +263,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
     const conv = conversations?.find(c => c.campaignLineItemId === li.id);
     if (!conv) {
       startConversation.mutate(li.id);
-    } else if (conv.lastMessageAt && (!conv.lastReadAt || new Date(conv.lastMessageAt) > new Date(conv.lastReadAt))) {
+    } else if (conv.lastMessage && (conv.lastMessage.sentAt || conv.lastMessage.createdAt) && (!conv.lastReadAt || new Date(conv.lastMessage.sentAt || conv.lastMessage.createdAt || '') > new Date(conv.lastReadAt))) {
       try {
         await apiRequest('PATCH', `/api/conversations/${conv.id}`, { lastReadAt: new Date().toISOString() });
         queryClient.invalidateQueries({ queryKey: [`/api/conversations?campaignId=${campaignId}`] });
@@ -411,7 +413,8 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
               {filteredLineItems.map(li => {
                 const conv = conversations?.find(c => c.campaignLineItemId === li.id);
                 const isSelected = selectedLineItemId === li.id;
-                const hasUnread = conv?.lastMessageAt && (!conv?.lastReadAt || new Date(conv.lastMessageAt) > new Date(conv.lastReadAt));
+                const lastMsgDate = conv?.lastMessage?.sentAt || conv?.lastMessage?.createdAt;
+                const hasUnread = lastMsgDate && (!conv?.lastReadAt || new Date(lastMsgDate) > new Date(conv.lastReadAt));
                 return (
                   <div
                     key={li.id}
@@ -426,20 +429,20 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-1">
                           <span className={`text-sm truncate ${hasUnread ? 'font-bold' : 'font-medium'}`}>{li.influencer?.name}</span>
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1 shrink-0">
                             {getFirstContactBadge(li)}
-                            {getStatusBadge(conv)}
+                            {conv?.lastMessage && (
+                              <span className={`text-[11px] tabular-nums shrink-0 ${hasUnread ? 'text-primary font-semibold' : 'text-muted-foreground'}`} data-testid={`text-last-message-date-${li.id}`}>
+                                {formatConversationDate(conv.lastMessage.sentAt || conv.lastMessage.createdAt)}
+                              </span>
+                            )}
                           </div>
                         </div>
                         <div className={`text-xs flex items-center gap-1 ${hasUnread ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
                           <span className="truncate flex-1 min-w-0">
                             {conv?.lastMessage?.snippet || li.influencer?.email || KO.pages.communication.noConversations}
                           </span>
-                          {conv?.lastMessageAt && (
-                            <span className="text-[10px] text-muted-foreground shrink-0 tabular-nums" data-testid={`text-last-message-date-${li.id}`}>
-                              {formatConversationDate(conv.lastMessageAt)}
-                            </span>
-                          )}
+                          {getStatusBadge(conv)}
                         </div>
                       </div>
                       <div className="flex flex-col items-center gap-0.5 shrink-0">
