@@ -7,7 +7,7 @@ import { api } from "@shared/routes";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
-import { campaignInfluencers, campaigns, influencers, influencerAccounts, users, workspaceMembers, workspaces, emailAccounts, contentSubmissions } from "@shared/schema";
+import { campaignInfluencers, campaigns, influencers, influencerAccounts, users, workspaceMembers, workspaces, emailAccounts, contentSubmissions, conversations, conversationMessages } from "@shared/schema";
 import { eq, and, or, inArray, sql, isNull, desc } from "drizzle-orm";
 import { getImapSmtpSettings } from "./smtp";
 import { normalizeInstagramHandle, normalizeInstagramUrl } from "@shared/utils";
@@ -2022,8 +2022,23 @@ export async function registerRoutes(
   });
 
   app.patch('/api/conversations/:id', async (req, res) => {
-    const conv = await storage.updateConversation(parseInt(req.params.id), req.body);
-    res.json(conv);
+    try {
+      const data = { ...req.body };
+      if (data.lastReadAt && typeof data.lastReadAt === 'string') {
+        const parsed = new Date(data.lastReadAt);
+        if (isNaN(parsed.getTime())) return res.status(400).json({ message: "Invalid lastReadAt date" });
+        data.lastReadAt = parsed;
+      }
+      if (data.lastMessageAt && typeof data.lastMessageAt === 'string') {
+        const parsed = new Date(data.lastMessageAt);
+        if (isNaN(parsed.getTime())) return res.status(400).json({ message: "Invalid lastMessageAt date" });
+        data.lastMessageAt = parsed;
+      }
+      const conv = await storage.updateConversation(parseInt(req.params.id), data);
+      res.json(conv);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
   });
 
   // Send message in conversation (with Gmail integration)
@@ -4480,6 +4495,42 @@ export async function registerRoutes(
         oneDriveLink: s.oneDriveLink,
       })));
     } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post('/api/admin/backfill-conversations', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const adminUser = req.user as any;
+      if (!adminUser.isPlatformAdmin) return res.status(403).json({ message: "Admin only" });
+
+      const allConvs = await db.select().from(conversations);
+      let nullified = 0;
+      let recalculated = 0;
+
+      for (const conv of allConvs) {
+        const msgs = await db.select().from(conversationMessages)
+          .where(eq(conversationMessages.conversationId, conv.id))
+          .orderBy(desc(conversationMessages.createdAt));
+
+        if (msgs.length === 0) {
+          if (conv.lastMessageAt) {
+            await db.update(conversations).set({ lastMessageAt: null }).where(eq(conversations.id, conv.id));
+            nullified++;
+          }
+        } else {
+          const latestDate = msgs[0].sentAt || msgs[0].createdAt;
+          if (latestDate) {
+            await db.update(conversations).set({ lastMessageAt: new Date(latestDate) }).where(eq(conversations.id, conv.id));
+            recalculated++;
+          }
+        }
+      }
+
+      res.json({ total: allConvs.length, nullified, recalculated });
+    } catch (err: any) {
+      console.error('Backfill conversations error:', err);
       res.status(500).json({ message: err.message });
     }
   });
