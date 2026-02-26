@@ -479,30 +479,32 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                     onClick={() => handleSelectLineItem(li)}
                     data-testid={`conversation-item-${li.id}`}
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 overflow-hidden">
                       <Avatar className="h-8 w-8 shrink-0">
                         <AvatarFallback className="text-xs">{li.influencer?.name?.substring(0, 2) || 'IN'}</AvatarFallback>
                       </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-1">
-                          <span className={`text-sm truncate ${hasUnread ? 'font-bold' : 'font-medium'}`}>{li.influencer?.name}</span>
-                          <div className="flex items-center gap-1 shrink-0">
-                            {getFirstContactBadge(li)}
+                      <div className="flex-1 min-w-0 overflow-hidden">
+                        <div className="flex items-center gap-1 overflow-hidden">
+                          <span className={`text-sm truncate flex-1 min-w-0 ${hasUnread ? 'font-bold' : 'font-medium'}`}>{li.influencer?.name}</span>
+                          <div className="flex items-center gap-1 shrink-0 ml-auto">
                             {conv?.lastMessage && (
-                              <span className={`text-[11px] tabular-nums shrink-0 ${hasUnread ? 'text-primary font-semibold' : 'text-muted-foreground'}`} data-testid={`text-last-message-date-${li.id}`}>
+                              <span className={`text-[11px] tabular-nums whitespace-nowrap ${hasUnread ? 'text-primary font-semibold' : 'text-muted-foreground'}`} data-testid={`text-last-message-date-${li.id}`}>
                                 {formatConversationDate(conv.lastMessage.sentAt || conv.lastMessage.createdAt)}
                               </span>
                             )}
                           </div>
                         </div>
-                        <div className={`text-xs flex items-center gap-1 ${hasUnread ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
+                        <div className={`text-xs flex items-center gap-1 overflow-hidden ${hasUnread ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
                           <span className="truncate flex-1 min-w-0">
                             {conv?.lastMessage?.snippet || li.influencer?.email || KO.pages.communication.noConversations}
                           </span>
-                          {getStatusBadge(conv)}
+                          <div className="flex items-center gap-1 shrink-0">
+                            {getFirstContactBadge(li)}
+                            {getStatusBadge(conv)}
+                          </div>
                         </div>
                       </div>
-                      <div className="flex flex-col items-center gap-0.5 shrink-0">
+                      <div className="flex flex-col items-center gap-0.5 shrink-0 w-5">
                         {aiEnabled && conv && pendingDraftConvIds?.includes(conv.id) && (
                           <Tooltip>
                             <TooltipTrigger asChild>
