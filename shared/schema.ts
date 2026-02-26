@@ -42,6 +42,10 @@ export const workspaces = pgTable("workspaces", {
   name: text("name").notNull(),
   logo: text("logo"), // url
   tabDescriptions: jsonb("tab_descriptions").$type<Record<string, string>>(),
+  aiDraftEnabled: boolean("ai_draft_enabled").default(false),
+  aiProvider: text("ai_provider").default("replit"),
+  aiApiKey: text("ai_api_key"),
+  aiModel: text("ai_model"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -502,6 +506,23 @@ export const contractTemplates = pgTable("contract_templates", {
 });
 
 
+// === AI DRAFT REPLIES ===
+export const aiDraftReplies = pgTable("ai_draft_replies", {
+  id: serial("id").primaryKey(),
+  conversationId: integer("conversation_id").notNull(),
+  triggerMessageId: integer("trigger_message_id").notNull(),
+  draft: text("draft").notNull(),
+  classification: text("classification"),
+  classificationLabel: text("classification_label"),
+  status: text("status").default("pending"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const aiDraftReplyRelations = relations(aiDraftReplies, ({ one }) => ({
+  conversation: one(conversations, { fields: [aiDraftReplies.conversationId], references: [conversations.id] }),
+  triggerMessage: one(conversationMessages, { fields: [aiDraftReplies.triggerMessageId], references: [conversationMessages.id] }),
+}));
+
 // === RELATIONS ===
 export const workspaceRelations = relations(workspaces, ({ many }) => ({
   members: many(workspaceMembers),
@@ -614,6 +635,7 @@ export const insertCampaignContentSchema = createInsertSchema(campaignContents).
 export const insertFeedbackNoteSchema = createInsertSchema(feedbackNotes).omit({ id: true, createdAt: true });
 export const insertCampaignInfluencerSchema = createInsertSchema(campaignInfluencers).omit({ id: true, updatedAt: true });
 export const insertContractTemplateSchema = createInsertSchema(contractTemplates).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertAiDraftReplySchema = createInsertSchema(aiDraftReplies).omit({ id: true, createdAt: true });
 
 // === TYPES ===
 export type User = typeof users.$inferSelect;
@@ -647,6 +669,8 @@ export type InsertFeedbackNote = z.infer<typeof insertFeedbackNoteSchema>;
 export type InsertCampaignInfluencer = z.infer<typeof insertCampaignInfluencerSchema>;
 export type ContractTemplate = typeof contractTemplates.$inferSelect;
 export type InsertContractTemplate = z.infer<typeof insertContractTemplateSchema>;
+export type AiDraftReply = typeof aiDraftReplies.$inferSelect;
+export type InsertAiDraftReply = z.infer<typeof insertAiDraftReplySchema>;
 
 export type InsertConversation = z.infer<typeof insertConversationSchema>;
 export type InsertConversationMessage = z.infer<typeof insertConversationMessageSchema>;

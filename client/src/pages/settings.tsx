@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useWorkspaces } from "@/hooks/use-workspaces";
 import { useUser } from "@/hooks/use-auth";
@@ -16,7 +16,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { KO } from "@/i18n/ko";
-import { Plus, Pencil, Trash2, Building2, Users, Shield, FileText, Star, Settings, RotateCcw, Mail, X } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Plus, Pencil, Trash2, Building2, Users, Shield, FileText, Star, Settings, RotateCcw, Mail, X, Sparkles } from "lucide-react";
 import { useResetOnboarding } from "@/hooks/use-auth";
 
 
@@ -66,6 +67,10 @@ export default function SettingsPage() {
   const [clientLogoUrl, setClientLogoUrl] = useState<string | null>(null);
 
   const [workspaceName, setWorkspaceName] = useState("");
+  const [aiDraftEnabled, setAiDraftEnabled] = useState(false);
+  const [aiProvider, setAiProvider] = useState("replit");
+  const [aiApiKey, setAiApiKey] = useState("");
+  const [aiModel, setAiModel] = useState("");
 
   const [userName, setUserName] = useState("");
   const [userEmail, setUserEmail] = useState("");
@@ -202,7 +207,35 @@ export default function SettingsPage() {
     },
   });
 
-  const currentWorkspace = workspaces?.find(w => w.id === workspaceId);
+  const currentWorkspace = workspaces?.find(w => w.id === workspaceId) as any;
+
+  const { data: fullWorkspace } = useQuery<any>({
+    queryKey: ['/api/workspaces'],
+    enabled: !!workspaceId,
+    select: (data: any[]) => data?.find((w: any) => w.id === workspaceId),
+  });
+
+  useEffect(() => {
+    if (fullWorkspace) {
+      setAiDraftEnabled(fullWorkspace.aiDraftEnabled || false);
+      setAiProvider(fullWorkspace.aiProvider || "replit");
+      setAiModel(fullWorkspace.aiModel || "");
+      setAiApiKey("");
+    }
+  }, [fullWorkspace?.id, fullWorkspace?.aiDraftEnabled, fullWorkspace?.aiProvider, fullWorkspace?.aiModel]);
+
+  const saveAiSettingsMutation = useMutation({
+    mutationFn: (data: { aiDraftEnabled?: boolean; aiProvider?: string; aiApiKey?: string; aiModel?: string }) =>
+      apiRequest('PATCH', `/api/workspaces/${workspaceId}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/workspaces'] });
+      setAiApiKey("");
+      toast({ title: "AI 설정이 저장되었습니다" });
+    },
+    onError: (err: any) => {
+      toast({ title: "AI 설정 저장 실패", description: err.message, variant: "destructive" });
+    },
+  });
 
   const resetClientForm = () => {
     setClientName("");
@@ -388,6 +421,100 @@ export default function SettingsPage() {
                   <RotateCcw className="h-4 w-4" />
                   온보딩 다시 보기
                 </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-purple-500" />
+                  AI 자동 답장 초안
+                </CardTitle>
+                <CardDescription>수신 메일에 대한 AI 답장 초안을 자동으로 생성합니다</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-sm font-medium">AI 초안 자동 생성</Label>
+                    <p className="text-xs text-muted-foreground mt-1">활성화하면 인바운드 메일 수신 시 자동으로 답장 초안이 생성됩니다</p>
+                  </div>
+                  <Switch
+                    checked={aiDraftEnabled}
+                    onCheckedChange={setAiDraftEnabled}
+                    data-testid="switch-ai-draft"
+                  />
+                </div>
+
+                {aiDraftEnabled && (
+                  <div className="space-y-4 pt-2 border-t">
+                    <div>
+                      <Label className="text-sm">LLM 제공자</Label>
+                      <Select value={aiProvider} onValueChange={setAiProvider}>
+                        <SelectTrigger className="mt-1" data-testid="select-ai-provider">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="replit">Replit AI (기본)</SelectItem>
+                          <SelectItem value="openai">OpenAI API</SelectItem>
+                          <SelectItem value="anthropic">Anthropic API</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {(aiProvider === 'openai' || aiProvider === 'anthropic') && (
+                      <>
+                        <div>
+                          <Label className="text-sm">API Key</Label>
+                          <Input
+                            type="password"
+                            value={aiApiKey}
+                            onChange={(e) => setAiApiKey(e.target.value)}
+                            placeholder={fullWorkspace?.aiApiKey ? "••••••••  (변경하려면 새 키를 입력)" : "API Key를 입력하세요"}
+                            className="mt-1"
+                            data-testid="input-ai-api-key"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-sm">모델명</Label>
+                          <Input
+                            value={aiModel}
+                            onChange={(e) => setAiModel(e.target.value)}
+                            placeholder={aiProvider === 'openai' ? "gpt-4o" : "claude-sonnet-4-20250514"}
+                            className="mt-1"
+                            data-testid="input-ai-model"
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    <Button
+                      onClick={() => {
+                        const data: any = {
+                          aiDraftEnabled,
+                          aiProvider,
+                          aiModel: aiModel || (aiProvider === 'openai' ? 'gpt-4o' : aiProvider === 'anthropic' ? 'claude-sonnet-4-20250514' : ''),
+                        };
+                        if (aiApiKey) data.aiApiKey = aiApiKey;
+                        saveAiSettingsMutation.mutate(data);
+                      }}
+                      disabled={saveAiSettingsMutation.isPending}
+                      data-testid="button-save-ai-settings"
+                    >
+                      {saveAiSettingsMutation.isPending ? "저장 중..." : "AI 설정 저장"}
+                    </Button>
+                  </div>
+                )}
+
+                {!aiDraftEnabled && fullWorkspace?.aiDraftEnabled && (
+                  <Button
+                    variant="outline"
+                    onClick={() => saveAiSettingsMutation.mutate({ aiDraftEnabled: false })}
+                    disabled={saveAiSettingsMutation.isPending}
+                    data-testid="button-disable-ai"
+                  >
+                    AI 초안 비활성화 저장
+                  </Button>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

@@ -33,7 +33,9 @@ import {
   FileText,
   Wallet,
   Reply,
-  ArrowUpRight
+  ArrowUpRight,
+  Sparkles,
+  X
 } from "lucide-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
@@ -154,7 +156,14 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
   const [attachEmailOpen, setAttachEmailOpen] = useState(false);
   const [isFullSyncRunning, setIsFullSyncRunning] = useState(false);
   const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0 });
-  
+  const [aiDraftDismissed, setAiDraftDismissed] = useState<number | null>(null);
+
+  const { data: workspaceData } = useQuery<any>({
+    queryKey: ['/api/workspaces'],
+    select: (data: any[]) => data?.find((w: any) => w.id === workspaceId),
+  });
+  const aiEnabled = workspaceData?.aiDraftEnabled === true;
+
   const { data: gmailStatus, isLoading: isLoadingGmail } = useQuery<{ connected: boolean; email?: string }>({
     queryKey: ['/api/email/gmail/status'],
   });
@@ -196,6 +205,53 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
     enabled: !!existingConv?.id,
     refetchInterval: 15000,
     refetchIntervalInBackground: false,
+  });
+
+  const { data: aiDraft, refetch: refetchAiDraft } = useQuery<any>({
+    queryKey: ['/api/conversations', existingConv?.id, 'ai-draft'],
+    queryFn: async () => {
+      const res = await fetch(`/api/conversations/${existingConv!.id}/ai-draft`, { credentials: 'include' });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data;
+    },
+    enabled: aiEnabled && !!existingConv?.id,
+  });
+
+  const { data: pendingDraftConvIds } = useQuery<number[]>({
+    queryKey: ['/api/conversations/ai-draft-ids', campaignId],
+    queryFn: async () => {
+      if (!conversations || conversations.length === 0) return [];
+      const convIds = conversations.map(c => c.id);
+      const res = await apiRequest('POST', '/api/conversations/ai-draft-ids', { conversationIds: convIds });
+      const data = await res.json();
+      return data.conversationIds || [];
+    },
+    enabled: aiEnabled && !!conversations && conversations.length > 0,
+  });
+
+  const generateAiDraft = useMutation({
+    mutationFn: async (conversationId: number) => {
+      const res = await apiRequest('POST', `/api/conversations/${conversationId}/ai-draft`);
+      return res.json();
+    },
+    onSuccess: () => {
+      refetchAiDraft();
+      queryClient.invalidateQueries({ queryKey: ['/api/conversations/ai-draft-ids', campaignId] });
+    },
+    onError: (err: any) => {
+      toast({ title: "AI 초안 생성 실패", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const updateAiDraft = useMutation({
+    mutationFn: async ({ draftId, status }: { draftId: number; status: string }) => {
+      await apiRequest('PATCH', `/api/ai-drafts/${draftId}`, { status });
+    },
+    onSuccess: () => {
+      refetchAiDraft();
+      queryClient.invalidateQueries({ queryKey: ['/api/conversations/ai-draft-ids', campaignId] });
+    },
   });
 
   const startConversation = useMutation({
@@ -260,6 +316,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
 
   const handleSelectLineItem = async (li: CampaignLineItem) => {
     setSelectedLineItemId(li.id);
+    setAiDraftDismissed(null);
     const conv = conversations?.find(c => c.campaignLineItemId === li.id);
     if (!conv) {
       startConversation.mutate(li.id);
@@ -446,6 +503,14 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                         </div>
                       </div>
                       <div className="flex flex-col items-center gap-0.5 shrink-0">
+                        {aiEnabled && conv && pendingDraftConvIds?.includes(conv.id) && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Sparkles className="w-3.5 h-3.5 text-purple-500" data-testid={`icon-ai-draft-${li.id}`} />
+                            </TooltipTrigger>
+                            <TooltipContent side="left"><p>AI 초안 준비됨</p></TooltipContent>
+                          </Tooltip>
+                        )}
                         {hasUnread && (
                           <span className="w-2.5 h-2.5 bg-destructive rounded-full" aria-label="새 메시지" data-testid={`badge-unread-${li.id}`} />
                         )}
@@ -560,6 +625,16 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                 const result = Array.from(allCc);
                 return result.length > 0 ? result : null;
               })()}
+              aiDraft={aiEnabled && aiDraft && aiDraftDismissed !== aiDraft.id ? aiDraft : null}
+              aiEnabled={aiEnabled}
+              isLastInbound={conversationDetail?.messages && conversationDetail.messages.length > 0 && conversationDetail.messages[conversationDetail.messages.length - 1]?.direction === 'inbound'}
+              onGenerateDraft={() => existingConv && generateAiDraft.mutate(existingConv.id)}
+              isGeneratingDraft={generateAiDraft.isPending}
+              onUseDraft={(draftId: number) => updateAiDraft.mutate({ draftId, status: 'used' })}
+              onDismissDraft={(draftId: number) => {
+                setAiDraftDismissed(draftId);
+                updateAiDraft.mutate({ draftId, status: 'dismissed' });
+              }}
               onSent={() => {
                 refetchConversation();
                 if (existingConv?.id) {
@@ -739,7 +814,7 @@ function MessageThread({ messages, onViewFull }: { messages: ConversationMessage
   );
 }
 
-function MessageComposer({ conversationId, influencerEmail, senderEmail, lastMessageCc, onSent }: { conversationId?: number; influencerEmail?: string | null; senderEmail?: string | null; lastMessageCc?: string[] | null; onSent: () => void }) {
+function MessageComposer({ conversationId, influencerEmail, senderEmail, lastMessageCc, aiDraft, aiEnabled, isLastInbound, onGenerateDraft, isGeneratingDraft, onUseDraft, onDismissDraft, onSent }: { conversationId?: number; influencerEmail?: string | null; senderEmail?: string | null; lastMessageCc?: string[] | null; aiDraft?: any; aiEnabled?: boolean; isLastInbound?: boolean; onGenerateDraft?: () => void; isGeneratingDraft?: boolean; onUseDraft?: (id: number) => void; onDismissDraft?: (id: number) => void; onSent: () => void }) {
   const { toast } = useToast();
   const [message, setMessage] = useState("");
   const [cc, setCc] = useState(lastMessageCc?.join(', ') || "");
@@ -782,8 +857,94 @@ function MessageComposer({ conversationId, influencerEmail, senderEmail, lastMes
     );
   }
 
+  const handleUseDraft = () => {
+    if (aiDraft) {
+      setMessage(aiDraft.draft);
+      onUseDraft?.(aiDraft.id);
+    }
+  };
+
   return (
     <div className="p-3 border-t bg-[#ffffff]">
+      {aiDraft && (
+        <div className="mb-3 rounded-lg border border-purple-200 bg-purple-50/50 p-3" data-testid="card-ai-draft">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-purple-500" />
+              <span className="text-sm font-medium text-purple-700">AI 초안</span>
+              {aiDraft.classification && (
+                <Badge variant="outline" className="text-[10px] bg-purple-100 text-purple-600 border-purple-200" data-testid="badge-ai-classification">
+                  {aiDraft.classification} {aiDraft.classificationLabel}
+                </Badge>
+              )}
+            </div>
+            <div className="flex items-center gap-1">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-6 w-6 text-purple-500 hover:text-purple-700"
+                    onClick={() => onGenerateDraft?.()}
+                    disabled={isGeneratingDraft}
+                    data-testid="button-regenerate-draft"
+                  >
+                    {isGeneratingDraft ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>재생성</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                    onClick={() => onDismissDraft?.(aiDraft.id)}
+                    data-testid="button-dismiss-draft"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>닫기</TooltipContent>
+              </Tooltip>
+            </div>
+          </div>
+          <div className="text-sm text-foreground whitespace-pre-wrap mb-2 max-h-[120px] overflow-y-auto" data-testid="text-ai-draft-body">
+            {aiDraft.draft}
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-xs bg-purple-100 hover:bg-purple-200 text-purple-700 border-purple-200"
+            onClick={handleUseDraft}
+            data-testid="button-use-draft"
+          >
+            <Sparkles className="w-3 h-3 mr-1" />
+            초안 사용
+          </Button>
+        </div>
+      )}
+
+      {!aiDraft && aiEnabled && isLastInbound && conversationId && (
+        <div className="mb-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-xs text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+            onClick={() => onGenerateDraft?.()}
+            disabled={isGeneratingDraft}
+            data-testid="button-generate-draft"
+          >
+            {isGeneratingDraft ? (
+              <><Loader2 className="w-3 h-3 mr-1 animate-spin" />AI 초안 생성 중...</>
+            ) : (
+              <><Sparkles className="w-3 h-3 mr-1" />AI 초안 생성</>
+            )}
+          </Button>
+        </div>
+      )}
+
       <div className="flex items-center gap-1.5 mb-2 flex-wrap">
         {senderEmail && (
           <Tooltip>

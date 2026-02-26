@@ -7,6 +7,51 @@ let syncInterval: NodeJS.Timeout | null = null;
 
 const SYNC_INTERVAL_MS = 3 * 60 * 1000;
 
+async function triggerAiDraftGeneration(conversationId: number, triggerMessageId: number) {
+  try {
+    const existing = await storage.getDraftByTriggerMessage(triggerMessageId);
+    if (existing) return;
+
+    const conv = await storage.getConversation(conversationId);
+    if (!conv) return;
+
+    const lineItem = await storage.getLineItemWithDetails(conv.campaignLineItemId);
+    if (!lineItem) return;
+
+    const campaign = await storage.getCampaign(lineItem.campaignId);
+    if (!campaign) return;
+
+    const allWorkspaces = await storage.getWorkspaces();
+    const workspace = allWorkspaces.find(w => w.id === campaign.workspaceId);
+    if (!workspace || !workspace.aiDraftEnabled) return;
+
+    const messages = await storage.getConversationMessages(conversationId);
+    if (messages.length === 0) return;
+
+    const { generateEmailDraft } = await import('./ai/draft-generator');
+    const result = await generateEmailDraft(
+      messages,
+      lineItem.influencer || {},
+      campaign,
+      workspace,
+      lineItem.offerFee,
+    );
+
+    await storage.createAiDraft({
+      conversationId,
+      triggerMessageId,
+      draft: result.draft,
+      classification: result.classification,
+      classificationLabel: result.classificationLabel,
+      status: 'pending',
+    });
+
+    console.log(`[AutoDraft] Generated AI draft for conversation ${conversationId}, classification: ${result.classification}`);
+  } catch (err) {
+    console.error(`[AutoDraft] Failed to generate draft for conversation ${conversationId}:`, err);
+  }
+}
+
 async function syncThreadToConversation(conversationId: number, gmailThreadId: string, account: EmailAccount): Promise<number> {
   const thread = await gmail.getThread(gmailThreadId);
   if (!thread.messages) return 0;
@@ -26,7 +71,7 @@ async function syncThreadToConversation(conversationId: number, gmailThreadId: s
     const body = gmail.getMessageBody(msg);
     const isOutbound = headers.from?.toLowerCase().includes(account.email.toLowerCase());
 
-    await storage.createConversationMessage({
+    const createdMsg = await storage.createConversationMessage({
       conversationId,
       direction: isOutbound ? 'outbound' : 'inbound',
       senderEmail: headers.from || null,
@@ -50,6 +95,9 @@ async function syncThreadToConversation(conversationId: number, gmailThreadId: s
         status: 'replied',
         lastMessageAt: headers.date ? new Date(headers.date) : new Date(),
       });
+      if (createdMsg) {
+        triggerAiDraftGeneration(conversationId, createdMsg.id).catch(() => {});
+      }
     }
   }
 
@@ -133,7 +181,7 @@ async function syncGmailAccountIncremental(account: EmailAccount): Promise<{ syn
 
             const isOutbound = headers.from?.toLowerCase().includes(account.email.toLowerCase());
 
-            await storage.createConversationMessage({
+            const createdMsg = await storage.createConversationMessage({
               conversationId: conv.id,
               direction: isOutbound ? 'outbound' : 'inbound',
               senderEmail: headers.from || null,
@@ -157,6 +205,9 @@ async function syncGmailAccountIncremental(account: EmailAccount): Promise<{ syn
                 status: 'replied',
                 lastMessageAt: headers.date ? new Date(headers.date) : new Date(),
               });
+              if (createdMsg) {
+                triggerAiDraftGeneration(conv.id, createdMsg.id).catch(() => {});
+              }
             }
           } catch (msgErr) {
             console.warn(`[AutoSync] Failed to fetch message ${msgId}:`, msgErr);

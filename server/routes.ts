@@ -10,6 +10,7 @@ import { db } from "./db";
 import { campaignInfluencers, campaigns, influencers, influencerAccounts, users, workspaceMembers, workspaces, emailAccounts, contentSubmissions, conversations, conversationMessages } from "@shared/schema";
 import { eq, and, or, inArray, sql, isNull, desc } from "drizzle-orm";
 import { getImapSmtpSettings } from "./smtp";
+import { encryptPassword } from "./imap";
 import { normalizeInstagramHandle, normalizeInstagramUrl } from "@shared/utils";
 
 // Singleton browser instance for PDF generation
@@ -316,7 +317,14 @@ export async function registerRoutes(
       return res.status(403).json({ message: '워크스페이스 소유자만 이름을 변경할 수 있습니다.' });
     }
 
-    const { name, tabDescriptions } = req.body as { name?: string; tabDescriptions?: Record<string, string> };
+    const { name, tabDescriptions, aiDraftEnabled, aiProvider, aiApiKey, aiModel } = req.body as {
+      name?: string;
+      tabDescriptions?: Record<string, string>;
+      aiDraftEnabled?: boolean;
+      aiProvider?: string;
+      aiApiKey?: string;
+      aiModel?: string;
+    };
 
     const updateData: any = {};
 
@@ -335,12 +343,37 @@ export async function registerRoutes(
       updateData.tabDescriptions = tabDescriptions;
     }
 
+    if (aiDraftEnabled !== undefined) {
+      updateData.aiDraftEnabled = aiDraftEnabled;
+    }
+
+    if (aiProvider !== undefined) {
+      if (!['replit', 'openai', 'anthropic'].includes(aiProvider)) {
+        return res.status(400).json({ message: '유효하지 않은 AI 제공자입니다.' });
+      }
+      updateData.aiProvider = aiProvider;
+    }
+
+    if (aiApiKey !== undefined) {
+      if (aiApiKey === '') {
+        updateData.aiApiKey = null;
+      } else {
+        const encryptedKey = encryptPassword(aiApiKey);
+        updateData.aiApiKey = encryptedKey;
+      }
+    }
+
+    if (aiModel !== undefined) {
+      updateData.aiModel = aiModel || null;
+    }
+
     if (Object.keys(updateData).length === 0) {
       return res.status(400).json({ message: '변경할 내용이 없습니다.' });
     }
 
     const updated = await storage.updateWorkspace(workspaceId, updateData);
-    res.json(updated);
+    const responseData = { ...updated, aiApiKey: updated.aiApiKey ? '••••••••' : null };
+    res.json(responseData);
   });
 
   // === INFLUENCERS ===
@@ -2434,6 +2467,106 @@ export async function registerRoutes(
     } catch (err) {
       console.error('Campaign sync-all error:', err);
       res.status(500).json({ message: "동기화 실패: " + (err as Error).message });
+    }
+  });
+
+  // === AI DRAFT REPLIES ===
+  app.get('/api/conversations/:id/ai-draft', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const conversationId = parseInt(req.params.id);
+      if (isNaN(conversationId)) return res.status(400).json({ message: "Invalid conversation ID" });
+      const draft = await storage.getLatestPendingDraft(conversationId);
+      res.json(draft || null);
+    } catch (err) {
+      console.error('Get AI draft error:', err);
+      res.status(500).json({ message: "AI 초안 조회 실패" });
+    }
+  });
+
+  app.post('/api/conversations/:id/ai-draft', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const conversationId = parseInt(req.params.id);
+      if (isNaN(conversationId)) return res.status(400).json({ message: "Invalid conversation ID" });
+
+      const conv = await storage.getConversation(conversationId);
+      if (!conv) return res.status(404).json({ message: "대화를 찾을 수 없습니다" });
+
+      const lineItem = await storage.getLineItemWithDetails(conv.campaignLineItemId);
+      if (!lineItem) return res.status(404).json({ message: "라인아이템을 찾을 수 없습니다" });
+
+      const campaign = await storage.getCampaign(lineItem.campaignId);
+      if (!campaign) return res.status(404).json({ message: "캠페인을 찾을 수 없습니다" });
+
+      const allWorkspaces = await storage.getWorkspaces();
+      const workspace = allWorkspaces.find(w => w.id === campaign.workspaceId);
+      if (!workspace) return res.status(404).json({ message: "워크스페이스를 찾을 수 없습니다" });
+      if (!workspace.aiDraftEnabled) return res.status(400).json({ message: "AI 초안 기능이 비활성화되어 있습니다" });
+
+      const messages = await storage.getConversationMessages(conversationId);
+      if (messages.length === 0) return res.status(400).json({ message: "대화 메시지가 없습니다" });
+
+      const lastInbound = [...messages].reverse().find(m => m.direction === 'inbound');
+      if (!lastInbound) return res.status(400).json({ message: "인바운드 메시지가 없습니다" });
+
+      const { generateEmailDraft } = await import('./ai/draft-generator');
+      const result = await generateEmailDraft(
+        messages,
+        lineItem.influencer || {},
+        campaign,
+        workspace,
+        lineItem.offerFee,
+      );
+
+      const existingDraft = await storage.getLatestPendingDraft(conversationId);
+      if (existingDraft) {
+        await storage.updateAiDraft(existingDraft.id, { status: 'dismissed' });
+      }
+
+      const draft = await storage.createAiDraft({
+        conversationId,
+        triggerMessageId: lastInbound.id,
+        draft: result.draft,
+        classification: result.classification,
+        classificationLabel: result.classificationLabel,
+        status: 'pending',
+      });
+
+      res.json(draft);
+    } catch (err) {
+      console.error('Generate AI draft error:', err);
+      res.status(500).json({ message: "AI 초안 생성 실패: " + (err as Error).message });
+    }
+  });
+
+  app.patch('/api/ai-drafts/:id', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const draftId = parseInt(req.params.id);
+      if (isNaN(draftId)) return res.status(400).json({ message: "Invalid draft ID" });
+      const { status } = req.body as { status: string };
+      if (!['used', 'dismissed'].includes(status)) {
+        return res.status(400).json({ message: "유효하지 않은 상태입니다" });
+      }
+      const updated = await storage.updateAiDraft(draftId, { status });
+      res.json(updated);
+    } catch (err) {
+      console.error('Update AI draft error:', err);
+      res.status(500).json({ message: "AI 초안 상태 업데이트 실패" });
+    }
+  });
+
+  app.post('/api/conversations/ai-draft-ids', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const { conversationIds } = req.body as { conversationIds: number[] };
+      if (!Array.isArray(conversationIds)) return res.status(400).json({ message: "Invalid input" });
+      const ids = await storage.getPendingDraftConversationIds(conversationIds);
+      res.json({ conversationIds: ids });
+    } catch (err) {
+      console.error('Get AI draft IDs error:', err);
+      res.status(500).json({ message: "AI 초안 ID 조회 실패" });
     }
   });
 

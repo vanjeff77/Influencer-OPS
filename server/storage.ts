@@ -3,7 +3,7 @@ import {
   users, workspaces, workspaceMembers, influencers, influencerAccounts, groups, groupInfluencers, campaigns, campaignInfluencers,
   emailAccounts, emailThreads, trackingJobs, trackingMetrics, contents, timelineEvents, auditLogs, notifications,
   conversations, conversationMessages, emailTemplates, bulkEmailJobs, bulkEmailQueueItems, campaignContents, feedbackNotes,
-  clients, clientUserAssignments, contractTemplates, contentSubmissions,
+  clients, clientUserAssignments, contractTemplates, contentSubmissions, aiDraftReplies,
   type User, type InsertUser, type Workspace, type InsertWorkspace,
   type Client, type InsertClient, type ClientUserAssignment, type InsertClientUserAssignment,
   type Influencer, type CreateInfluencerWithAccounts, type InfluencerAccount,
@@ -16,7 +16,8 @@ import {
   type CampaignContent, type InsertCampaignContent,
   type FeedbackNote, type InsertFeedbackNote,
   type ContractTemplate, type InsertContractTemplate,
-  type ContentSubmission, type InsertContentSubmission
+  type ContentSubmission, type InsertContentSubmission,
+  type AiDraftReply, type InsertAiDraftReply
 } from "@shared/schema";
 import { eq, like, or, and, sql, inArray, desc } from "drizzle-orm";
 
@@ -204,6 +205,13 @@ export interface IStorage {
   createContractTemplate(template: InsertContractTemplate): Promise<ContractTemplate>;
   updateContractTemplate(id: number, data: Partial<ContractTemplate>): Promise<ContractTemplate>;
   deleteContractTemplate(id: number): Promise<void>;
+
+  // AI Draft Replies
+  getLatestPendingDraft(conversationId: number): Promise<AiDraftReply | undefined>;
+  getDraftByTriggerMessage(triggerMessageId: number): Promise<AiDraftReply | undefined>;
+  createAiDraft(draft: InsertAiDraftReply): Promise<AiDraftReply>;
+  updateAiDraft(id: number, data: Partial<AiDraftReply>): Promise<AiDraftReply>;
+  getPendingDraftConversationIds(conversationIds: number[]): Promise<number[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1508,6 +1516,47 @@ export class DatabaseStorage implements IStorage {
     const lineItem = lineItems.find(li => li.influencerId === influencer.id);
     
     return lineItem ? { influencer, lineItem } : null;
+  }
+
+  async getLatestPendingDraft(conversationId: number): Promise<AiDraftReply | undefined> {
+    const [draft] = await db.select().from(aiDraftReplies)
+      .where(and(
+        eq(aiDraftReplies.conversationId, conversationId),
+        eq(aiDraftReplies.status, "pending")
+      ))
+      .orderBy(desc(aiDraftReplies.createdAt))
+      .limit(1);
+    return draft;
+  }
+
+  async getDraftByTriggerMessage(triggerMessageId: number): Promise<AiDraftReply | undefined> {
+    const [draft] = await db.select().from(aiDraftReplies)
+      .where(eq(aiDraftReplies.triggerMessageId, triggerMessageId));
+    return draft;
+  }
+
+  async createAiDraft(draft: InsertAiDraftReply): Promise<AiDraftReply> {
+    const [created] = await db.insert(aiDraftReplies).values(draft).returning();
+    return created;
+  }
+
+  async updateAiDraft(id: number, data: Partial<AiDraftReply>): Promise<AiDraftReply> {
+    const [updated] = await db.update(aiDraftReplies)
+      .set(data)
+      .where(eq(aiDraftReplies.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getPendingDraftConversationIds(conversationIds: number[]): Promise<number[]> {
+    if (conversationIds.length === 0) return [];
+    const results = await db.select({ conversationId: aiDraftReplies.conversationId })
+      .from(aiDraftReplies)
+      .where(and(
+        inArray(aiDraftReplies.conversationId, conversationIds),
+        eq(aiDraftReplies.status, "pending")
+      ));
+    return [...new Set(results.map(r => r.conversationId))];
   }
 }
 

@@ -8,6 +8,15 @@ const getEncryptionKey = (): Buffer => {
   return Buffer.from(key.slice(0, 32).padEnd(32, '0'));
 };
 
+export function encryptPassword(password: string): string {
+  const keyBuffer = getEncryptionKey();
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv('aes-256-cbc', keyBuffer, iv);
+  let encrypted = cipher.update(password, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  return iv.toString('hex') + ':' + encrypted;
+}
+
 export function decryptPassword(encryptedPassword: string): string {
   // If not encrypted (no colon separator), return as-is
   if (!encryptedPassword.includes(':')) {

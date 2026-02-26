@@ -94,6 +94,16 @@ Preferred communication style: Simple, everyday language.
     - **FeatureHint Component**: Contextual page-level hint cards with dismiss functionality.
     - **State Management**: Stored per-user with `onboardingCompleted` flag and `dismissedHints` array.
     - **Reset Onboarding**: Option in Settings.
+- **AI Auto-Reply Draft Generation**:
+    - **RAG-based**: Email response framework document (`server/ai/email-framework.md`) injected into system prompt as context.
+    - **LLM Provider Abstraction**: `server/ai/llm-provider.ts` with 3 providers (Replit AI, OpenAI API, Anthropic API). Workspace-configurable via settings.
+    - **Draft Generator**: `server/ai/draft-generator.ts` builds system+user prompts from framework doc, conversation messages, influencer/campaign context. Returns draft text + classification code/label.
+    - **Background Generation**: Triggered in `server/email-sync.ts` after inbound message sync. Async, non-blocking, errors silently logged.
+    - **Storage**: `ai_draft_replies` table (conversationId, triggerMessageId, draft, classification, classificationLabel, status).
+    - **Workspace Settings**: `aiDraftEnabled`, `aiProvider`, `aiApiKey` (AES-256-CBC encrypted), `aiModel` columns on workspaces table. Settings UI in workspace tab (owner-only).
+    - **Communication UI**: Auto-displays pending draft card (purple theme) above MessageComposer when conversation selected. "Use draft" inserts into textarea, "Regenerate" calls LLM again, "Dismiss" hides card. Manual "Generate AI draft" button when no pending draft and last message is inbound. Sparkles icon on conversation list items with pending drafts.
+    - **API Endpoints**: `GET/POST /api/conversations/:id/ai-draft`, `PATCH /api/ai-drafts/:id`, `POST /api/conversations/ai-draft-ids`.
+    - **Safety**: Never auto-sends. User always reviews and manually sends.
 
 ## External Dependencies
 
