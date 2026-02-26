@@ -7,7 +7,7 @@ let frameworkDoc: string | null = null;
 
 function getFrameworkDoc(): string {
   if (!frameworkDoc) {
-    const docPath = path.join(__dirname, "email-framework.md");
+    const docPath = path.join(process.cwd(), "server", "ai", "email-framework.md");
     frameworkDoc = fs.readFileSync(docPath, "utf-8");
   }
   return frameworkDoc;
