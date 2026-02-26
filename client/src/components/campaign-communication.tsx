@@ -396,7 +396,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 min-h-[400px] lg:h-[calc(100vh-220px)]">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 min-h-[600px] lg:h-[calc(100vh-100px)]">
       {/* Left Panel: Line Items List */}
       <div className="lg:col-span-3 border rounded-lg overflow-hidden flex flex-col bg-[#ffffff]" data-testid="panel-conversations-list">
         <div className="p-3 border-b bg-muted/30">
