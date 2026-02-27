@@ -35,7 +35,9 @@ import {
   Reply,
   ArrowUpRight,
   Sparkles,
-  X
+  X,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
@@ -157,12 +159,41 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
   const [isFullSyncRunning, setIsFullSyncRunning] = useState(false);
   const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0 });
   const [aiDraftDismissed, setAiDraftDismissed] = useState<number | null>(null);
+  const [aiInstructionOpen, setAiInstructionOpen] = useState(false);
+  const [aiInstructionText, setAiInstructionText] = useState("");
+  const [aiInstructionEdited, setAiInstructionEdited] = useState(false);
 
   const { data: workspaceData } = useQuery<any>({
     queryKey: ['/api/workspaces'],
     select: (data: any[]) => data?.find((w: any) => w.id === workspaceId),
   });
   const aiEnabled = workspaceData?.aiDraftEnabled === true;
+
+  const { data: aiInstructionData } = useQuery<{ instruction: string }>({
+    queryKey: ['/api/campaigns', campaignId, 'ai-instruction'],
+    queryFn: () => apiRequest('GET', `/api/campaigns/${campaignId}/ai-instruction`).then(r => r.json()),
+    enabled: aiEnabled,
+  });
+
+  useEffect(() => {
+    if (aiInstructionData) {
+      setAiInstructionText(aiInstructionData.instruction);
+      setAiInstructionEdited(false);
+    }
+  }, [aiInstructionData]);
+
+  const saveAiInstructionMutation = useMutation({
+    mutationFn: (instruction: string) =>
+      apiRequest('PUT', `/api/campaigns/${campaignId}/ai-instruction`, { instruction }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/campaigns', campaignId, 'ai-instruction'] });
+      setAiInstructionEdited(false);
+      toast({ title: "AI 지침이 저장되었습니다" });
+    },
+    onError: (err: any) => {
+      toast({ title: "저장 실패", description: err.message, variant: "destructive" });
+    },
+  });
 
   const { data: gmailStatus, isLoading: isLoadingGmail } = useQuery<{ connected: boolean; email?: string }>({
     queryKey: ['/api/email/gmail/status'],
@@ -396,6 +427,57 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
   };
 
   return (
+    <div className="flex flex-col gap-2">
+      {aiEnabled && (
+        <div className="border rounded-lg bg-purple-50/50 dark:bg-purple-950/20" data-testid="section-ai-instruction">
+          <button
+            onClick={() => setAiInstructionOpen(!aiInstructionOpen)}
+            className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-left hover:bg-purple-100/50 dark:hover:bg-purple-900/30 rounded-lg transition-colors"
+            data-testid="button-toggle-ai-instruction"
+          >
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-purple-500" />
+              <span>캠페인 AI 지침</span>
+              {aiInstructionText && (
+                <span className="text-xs text-muted-foreground max-w-[300px] truncate">
+                  — {aiInstructionText.substring(0, 50)}{aiInstructionText.length > 50 ? '...' : ''}
+                </span>
+              )}
+            </div>
+            {aiInstructionOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+          </button>
+          {aiInstructionOpen && (
+            <div className="px-4 pb-3 space-y-2">
+              <p className="text-xs text-muted-foreground">
+                이 캠페인의 AI 초안 생성 시 추가 적용할 지침을 작성하세요. (예: 캠페인 특이사항, 단가 가이드라인 등)
+              </p>
+              <Textarea
+                value={aiInstructionText}
+                onChange={(e) => {
+                  setAiInstructionText(e.target.value);
+                  setAiInstructionEdited(true);
+                }}
+                className="font-mono text-xs min-h-[120px] leading-relaxed bg-white dark:bg-gray-900"
+                placeholder="예: 이 캠페인의 제안 단가는 50만원이며, 최대 70만원까지 협의 가능합니다. 인플루언서가 단가 네고를 시도하면 60만원을 먼저 제안하세요."
+                data-testid="textarea-ai-instruction"
+              />
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => saveAiInstructionMutation.mutate(aiInstructionText)}
+                  disabled={saveAiInstructionMutation.isPending || !aiInstructionEdited}
+                  data-testid="button-save-ai-instruction"
+                >
+                  {saveAiInstructionMutation.isPending ? "저장 중..." : "지침 저장"}
+                </Button>
+                {aiInstructionEdited && (
+                  <span className="text-xs text-amber-600">수정됨 — 저장하지 않으면 반영되지 않습니다</span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 min-h-[600px] lg:h-[calc(100vh-100px)]">
       {/* Left Panel: Line Items List */}
       <div className="lg:col-span-3 border rounded-lg overflow-hidden flex flex-col bg-[#ffffff]" data-testid="panel-conversations-list">
@@ -715,6 +797,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
           workspaceId={workspaceId}
         />
       )}
+    </div>
     </div>
   );
 }

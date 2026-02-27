@@ -224,6 +224,49 @@ export default function SettingsPage() {
     }
   }, [fullWorkspace?.id, fullWorkspace?.aiDraftEnabled, fullWorkspace?.aiProvider, fullWorkspace?.aiModel]);
 
+  const { data: frameworkData, isLoading: isLoadingFramework } = useQuery<{ content: string; isCustom: boolean }>({
+    queryKey: ['/api/workspaces', workspaceId, 'ai-framework'],
+    queryFn: () => apiRequest('GET', `/api/workspaces/${workspaceId}/ai-framework`).then(r => r.json()),
+    enabled: !!workspaceId && aiDraftEnabled,
+  });
+
+  const [frameworkContent, setFrameworkContent] = useState("");
+  const [frameworkEdited, setFrameworkEdited] = useState(false);
+
+  useEffect(() => {
+    if (frameworkData) {
+      setFrameworkContent(frameworkData.content);
+      setFrameworkEdited(false);
+    }
+  }, [frameworkData]);
+
+  const saveFrameworkMutation = useMutation({
+    mutationFn: (content: string) =>
+      apiRequest('PUT', `/api/workspaces/${workspaceId}/ai-framework`, { content }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/workspaces', workspaceId, 'ai-framework'] });
+      setFrameworkEdited(false);
+      toast({ title: "프레임워크 문서가 저장되었습니다" });
+    },
+    onError: (err: any) => {
+      toast({ title: "저장 실패", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const resetFrameworkMutation = useMutation({
+    mutationFn: () =>
+      apiRequest('POST', `/api/workspaces/${workspaceId}/ai-framework/reset`).then(r => r.json()),
+    onSuccess: (data: { content: string }) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/workspaces', workspaceId, 'ai-framework'] });
+      setFrameworkContent(data.content);
+      setFrameworkEdited(false);
+      toast({ title: "기본 프레임워크 문서로 초기화되었습니다" });
+    },
+    onError: (err: any) => {
+      toast({ title: "초기화 실패", description: err.message, variant: "destructive" });
+    },
+  });
+
   const saveAiSettingsMutation = useMutation({
     mutationFn: (data: { aiDraftEnabled?: boolean; aiProvider?: string; aiApiKey?: string; aiModel?: string }) =>
       apiRequest('PATCH', `/api/workspaces/${workspaceId}`, data),
@@ -517,6 +560,63 @@ export default function SettingsPage() {
                 )}
               </CardContent>
             </Card>
+
+            {aiDraftEnabled && (
+              <Card className="mt-4">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <FileText className="h-5 w-5 text-purple-500" />
+                    이메일 대응 프레임워크
+                  </CardTitle>
+                  <CardDescription>
+                    AI 초안 생성 시 참조하는 이메일 대응 프레임워크 문서입니다. 마크다운 형식으로 작성합니다.
+                    {frameworkData?.isCustom && (
+                      <Badge variant="outline" className="ml-2 text-purple-600 border-purple-300">커스텀</Badge>
+                    )}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {isLoadingFramework ? (
+                    <div className="h-[300px] bg-muted animate-pulse rounded-md" />
+                  ) : (
+                    <>
+                      <Textarea
+                        value={frameworkContent}
+                        onChange={(e) => {
+                          setFrameworkContent(e.target.value);
+                          setFrameworkEdited(true);
+                        }}
+                        className="font-mono text-xs min-h-[300px] leading-relaxed"
+                        placeholder="이메일 대응 프레임워크 문서를 작성하세요..."
+                        data-testid="textarea-ai-framework"
+                      />
+                      <div className="flex items-center gap-2">
+                        <Button
+                          onClick={() => saveFrameworkMutation.mutate(frameworkContent)}
+                          disabled={saveFrameworkMutation.isPending || !frameworkEdited}
+                          data-testid="button-save-framework"
+                        >
+                          {saveFrameworkMutation.isPending ? "저장 중..." : "프레임워크 저장"}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            if (confirm("기본 프레임워크 문서로 초기화하시겠습니까? 현재 내용이 삭제됩니다.")) {
+                              resetFrameworkMutation.mutate();
+                            }
+                          }}
+                          disabled={resetFrameworkMutation.isPending || !frameworkData?.isCustom}
+                          data-testid="button-reset-framework"
+                        >
+                          <RotateCcw className="h-4 w-4 mr-1" />
+                          {resetFrameworkMutation.isPending ? "초기화 중..." : "기본값으로 초기화"}
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
         )}
 

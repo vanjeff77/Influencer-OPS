@@ -376,6 +376,69 @@ export async function registerRoutes(
     res.json(responseData);
   });
 
+  app.get('/api/workspaces/:id/ai-framework', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const workspaceId = parseInt(req.params.id);
+      const userId = (req.user as any).id;
+      const membership = await storage.getWorkspaceMember(userId, workspaceId);
+      if (!membership) return res.status(403).json({ message: "Forbidden" });
+
+      const [workspace] = await db.select().from(workspaces).where(eq(workspaces.id, workspaceId));
+      if (!workspace) return res.status(404).json({ message: "Workspace not found" });
+
+      if (workspace.aiFrameworkDoc) {
+        return res.json({ content: workspace.aiFrameworkDoc, isCustom: true });
+      }
+
+      const defaultPath = pathSync.join(process.cwd(), 'server', 'ai', 'email-framework.md');
+      const defaultContent = fsSync.readFileSync(defaultPath, 'utf-8');
+      res.json({ content: defaultContent, isCustom: false });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.put('/api/workspaces/:id/ai-framework', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const workspaceId = parseInt(req.params.id);
+      const userId = (req.user as any).id;
+      const membership = await storage.getWorkspaceMember(userId, workspaceId);
+      if (!membership || membership.role !== 'WORKSPACE_OWNER') {
+        return res.status(403).json({ message: "소유자만 프레임워크 문서를 수정할 수 있습니다." });
+      }
+
+      const { content } = req.body as { content: string };
+      if (content == null) return res.status(400).json({ message: "content is required" });
+
+      const updated = await storage.updateWorkspace(workspaceId, { aiFrameworkDoc: content });
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post('/api/workspaces/:id/ai-framework/reset', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const workspaceId = parseInt(req.params.id);
+      const userId = (req.user as any).id;
+      const membership = await storage.getWorkspaceMember(userId, workspaceId);
+      if (!membership || membership.role !== 'WORKSPACE_OWNER') {
+        return res.status(403).json({ message: "소유자만 프레임워크 문서를 초기화할 수 있습니다." });
+      }
+
+      await storage.updateWorkspace(workspaceId, { aiFrameworkDoc: null });
+
+      const defaultPath = pathSync.join(process.cwd(), 'server', 'ai', 'email-framework.md');
+      const defaultContent = fsSync.readFileSync(defaultPath, 'utf-8');
+      res.json({ content: defaultContent, isCustom: false });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   // === INFLUENCERS ===
   app.get(api.influencers.list.path, async (req, res) => {
     const wId = parseInt(req.params.workspaceId);
@@ -1023,6 +1086,45 @@ export async function registerRoutes(
   app.patch('/api/campaigns/:id', async (req, res) => {
     const campaign = await storage.updateCampaign(parseInt(req.params.id), req.body);
     res.json(campaign);
+  });
+
+  app.get('/api/campaigns/:id/ai-instruction', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const campaignId = parseInt(req.params.id);
+      const campaign = await storage.getCampaign(campaignId);
+      if (!campaign) return res.status(404).json({ message: "Campaign not found" });
+
+      const userId = (req.user as any).id;
+      const memberships = await storage.getWorkspaceMemberships(userId);
+      const member = memberships.find(m => m.workspaceId === campaign.workspaceId);
+      if (!member) return res.status(403).json({ message: "Forbidden" });
+
+      res.json({ instruction: campaign.aiInstruction || '' });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.put('/api/campaigns/:id/ai-instruction', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const campaignId = parseInt(req.params.id);
+      const campaign = await storage.getCampaign(campaignId);
+      if (!campaign) return res.status(404).json({ message: "Campaign not found" });
+
+      const userId = (req.user as any).id;
+      const memberships = await storage.getWorkspaceMemberships(userId);
+      const member = memberships.find(m => m.workspaceId === campaign.workspaceId);
+      if (!member) return res.status(403).json({ message: "Forbidden" });
+      if (member.role === 'CLIENT') return res.status(403).json({ message: "CLIENT role cannot edit AI instructions" });
+
+      const { instruction } = req.body as { instruction: string };
+      await storage.updateCampaign(campaignId, { aiInstruction: instruction || null });
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
   });
 
   app.delete('/api/campaigns/:id', async (req, res) => {

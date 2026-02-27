@@ -3,18 +3,25 @@ import * as path from "path";
 import { createProvider } from "./llm-provider";
 import type { Conversation, ConversationMessage, Influencer, Campaign, Workspace } from "@shared/schema";
 
-let frameworkDoc: string | null = null;
+let defaultFrameworkDoc: string | null = null;
 
-function getFrameworkDoc(): string {
-  if (!frameworkDoc) {
+function getDefaultFrameworkDoc(): string {
+  if (!defaultFrameworkDoc) {
     const docPath = path.join(process.cwd(), "server", "ai", "email-framework.md");
-    frameworkDoc = fs.readFileSync(docPath, "utf-8");
+    defaultFrameworkDoc = fs.readFileSync(docPath, "utf-8");
   }
-  return frameworkDoc;
+  return defaultFrameworkDoc;
 }
 
-function buildSystemPrompt(): string {
-  const framework = getFrameworkDoc();
+function getFrameworkDoc(workspace: Workspace): string {
+  if (workspace.aiFrameworkDoc) {
+    return workspace.aiFrameworkDoc;
+  }
+  return getDefaultFrameworkDoc();
+}
+
+function buildSystemPrompt(workspace: Workspace): string {
+  const framework = getFrameworkDoc(workspace);
   return `당신은 인플루언서 마케팅 에이전시 "밴스드"의 이메일 대응 AI 어시스턴트입니다.
 아래 이메일 대응 프레임워크 문서를 숙지하고, 인플루언서의 이메일에 대한 답장 초안을 작성합니다.
 
@@ -68,6 +75,11 @@ function buildUserPrompt(
   if (campaign.name) parts.push(`- 캠페인명: ${campaign.name}`);
   if (campaign.client) parts.push(`- 클라이언트: ${campaign.client}`);
   if (offerFee != null) parts.push(`- 제안 단가: ${offerFee.toLocaleString()}원`);
+
+  if (campaign.aiInstruction) {
+    parts.push("\n## 캠페인별 추가 지침");
+    parts.push(campaign.aiInstruction);
+  }
   
   parts.push("\n위 대화의 마지막 인플루언서 메시지에 대한 답장 초안을 작성해주세요.");
 
@@ -88,7 +100,7 @@ export async function generateEmailDraft(
   offerFee?: number | null,
 ): Promise<DraftResult> {
   const provider = createProvider(workspace);
-  const systemPrompt = buildSystemPrompt();
+  const systemPrompt = buildSystemPrompt(workspace);
   const userPrompt = buildUserPrompt(messages, influencer, campaign, offerFee);
 
   const result = await provider.generateDraft(systemPrompt, userPrompt);

@@ -46,6 +46,7 @@ export const workspaces = pgTable("workspaces", {
   aiProvider: text("ai_provider").default("replit"),
   aiApiKey: text("ai_api_key"),
   aiModel: text("ai_model"),
+  aiFrameworkDoc: text("ai_framework_doc"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -183,6 +184,7 @@ export const campaigns = pgTable("campaigns", {
   startDate: timestamp("start_date"),
   endDate: timestamp("end_date"),
   status: text("status").default("대기중"), // 대기중, 진행중, 완료
+  aiInstruction: text("ai_instruction"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
