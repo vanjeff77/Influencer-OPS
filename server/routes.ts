@@ -12,6 +12,7 @@ import { eq, and, or, inArray, sql, isNull, desc } from "drizzle-orm";
 import { getImapSmtpSettings } from "./smtp";
 import { encryptPassword } from "./imap";
 import { normalizeInstagramHandle, normalizeInstagramUrl } from "@shared/utils";
+import { getDefaultFrameworkDoc } from "./ai/draft-generator";
 
 // Singleton browser instance for PDF generation
 let sharedBrowser: any = null;
@@ -391,9 +392,7 @@ export async function registerRoutes(
         return res.json({ content: workspace.aiFrameworkDoc, isCustom: true });
       }
 
-      const defaultPath = pathSync.join(process.cwd(), 'server', 'ai', 'email-framework.md');
-      const defaultContent = fsSync.readFileSync(defaultPath, 'utf-8');
-      res.json({ content: defaultContent, isCustom: false });
+      res.json({ content: getDefaultFrameworkDoc(), isCustom: false });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
@@ -431,9 +430,7 @@ export async function registerRoutes(
 
       await storage.updateWorkspace(workspaceId, { aiFrameworkDoc: null });
 
-      const defaultPath = pathSync.join(process.cwd(), 'server', 'ai', 'email-framework.md');
-      const defaultContent = fsSync.readFileSync(defaultPath, 'utf-8');
-      res.json({ content: defaultContent, isCustom: false });
+      res.json({ content: getDefaultFrameworkDoc(), isCustom: false });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }

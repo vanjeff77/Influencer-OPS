@@ -1,6 +1,6 @@
 import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
-import { rm, readFile } from "fs/promises";
+import { rm, readFile, mkdir, copyFile } from "fs/promises";
 
 // server deps to bundle to reduce openat(2) syscalls
 // which helps cold start times
@@ -45,6 +45,10 @@ async function buildAll() {
     ...Object.keys(pkg.devDependencies || {}),
   ];
   const externals = allDeps.filter((dep) => !allowlist.includes(dep));
+
+  console.log("copying static assets...");
+  await mkdir("dist/server/ai", { recursive: true });
+  await copyFile("server/ai/email-framework.md", "dist/server/ai/email-framework.md");
 
   await esbuild({
     entryPoints: ["server/index.ts"],

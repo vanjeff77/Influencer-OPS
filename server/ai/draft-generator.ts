@@ -5,10 +5,19 @@ import type { Conversation, ConversationMessage, Influencer, Campaign, Workspace
 
 let defaultFrameworkDoc: string | null = null;
 
-function getDefaultFrameworkDoc(): string {
+export function getDefaultFrameworkDoc(): string {
   if (!defaultFrameworkDoc) {
-    const docPath = path.join(process.cwd(), "server", "ai", "email-framework.md");
-    defaultFrameworkDoc = fs.readFileSync(docPath, "utf-8");
+    const candidates = [
+      path.join(process.cwd(), "server", "ai", "email-framework.md"),
+      path.join(process.cwd(), "dist", "server", "ai", "email-framework.md"),
+    ];
+    for (const docPath of candidates) {
+      try {
+        defaultFrameworkDoc = fs.readFileSync(docPath, "utf-8");
+        break;
+      } catch {}
+    }
+    if (!defaultFrameworkDoc) defaultFrameworkDoc = "";
   }
   return defaultFrameworkDoc;
 }
