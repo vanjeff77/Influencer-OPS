@@ -64,6 +64,7 @@ function buildUserPrompt(
   influencer: Partial<Influencer>,
   campaign: Partial<Campaign>,
   offerFee?: number | null,
+  userFeedback?: string,
 ): string {
   const recentMessages = messages.slice(-10);
   
@@ -89,6 +90,11 @@ function buildUserPrompt(
     parts.push("\n## 캠페인별 추가 지침");
     parts.push(campaign.aiInstruction);
   }
+
+  if (userFeedback && userFeedback.trim()) {
+    parts.push("\n## 사용자 추가 요청사항");
+    parts.push(userFeedback.trim());
+  }
   
   parts.push("\n위 대화의 마지막 인플루언서 메시지에 대한 답장 초안을 작성해주세요.");
 
@@ -107,10 +113,11 @@ export async function generateEmailDraft(
   campaign: Partial<Campaign>,
   workspace: Workspace,
   offerFee?: number | null,
+  userFeedback?: string,
 ): Promise<DraftResult> {
   const provider = createProvider(workspace);
   const systemPrompt = buildSystemPrompt(workspace);
-  const userPrompt = buildUserPrompt(messages, influencer, campaign, offerFee);
+  const userPrompt = buildUserPrompt(messages, influencer, campaign, offerFee, userFeedback);
 
   const result = await provider.generateDraft(systemPrompt, userPrompt);
   

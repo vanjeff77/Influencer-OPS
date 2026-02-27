@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -37,7 +38,8 @@ import {
   Sparkles,
   X,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Maximize2
 } from "lucide-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
@@ -262,8 +264,10 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
   });
 
   const generateAiDraft = useMutation({
-    mutationFn: async (conversationId: number) => {
-      const res = await apiRequest('POST', `/api/conversations/${conversationId}/ai-draft`);
+    mutationFn: async (params: { conversationId: number; userFeedback?: string }) => {
+      const res = await apiRequest('POST', `/api/conversations/${params.conversationId}/ai-draft`, {
+        userFeedback: params.userFeedback,
+      });
       return res.json();
     },
     onSuccess: () => {
@@ -712,7 +716,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
               aiDraft={aiEnabled && aiDraft && aiDraftDismissed !== aiDraft.id ? aiDraft : null}
               aiEnabled={aiEnabled}
               isLastInbound={conversationDetail?.messages && conversationDetail.messages.length > 0 && conversationDetail.messages[conversationDetail.messages.length - 1]?.direction === 'inbound'}
-              onGenerateDraft={() => existingConv && generateAiDraft.mutate(existingConv.id)}
+              onGenerateDraft={(userFeedback?: string) => existingConv && generateAiDraft.mutate({ conversationId: existingConv.id, userFeedback })}
               isGeneratingDraft={generateAiDraft.isPending}
               onUseDraft={(draftId: number) => updateAiDraft.mutate({ draftId, status: 'used' })}
               onDismissDraft={(draftId: number) => {
@@ -899,11 +903,16 @@ function MessageThread({ messages, onViewFull }: { messages: ConversationMessage
   );
 }
 
-function MessageComposer({ conversationId, influencerEmail, senderEmail, lastMessageCc, aiDraft, aiEnabled, isLastInbound, onGenerateDraft, isGeneratingDraft, onUseDraft, onDismissDraft, onSent }: { conversationId?: number; influencerEmail?: string | null; senderEmail?: string | null; lastMessageCc?: string[] | null; aiDraft?: any; aiEnabled?: boolean; isLastInbound?: boolean; onGenerateDraft?: () => void; isGeneratingDraft?: boolean; onUseDraft?: (id: number) => void; onDismissDraft?: (id: number) => void; onSent: () => void }) {
+function MessageComposer({ conversationId, influencerEmail, senderEmail, lastMessageCc, aiDraft, aiEnabled, isLastInbound, onGenerateDraft, isGeneratingDraft, onUseDraft, onDismissDraft, onSent }: { conversationId?: number; influencerEmail?: string | null; senderEmail?: string | null; lastMessageCc?: string[] | null; aiDraft?: any; aiEnabled?: boolean; isLastInbound?: boolean; onGenerateDraft?: (userFeedback?: string) => void; isGeneratingDraft?: boolean; onUseDraft?: (id: number) => void; onDismissDraft?: (id: number) => void; onSent: () => void }) {
   const { toast } = useToast();
   const [message, setMessage] = useState("");
   const [cc, setCc] = useState(lastMessageCc?.join(', ') || "");
   const [showCcEdit, setShowCcEdit] = useState(false);
+  const [showFeedbackInput, setShowFeedbackInput] = useState(false);
+  const [feedbackText, setFeedbackText] = useState("");
+  const [expandDialogOpen, setExpandDialogOpen] = useState(false);
+  const [expandMessage, setExpandMessage] = useState("");
+  const [expandCc, setExpandCc] = useState("");
 
   const lastCcKey = lastMessageCc ? [...lastMessageCc].sort().join('|') : '';
   useEffect(() => {
@@ -984,6 +993,21 @@ function MessageComposer({ conversationId, influencerEmail, senderEmail, lastMes
                   <Button
                     size="icon"
                     variant="ghost"
+                    className="h-6 w-6 text-purple-500 hover:text-purple-700"
+                    onClick={() => setShowFeedbackInput(!showFeedbackInput)}
+                    disabled={isGeneratingDraft}
+                    data-testid="button-toggle-feedback"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>요청사항 반영 재생성</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant="ghost"
                     className="h-6 w-6 text-muted-foreground hover:text-foreground"
                     onClick={() => onDismissDraft?.(aiDraft.id)}
                     data-testid="button-dismiss-draft"
@@ -998,6 +1022,45 @@ function MessageComposer({ conversationId, influencerEmail, senderEmail, lastMes
           <div className="text-sm text-foreground whitespace-pre-wrap mb-2 max-h-[120px] overflow-y-auto" data-testid="text-ai-draft-body">
             {aiDraft.draft}
           </div>
+          {showFeedbackInput && (
+            <div className="mb-2 space-y-2" data-testid="section-feedback-input">
+              <Textarea
+                value={feedbackText}
+                onChange={(e) => setFeedbackText(e.target.value)}
+                placeholder="수정 요청사항을 입력하세요 (예: 좀 더 정중하게, 단가를 강조해주세요)"
+                className="text-xs min-h-[60px] max-h-[100px] resize-none bg-white dark:bg-gray-900"
+                data-testid="textarea-feedback"
+              />
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  className="text-xs bg-purple-600 text-white"
+                  onClick={() => {
+                    onGenerateDraft?.(feedbackText || undefined);
+                    setShowFeedbackInput(false);
+                    setFeedbackText("");
+                  }}
+                  disabled={isGeneratingDraft}
+                  data-testid="button-submit-regenerate"
+                >
+                  {isGeneratingDraft ? (
+                    <><Loader2 className="w-3 h-3 mr-1 animate-spin" />재생성 중...</>
+                  ) : (
+                    <><RefreshCw className="w-3 h-3 mr-1" />재생성</>
+                  )}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-xs"
+                  onClick={() => { setShowFeedbackInput(false); setFeedbackText(""); }}
+                  data-testid="button-cancel-feedback"
+                >
+                  취소
+                </Button>
+              </div>
+            </div>
+          )}
           <Button
             size="sm"
             variant="outline"
@@ -1105,8 +1168,91 @@ function MessageComposer({ conversationId, influencerEmail, senderEmail, lastMes
           >
             {sendMessage.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
           </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => {
+              setExpandMessage(message);
+              setExpandCc(cc);
+              setExpandDialogOpen(true);
+            }}
+            data-testid="button-expand-composer"
+          >
+            <Maximize2 className="w-4 h-4" />
+          </Button>
         </div>
       </div>
+
+      <Dialog open={expandDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          setMessage(expandMessage);
+          setCc(expandCc);
+        }
+        setExpandDialogOpen(open);
+      }}>
+        <DialogContent className="max-w-2xl" data-testid="dialog-expand-composer">
+          <DialogHeader>
+            <DialogTitle>메시지 작성</DialogTitle>
+            <DialogDescription className="sr-only">넓은 화면에서 메시지를 작성합니다</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
+              {senderEmail && (
+                <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-muted">
+                  <Mail className="w-3 h-3" /> {senderEmail}
+                </span>
+              )}
+              <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-muted">
+                <User className="w-3 h-3" /> {influencerEmail}
+              </span>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">참조 (CC)</label>
+              <Input
+                placeholder="이메일 주소, 쉼표로 구분"
+                value={expandCc}
+                onChange={(e) => setExpandCc(e.target.value)}
+                className="text-sm"
+                data-testid="input-expand-cc"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">본문</label>
+              <Textarea
+                placeholder={KO.pages.communication.typeMessage}
+                value={expandMessage}
+                onChange={(e) => setExpandMessage(e.target.value)}
+                className="text-sm resize-y"
+                style={{ minHeight: '300px' }}
+                autoFocus
+                data-testid="input-expand-message-body"
+              />
+            </div>
+            <div className="flex justify-end">
+              <Button
+                onClick={() => {
+                  if (!expandMessage.trim() || !conversationId) return;
+                  sendMessage.mutate(
+                    { body: expandMessage, cc: expandCc.trim() || undefined },
+                    {
+                      onSuccess: () => {
+                        setExpandMessage("");
+                        setExpandCc("");
+                        setExpandDialogOpen(false);
+                      },
+                    }
+                  );
+                }}
+                disabled={sendMessage.isPending || !expandMessage.trim()}
+                data-testid="button-expand-send"
+              >
+                {sendMessage.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Send className="w-4 h-4 mr-1" />}
+                전송
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

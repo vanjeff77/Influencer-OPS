@@ -105,7 +105,9 @@ Preferred communication style: Simple, everyday language.
     - **Framework Editing**: Settings > AI tab shows textarea for editing framework doc (markdown, monospace). "Save" and "Reset to default" buttons. `GET/PUT /api/workspaces/:id/ai-framework`, `POST /api/workspaces/:id/ai-framework/reset`.
     - **Campaign AI Instructions**: `GET/PUT /api/campaigns/:id/ai-instruction`. Collapsible panel on Communication tab with textarea, save button, and edit indicator.
     - **Communication UI**: Auto-displays pending draft card (purple theme) above MessageComposer when conversation selected. "Use draft" inserts into textarea, "Regenerate" calls LLM again, "Dismiss" hides card. Manual "Generate AI draft" button when no pending draft and last message is inbound. Sparkles icon on conversation list items with pending drafts.
-    - **API Endpoints**: `GET/POST /api/conversations/:id/ai-draft`, `PATCH /api/ai-drafts/:id`, `POST /api/conversations/ai-draft-ids`.
+    - **User Feedback Regeneration**: AI draft card has a separate "요청사항 반영 재생성" button (MessageSquare icon) that toggles a feedback textarea. User can type specific instructions (e.g., "좀 더 정중하게") and regenerate with feedback. API accepts optional `userFeedback` body param on `POST /api/conversations/:id/ai-draft`, appended as "사용자 추가 요청사항" section in user prompt.
+    - **Expandable Message Composer**: Maximize2 button next to send button opens a Dialog modal with full-width textarea (min-height 300px), CC input, sender/recipient info, and send button. Content syncs back to inline composer when dialog closes.
+    - **API Endpoints**: `GET/POST /api/conversations/:id/ai-draft` (POST accepts optional `userFeedback`), `PATCH /api/ai-drafts/:id`, `POST /api/conversations/ai-draft-ids`.
     - **Safety**: Never auto-sends. User always reviews and manually sends.
 
 ## External Dependencies

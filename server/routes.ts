@@ -2603,6 +2603,8 @@ export async function registerRoutes(
       if (!workspace) return res.status(404).json({ message: "워크스페이스를 찾을 수 없습니다" });
       if (!workspace.aiDraftEnabled) return res.status(400).json({ message: "AI 초안 기능이 비활성화되어 있습니다" });
 
+      const { userFeedback } = (req.body || {}) as { userFeedback?: string };
+
       const messages = await storage.getConversationMessages(conversationId);
       if (messages.length === 0) return res.status(400).json({ message: "대화 메시지가 없습니다" });
 
@@ -2616,6 +2618,7 @@ export async function registerRoutes(
         campaign,
         workspace,
         lineItem.offerFee,
+        userFeedback,
       );
 
       const existingDraft = await storage.getLatestPendingDraft(conversationId);
