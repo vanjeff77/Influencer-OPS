@@ -264,9 +264,11 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
   });
 
   const generateAiDraft = useMutation({
-    mutationFn: async (params: { conversationId: number; userFeedback?: string }) => {
+    mutationFn: async (params: { conversationId: number; userFeedback?: string; requestedClassification?: string; requestedClassificationLabel?: string }) => {
       const res = await apiRequest('POST', `/api/conversations/${params.conversationId}/ai-draft`, {
         userFeedback: params.userFeedback,
+        requestedClassification: params.requestedClassification,
+        requestedClassificationLabel: params.requestedClassificationLabel,
       });
       return res.json();
     },
@@ -716,7 +718,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
               aiDraft={aiEnabled && aiDraft && aiDraftDismissed !== aiDraft.id ? aiDraft : null}
               aiEnabled={aiEnabled}
               isLastInbound={conversationDetail?.messages && conversationDetail.messages.length > 0 && conversationDetail.messages[conversationDetail.messages.length - 1]?.direction === 'inbound'}
-              onGenerateDraft={(userFeedback?: string) => existingConv && generateAiDraft.mutate({ conversationId: existingConv.id, userFeedback })}
+              onGenerateDraft={(userFeedback?: string, requestedClassification?: string, requestedClassificationLabel?: string) => existingConv && generateAiDraft.mutate({ conversationId: existingConv.id, userFeedback, requestedClassification, requestedClassificationLabel })}
               isGeneratingDraft={generateAiDraft.isPending}
               onUseDraft={(draftId: number) => updateAiDraft.mutate({ draftId, status: 'used' })}
               onDismissDraft={(draftId: number) => {
@@ -903,7 +905,7 @@ function MessageThread({ messages, onViewFull }: { messages: ConversationMessage
   );
 }
 
-function MessageComposer({ conversationId, influencerEmail, senderEmail, lastMessageCc, aiDraft, aiEnabled, isLastInbound, onGenerateDraft, isGeneratingDraft, onUseDraft, onDismissDraft, onSent }: { conversationId?: number; influencerEmail?: string | null; senderEmail?: string | null; lastMessageCc?: string[] | null; aiDraft?: any; aiEnabled?: boolean; isLastInbound?: boolean; onGenerateDraft?: (userFeedback?: string) => void; isGeneratingDraft?: boolean; onUseDraft?: (id: number) => void; onDismissDraft?: (id: number) => void; onSent: () => void }) {
+function MessageComposer({ conversationId, influencerEmail, senderEmail, lastMessageCc, aiDraft, aiEnabled, isLastInbound, onGenerateDraft, isGeneratingDraft, onUseDraft, onDismissDraft, onSent }: { conversationId?: number; influencerEmail?: string | null; senderEmail?: string | null; lastMessageCc?: string[] | null; aiDraft?: any; aiEnabled?: boolean; isLastInbound?: boolean; onGenerateDraft?: (userFeedback?: string, requestedClassification?: string, requestedClassificationLabel?: string) => void; isGeneratingDraft?: boolean; onUseDraft?: (id: number) => void; onDismissDraft?: (id: number) => void; onSent: () => void }) {
   const { toast } = useToast();
   const [message, setMessage] = useState("");
   const [cc, setCc] = useState(lastMessageCc?.join(', ') || "");
@@ -972,56 +974,37 @@ function MessageComposer({ conversationId, influencerEmail, senderEmail, lastMes
                 </Badge>
               )}
             </div>
-            <div className="flex items-center gap-1">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-6 w-6 text-purple-500 hover:text-purple-700"
-                    onClick={() => onGenerateDraft?.()}
-                    disabled={isGeneratingDraft}
-                    data-testid="button-regenerate-draft"
-                  >
-                    {isGeneratingDraft ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>재생성</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-6 w-6 text-purple-500 hover:text-purple-700"
-                    onClick={() => setShowFeedbackInput(!showFeedbackInput)}
-                    disabled={isGeneratingDraft}
-                    data-testid="button-toggle-feedback"
-                  >
-                    <MessageSquare className="w-3.5 h-3.5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>요청사항 반영 재생성</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                    onClick={() => onDismissDraft?.(aiDraft.id)}
-                    data-testid="button-dismiss-draft"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>닫기</TooltipContent>
-              </Tooltip>
-            </div>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-6 w-6 text-muted-foreground hover:text-foreground"
+              onClick={() => onDismissDraft?.(aiDraft.id)}
+              data-testid="button-dismiss-draft"
+            >
+              <X className="w-3.5 h-3.5" />
+            </Button>
           </div>
           <div className="text-sm text-foreground whitespace-pre-wrap mb-2 max-h-[120px] overflow-y-auto" data-testid="text-ai-draft-body">
             {aiDraft.draft}
           </div>
+          {aiDraft.alternativesParsed && aiDraft.alternativesParsed.length > 0 && (
+            <div className="mb-2 flex items-center gap-1.5 flex-wrap" data-testid="section-alternatives">
+              <span className="text-[10px] text-muted-foreground">다른 옵션:</span>
+              {aiDraft.alternativesParsed.map((alt: { classification: string; classificationLabel: string }, idx: number) => (
+                <Button
+                  key={idx}
+                  size="sm"
+                  variant="outline"
+                  className="text-[10px] h-6 px-2 py-0 text-purple-600 border-purple-200 hover:bg-purple-50"
+                  onClick={() => onGenerateDraft?.(undefined, alt.classification, alt.classificationLabel)}
+                  disabled={isGeneratingDraft}
+                  data-testid={`button-alternative-${idx}`}
+                >
+                  {alt.classification} {alt.classificationLabel}
+                </Button>
+              ))}
+            </div>
+          )}
           {showFeedbackInput && (
             <div className="mb-2 space-y-2" data-testid="section-feedback-input">
               <Textarea
@@ -1061,16 +1044,40 @@ function MessageComposer({ conversationId, influencerEmail, senderEmail, lastMes
               </div>
             </div>
           )}
-          <Button
-            size="sm"
-            variant="outline"
-            className="text-xs bg-purple-100 hover:bg-purple-200 text-purple-700 border-purple-200"
-            onClick={handleUseDraft}
-            data-testid="button-use-draft"
-          >
-            <Sparkles className="w-3 h-3 mr-1" />
-            초안 사용
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-xs bg-purple-100 hover:bg-purple-200 text-purple-700 border-purple-200"
+              onClick={handleUseDraft}
+              data-testid="button-use-draft"
+            >
+              <Sparkles className="w-3 h-3 mr-1" />
+              초안 사용
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-xs text-purple-600 border-purple-200 hover:bg-purple-50"
+              onClick={() => onGenerateDraft?.()}
+              disabled={isGeneratingDraft}
+              data-testid="button-regenerate-draft"
+            >
+              {isGeneratingDraft ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <RefreshCw className="w-3 h-3 mr-1" />}
+              재생성
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-xs text-purple-600 border-purple-200 hover:bg-purple-50"
+              onClick={() => setShowFeedbackInput(!showFeedbackInput)}
+              disabled={isGeneratingDraft}
+              data-testid="button-toggle-feedback"
+            >
+              <MessageSquare className="w-3 h-3 mr-1" />
+              요청 반영
+            </Button>
+          </div>
         </div>
       )}
 

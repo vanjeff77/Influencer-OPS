@@ -5,6 +5,7 @@ export interface LLMResponse {
   draft: string;
   classification: string;
   classificationLabel: string;
+  alternatives?: Array<{ classification: string; classificationLabel: string }>;
 }
 
 export interface LLMProvider {
@@ -109,6 +110,7 @@ function parseJsonResponse(content: string): LLMResponse {
         draft: parsed.draft || parsed.reply || content,
         classification: parsed.classification || "unknown",
         classificationLabel: parsed.classificationLabel || parsed.classification_label || "미분류",
+        alternatives: Array.isArray(parsed.alternatives) ? parsed.alternatives : undefined,
       };
     }
   } catch (e) {

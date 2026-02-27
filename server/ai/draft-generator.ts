@@ -46,9 +46,17 @@ ${framework}
 {
   "classification": "분류 코드 (예: A-3, B-1, R-2 등)",
   "classificationLabel": "분류 라벨 (예: 소폭 초과 네고, 즉시 수락 등)",
-  "draft": "생성된 답장 초안 전체 텍스트"
+  "draft": "생성된 답장 초안 전체 텍스트",
+  "alternatives": [
+    { "classification": "대안1 코드", "classificationLabel": "대안1 라벨" },
+    { "classification": "대안2 코드", "classificationLabel": "대안2 라벨" }
+  ]
 }
 \`\`\`
+
+- "alternatives"는 현재 선택한 분류 외에 차순위로 가능성 있는 대안 응답 옵션 2개입니다
+- 각 대안은 해당 상황에서 담당자가 선택할 수 있는 다른 대응 방식이어야 합니다
+- 예: 메인이 "네고 제안(R-2)"이면 대안으로 "수락(R-3)", "거절(R-1)" 등을 제시
 
 ## 답장 작성 규칙
 1. 프레임워크의 톤&매너 규칙(섹션 0)을 반드시 따르세요
@@ -101,10 +109,16 @@ function buildUserPrompt(
   return parts.join("\n");
 }
 
+export interface DraftAlternative {
+  classification: string;
+  classificationLabel: string;
+}
+
 export interface DraftResult {
   draft: string;
   classification: string;
   classificationLabel: string;
+  alternatives?: DraftAlternative[];
 }
 
 export async function generateEmailDraft(
@@ -114,10 +128,19 @@ export async function generateEmailDraft(
   workspace: Workspace,
   offerFee?: number | null,
   userFeedback?: string,
+  requestedClassification?: string,
+  requestedClassificationLabel?: string,
 ): Promise<DraftResult> {
   const provider = createProvider(workspace);
   const systemPrompt = buildSystemPrompt(workspace);
-  const userPrompt = buildUserPrompt(messages, influencer, campaign, offerFee, userFeedback);
+  
+  let feedback = userFeedback;
+  if (requestedClassification) {
+    const classificationInstruction = `지정된 분류 코드로 초안을 작성하세요: ${requestedClassification}${requestedClassificationLabel ? ` (${requestedClassificationLabel})` : ''}. 이 분류에 맞는 PHASE 3 답장 템플릿을 사용하세요.`;
+    feedback = feedback ? `${feedback}\n\n${classificationInstruction}` : classificationInstruction;
+  }
+  
+  const userPrompt = buildUserPrompt(messages, influencer, campaign, offerFee, feedback);
 
   const result = await provider.generateDraft(systemPrompt, userPrompt);
   
@@ -125,5 +148,6 @@ export async function generateEmailDraft(
     draft: result.draft,
     classification: result.classification,
     classificationLabel: result.classificationLabel,
+    alternatives: Array.isArray(result.alternatives) ? result.alternatives : undefined,
   };
 }

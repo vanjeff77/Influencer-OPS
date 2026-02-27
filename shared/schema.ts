@@ -516,6 +516,7 @@ export const aiDraftReplies = pgTable("ai_draft_replies", {
   draft: text("draft").notNull(),
   classification: text("classification"),
   classificationLabel: text("classification_label"),
+  alternatives: text("alternatives"),
   status: text("status").default("pending"),
   createdAt: timestamp("created_at").defaultNow(),
 });

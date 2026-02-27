@@ -2576,6 +2576,11 @@ export async function registerRoutes(
       const conversationId = parseInt(req.params.id);
       if (isNaN(conversationId)) return res.status(400).json({ message: "Invalid conversation ID" });
       const draft = await storage.getLatestPendingDraft(conversationId);
+      if (draft && draft.alternatives) {
+        try {
+          (draft as any).alternativesParsed = JSON.parse(draft.alternatives);
+        } catch {}
+      }
       res.json(draft || null);
     } catch (err) {
       console.error('Get AI draft error:', err);
@@ -2603,7 +2608,7 @@ export async function registerRoutes(
       if (!workspace) return res.status(404).json({ message: "워크스페이스를 찾을 수 없습니다" });
       if (!workspace.aiDraftEnabled) return res.status(400).json({ message: "AI 초안 기능이 비활성화되어 있습니다" });
 
-      const { userFeedback } = (req.body || {}) as { userFeedback?: string };
+      const { userFeedback, requestedClassification, requestedClassificationLabel } = (req.body || {}) as { userFeedback?: string; requestedClassification?: string; requestedClassificationLabel?: string };
 
       const messages = await storage.getConversationMessages(conversationId);
       if (messages.length === 0) return res.status(400).json({ message: "대화 메시지가 없습니다" });
@@ -2619,6 +2624,8 @@ export async function registerRoutes(
         workspace,
         lineItem.offerFee,
         userFeedback,
+        requestedClassification,
+        requestedClassificationLabel,
       );
 
       const existingDraft = await storage.getLatestPendingDraft(conversationId);
@@ -2632,10 +2639,15 @@ export async function registerRoutes(
         draft: result.draft,
         classification: result.classification,
         classificationLabel: result.classificationLabel,
+        alternatives: result.alternatives ? JSON.stringify(result.alternatives) : null,
         status: 'pending',
       });
 
-      res.json(draft);
+      const response: any = { ...draft };
+      if (draft.alternatives) {
+        try { response.alternativesParsed = JSON.parse(draft.alternatives); } catch {}
+      }
+      res.json(response);
     } catch (err) {
       console.error('Generate AI draft error:', err);
       res.status(500).json({ message: "AI 초안 생성 실패: " + (err as Error).message });
