@@ -655,10 +655,6 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                           <span className="truncate w-0 flex-1">
                             {conv?.lastMessage?.snippet || li.influencer?.email || KO.pages.communication.noConversations}
                           </span>
-                          <div className="flex items-center gap-1 shrink-0 ml-auto">
-                            {getFirstContactBadge(li)}
-                            {getStatusBadge(conv)}
-                          </div>
                         </div>
                       </div>
                     </div>
