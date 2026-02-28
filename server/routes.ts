@@ -13,7 +13,7 @@ import { getImapSmtpSettings } from "./smtp";
 import { encryptPassword } from "./imap";
 import { normalizeInstagramHandle, normalizeInstagramUrl } from "@shared/utils";
 import { getDefaultFrameworkDoc } from "./ai/draft-generator";
-import { fetchProfileImage } from "./profile-fetcher";
+import { fetchProfileImage, getDirectDownloadUrl } from "./profile-fetcher";
 
 // Singleton browser instance for PDF generation
 let sharedBrowser: any = null;
@@ -4796,10 +4796,11 @@ export async function registerRoutes(
       const membership = await storage.getWorkspaceMember(inf.workspaceId, user.id);
       if (!membership) return res.status(403).json({ message: "Forbidden" });
 
-      const imageUrl = await fetchProfileImage(account.platform, account.handle);
-      if (imageUrl) {
-        await db.update(influencerAccounts).set({ profileImageUrl: imageUrl }).where(eq(influencerAccounts.id, accountId));
-        res.json({ success: true, profileImageUrl: imageUrl });
+      const result = await fetchProfileImage(account.platform, account.handle);
+      if (result) {
+        const proxyUrl = `/api/profile-image/${result.fileId}`;
+        await db.update(influencerAccounts).set({ profileImageUrl: proxyUrl, profileImageFileId: result.fileId }).where(eq(influencerAccounts.id, accountId));
+        res.json({ success: true, profileImageUrl: proxyUrl });
       } else {
         res.json({ success: false, message: "Could not fetch profile image" });
       }
@@ -4836,9 +4837,10 @@ export async function registerRoutes(
         const batch = toFetch.slice(i, i + BATCH_SIZE);
         const results = await Promise.allSettled(
           batch.map(async (acc) => {
-            const imageUrl = await fetchProfileImage(acc.platform, acc.handle);
-            if (imageUrl) {
-              await db.update(influencerAccounts).set({ profileImageUrl: imageUrl }).where(eq(influencerAccounts.id, acc.id));
+            const result = await fetchProfileImage(acc.platform, acc.handle);
+            if (result) {
+              const proxyUrl = `/api/profile-image/${result.fileId}`;
+              await db.update(influencerAccounts).set({ profileImageUrl: proxyUrl, profileImageFileId: result.fileId }).where(eq(influencerAccounts.id, acc.id));
               return true;
             }
             return false;
@@ -4851,6 +4853,22 @@ export async function registerRoutes(
     } catch (err: any) {
       console.error('Refresh all profile images error:', err);
       res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get('/api/profile-image/:fileId', async (req, res) => {
+    try {
+      const { fileId } = req.params;
+      if (!fileId) return res.status(400).json({ message: "Missing fileId" });
+
+      const downloadUrl = await getDirectDownloadUrl(fileId);
+      if (!downloadUrl) return res.status(404).json({ message: "Image not found" });
+
+      res.set('Cache-Control', 'public, max-age=86400');
+      res.redirect(302, downloadUrl);
+    } catch (err: any) {
+      console.error('Profile image proxy error:', err.message);
+      res.status(500).json({ message: "Failed to serve image" });
     }
   });
 

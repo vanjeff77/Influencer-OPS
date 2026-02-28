@@ -52,7 +52,13 @@ Preferred communication style: Simple, everyday language.
 - **Content Submission History**: Tracks influencer content submissions, supports multiple uploads, and integrates with review tracking.
 - **Finance & Tracking**: Real-time finance summary and CSV export.
 - **Settlement Management**: Finance page with work queue, settlement info editing, payout status workflow, and role-based access control.
-- **Influencer Profile Image Auto-Fetch**: Async background fetching of profile images from platforms like Instagram and YouTube.
+- **Influencer Profile Image Auto-Fetch**:
+    - **Schema**: `profileImageUrl` and `profileImageFileId` columns on `influencer_accounts` table.
+    - **Service**: `server/profile-fetcher.ts` — RapidAPI (instagram120) for IG, YouTube Data API for YT.
+    - **OneDrive Caching**: Images downloaded from CDN, uploaded to OneDrive `프로필사진/` folder, served via `/api/profile-image/:fileId` proxy endpoint (302 redirect to OneDrive download URL with 24h cache).
+    - **Auto-trigger**: On influencer account create/update, background fetch runs async.
+    - **Manual APIs**: `POST /api/influencer-accounts/:id/refresh-profile-image`, `POST /api/workspaces/:workspaceId/influencers/refresh-all-profile-images`.
+    - **Environment**: `RAPIDAPI_KEY` (secret) for Instagram, `YOUTUBE_API_KEY` (optional) for YouTube.
 - **Security**: IMAP password encryption (AES-256-CBC), Zod validation, authentication and workspace authorization.
 - **Contract Template Management**: CRUD operations for templates, rich text editor (TipTap), variable substitution, and dual DOCX/PDF export.
 - **Client Logo Management**: URL-based client logos with live preview and integration into campaign UI.

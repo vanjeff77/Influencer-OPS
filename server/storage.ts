@@ -1564,10 +1564,10 @@ export class DatabaseStorage implements IStorage {
     Promise.allSettled(
       toFetch.map(async (acc) => {
         try {
-          const imageUrl = await fetchProfileImage(acc.platform, acc.handle);
-          if (imageUrl) {
+          const result = await fetchProfileImage(acc.platform, acc.handle);
+          if (result) {
             await db.update(influencerAccounts)
-              .set({ profileImageUrl: imageUrl })
+              .set({ profileImageUrl: `/api/profile-image/${result.fileId}`, profileImageFileId: result.fileId })
               .where(eq(influencerAccounts.id, acc.id));
           }
         } catch (err) {

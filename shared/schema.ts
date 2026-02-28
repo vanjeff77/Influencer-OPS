@@ -136,6 +136,7 @@ export const influencerAccounts = pgTable("influencer_accounts", {
   verified: boolean("verified").default(false),
   followers: integer("followers").default(0),
   profileImageUrl: text("profile_image_url"),
+  profileImageFileId: text("profile_image_file_id"),
 });
 
 export const metricsSnapshots = pgTable("metrics_snapshots", {

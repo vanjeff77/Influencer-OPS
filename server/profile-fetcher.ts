@@ -1,4 +1,10 @@
+import { createFolderIfNotExists, uploadSmallFile, getDirectDownloadUrl } from './onedrive';
+
 const FETCH_TIMEOUT = 8000;
+
+export interface ProfileImageResult {
+  fileId: string;
+}
 
 async function fetchWithTimeout(url: string, headers: Record<string, string> = {}): Promise<string | null> {
   const controller = new AbortController();
@@ -70,22 +76,74 @@ async function fetchInstagramViaRapidAPI(handle: string): Promise<string | null>
   }
 }
 
-async function fetchInstagramProfileImage(handle: string): Promise<string | null> {
+async function downloadImageBuffer(imageUrl: string): Promise<Buffer | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+  try {
+    const res = await fetch(imageUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
+      signal: controller.signal,
+      redirect: 'follow',
+    });
+    if (!res.ok) return null;
+    const arrayBuffer = await res.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+let profileFolderIdCache: string | null = null;
+
+async function cacheImageToOneDrive(platform: string, handle: string, imageUrl: string): Promise<ProfileImageResult | null> {
+  try {
+    if (!profileFolderIdCache) {
+      profileFolderIdCache = await createFolderIfNotExists('프로필사진');
+    }
+
+    const buffer = await downloadImageBuffer(imageUrl);
+    if (!buffer || buffer.length < 100) {
+      console.log(`[ProfileFetch] Image download failed or too small for @${handle}`);
+      return null;
+    }
+
+    const fileName = `${platform}_${handle}.jpg`;
+    const uploaded = await uploadSmallFile(profileFolderIdCache, fileName, buffer);
+    console.log(`[ProfileFetch] Uploaded to OneDrive: ${fileName} (${buffer.length} bytes), fileId: ${uploaded.id}`);
+
+    return { fileId: uploaded.id };
+  } catch (err: any) {
+    console.log(`[ProfileFetch] OneDrive cache failed for @${handle}:`, err.message);
+    return null;
+  }
+}
+
+async function fetchInstagramProfileImage(handle: string): Promise<ProfileImageResult | null> {
   const cleanHandle = sanitizeHandle(handle);
   if (!cleanHandle) return null;
 
-  const rapidResult = await fetchInstagramViaRapidAPI(cleanHandle);
-  if (rapidResult) return rapidResult;
+  const cdnUrl = await fetchInstagramViaRapidAPI(cleanHandle);
+  if (!cdnUrl) {
+    const html = await fetchWithTimeout(`https://www.instagram.com/${cleanHandle}/`);
+    if (!html) return null;
+    const ogUrl = extractOgImage(html);
+    if (!ogUrl) return null;
+    return await cacheImageToOneDrive('IG', cleanHandle, ogUrl);
+  }
 
-  const html = await fetchWithTimeout(`https://www.instagram.com/${cleanHandle}/`);
-  if (!html) return null;
-  return extractOgImage(html);
+  return await cacheImageToOneDrive('IG', cleanHandle, cdnUrl);
 }
 
-async function fetchYouTubeProfileImage(handle: string): Promise<string | null> {
+async function fetchYouTubeProfileImage(handle: string): Promise<ProfileImageResult | null> {
   const apiKey = process.env.YOUTUBE_API_KEY;
   const cleanHandle = sanitizeHandle(handle);
   if (!cleanHandle) return null;
+
+  let imageUrl: string | null = null;
 
   if (apiKey) {
     try {
@@ -95,19 +153,26 @@ async function fetchYouTubeProfileImage(handle: string): Promise<string | null> 
         const data = JSON.parse(html);
         const thumbnails = data?.items?.[0]?.snippet?.thumbnails;
         if (thumbnails) {
-          return thumbnails.high?.url || thumbnails.medium?.url || thumbnails.default?.url || null;
+          imageUrl = thumbnails.high?.url || thumbnails.medium?.url || thumbnails.default?.url || null;
         }
       }
     } catch {
     }
   }
 
-  const html = await fetchWithTimeout(`https://www.youtube.com/@${cleanHandle}`);
-  if (!html) return null;
-  return extractOgImage(html);
+  if (!imageUrl) {
+    const html = await fetchWithTimeout(`https://www.youtube.com/@${cleanHandle}`);
+    if (html) {
+      imageUrl = extractOgImage(html);
+    }
+  }
+
+  if (!imageUrl) return null;
+
+  return await cacheImageToOneDrive('YT', cleanHandle, imageUrl);
 }
 
-export async function fetchProfileImage(platform: string, handle: string): Promise<string | null> {
+export async function fetchProfileImage(platform: string, handle: string): Promise<ProfileImageResult | null> {
   try {
     switch (platform) {
       case 'IG':
@@ -121,3 +186,5 @@ export async function fetchProfileImage(platform: string, handle: string): Promi
     return null;
   }
 }
+
+export { getDirectDownloadUrl };

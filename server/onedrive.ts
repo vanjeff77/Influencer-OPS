@@ -99,6 +99,15 @@ export async function createUploadSession(folderId: string, fileName: string): P
   };
 }
 
+export async function uploadSmallFile(folderId: string, fileName: string, buffer: Buffer, contentType: string = 'image/jpeg'): Promise<{ id: string; webUrl: string }> {
+  const client = await getOneDriveClient();
+
+  const result = await client.api(`/me/drive/items/${folderId}:/${fileName}:/content`)
+    .putStream(buffer);
+
+  return { id: result.id, webUrl: result.webUrl };
+}
+
 export async function getFileLink(fileId: string): Promise<string> {
   const client = await getOneDriveClient();
   
@@ -109,4 +118,14 @@ export async function getFileLink(fileId: string): Promise<string> {
     });
   
   return link.link.webUrl;
+}
+
+export async function getDirectDownloadUrl(fileId: string): Promise<string | null> {
+  try {
+    const client = await getOneDriveClient();
+    const item = await client.api(`/me/drive/items/${fileId}`).select('@microsoft.graph.downloadUrl').get();
+    return item['@microsoft.graph.downloadUrl'] || null;
+  } catch {
+    return null;
+  }
 }
