@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { CachedAvatar } from "@/components/cached-avatar";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -630,10 +631,12 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                     data-testid={`conversation-item-${li.id}`}
                   >
                     <div className="flex items-start gap-2 overflow-hidden">
-                      <Avatar className="h-8 w-8 shrink-0 mt-0.5">
-                        <AvatarImage src={li.influencer?.accounts?.[0]?.profileImageUrl || undefined} />
-                        <AvatarFallback className="text-xs">{li.influencer?.name?.substring(0, 2) || 'IN'}</AvatarFallback>
-                      </Avatar>
+                      <CachedAvatar
+                        className="h-8 w-8 shrink-0 mt-0.5"
+                        src={li.influencer?.accounts?.[0]?.profileImageUrl}
+                        fallback={li.influencer?.name?.substring(0, 2) || 'IN'}
+                        fallbackClassName="text-xs"
+                      />
                       <div className="flex-1 w-0 min-w-0 overflow-hidden">
                         <div className="flex items-center gap-2 overflow-hidden">
                           <span className={`text-sm truncate w-0 flex-1 ${hasUnread ? 'font-bold' : 'font-medium'}`}>{li.influencer?.name}</span>
@@ -689,10 +692,12 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
             <div className="p-3 border-b flex flex-col gap-2 bg-[#ffffff]">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
-                  <Avatar className="h-8 w-8 shrink-0">
-                    <AvatarImage src={selectedLineItem.influencer?.accounts?.[0]?.profileImageUrl || undefined} />
-                    <AvatarFallback className="text-xs">{selectedLineItem.influencer?.name?.substring(0, 2)}</AvatarFallback>
-                  </Avatar>
+                  <CachedAvatar
+                    className="h-8 w-8 shrink-0"
+                    src={selectedLineItem.influencer?.accounts?.[0]?.profileImageUrl}
+                    fallback={selectedLineItem.influencer?.name?.substring(0, 2) || 'IN'}
+                    fallbackClassName="text-xs"
+                  />
                   <div className="min-w-0">
                     <div className="font-medium text-sm truncate">{selectedLineItem.influencer?.name}</div>
                     <div className="text-xs text-muted-foreground truncate">{selectedLineItem.influencer?.email || KO.pages.communication.noEmail}</div>
@@ -1477,10 +1482,12 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
     <div className="flex flex-col h-full">
       <div className="sticky top-0 z-10 bg-background border-b p-3">
         <div className="flex items-center gap-2">
-          <Avatar className="h-8 w-8 shrink-0">
-            <AvatarImage src={influencer.accounts?.[0]?.profileImageUrl || undefined} />
-            <AvatarFallback className="text-[10px]">{influencer.name?.substring(0, 2)}</AvatarFallback>
-          </Avatar>
+          <CachedAvatar
+            className="h-8 w-8 shrink-0"
+            src={influencer.accounts?.[0]?.profileImageUrl}
+            fallback={influencer.name?.substring(0, 2) || 'IN'}
+            fallbackClassName="text-[10px]"
+          />
           <div className="min-w-0 flex-1">
             <h3 className="font-semibold text-xs truncate">{influencer.name}</h3>
             {influencer.email && (

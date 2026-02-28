@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { CachedAvatar } from "@/components/cached-avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Clock, AlertTriangle, Pause, CheckCircle2, Copy, CreditCard, X, Download, Send } from "lucide-react";
 import { KO } from "@/i18n/ko";
@@ -525,10 +526,11 @@ function SettlementDetailSheet({ item, workspaceId, onClose, onMarkPaid, isMarki
       <SheetContent className="w-[400px] sm:max-w-[400px] overflow-hidden flex flex-col">
         <SheetHeader className="shrink-0">
           <div className="flex items-center gap-4">
-            <Avatar className="h-12 w-12">
-              <AvatarImage src={inf?.accounts?.[0]?.profileImageUrl || undefined} />
-              <AvatarFallback>{inf?.name?.substring(0, 2) || 'IN'}</AvatarFallback>
-            </Avatar>
+            <CachedAvatar
+              className="h-12 w-12"
+              src={inf?.accounts?.[0]?.profileImageUrl}
+              fallback={inf?.name?.substring(0, 2) || 'IN'}
+            />
             <div className="min-w-0 flex-1">
               <SheetTitle className="truncate">{inf?.name || '인플루언서'}</SheetTitle>
               <div className="text-sm text-muted-foreground truncate">{item.campaign?.name}</div>

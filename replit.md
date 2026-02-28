@@ -55,7 +55,8 @@ Preferred communication style: Simple, everyday language.
 - **Influencer Profile Image Auto-Fetch**:
     - **Schema**: `profileImageUrl` and `profileImageFileId` columns on `influencer_accounts` table.
     - **Service**: `server/profile-fetcher.ts` — RapidAPI (instagram120) for IG, YouTube Data API for YT.
-    - **OneDrive Caching**: Images downloaded from CDN, uploaded to OneDrive `프로필사진/` folder, served via `/api/profile-image/:fileId` proxy endpoint (302 redirect to OneDrive download URL with 24h cache).
+    - **OneDrive Caching**: Images downloaded from CDN, uploaded to OneDrive `프로필사진/` folder, served via `/api/profile-image/:fileId` proxy endpoint (301 permanent redirect to OneDrive download URL with 1-year immutable cache + ETag).
+    - **Client-Side Caching**: `CachedAvatar` component with IndexedDB-based image cache (`client/src/lib/image-cache.ts`). First load fetches from OneDrive, subsequent loads serve from IndexedDB instantly. Blob URL lifecycle managed with proper revocation.
     - **Auto-trigger**: On influencer account create/update, background fetch runs async.
     - **Manual APIs**: `POST /api/influencer-accounts/:id/refresh-profile-image`, `POST /api/workspaces/:workspaceId/influencers/refresh-all-profile-images`.
     - **Environment**: `RAPIDAPI_KEY` (secret) for Instagram, `YOUTUBE_API_KEY` (optional) for YouTube.

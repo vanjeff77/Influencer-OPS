@@ -100,6 +100,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { CachedAvatar } from "@/components/cached-avatar";
 import type {
   CampaignLineItem,
   CampaignContentWithInfluencer,
@@ -1666,12 +1667,12 @@ function AddInfluencerModal({
                 data-testid={`add-influencer-option-${inf.id}`}
               >
                 <Checkbox checked={selectedIds.has(inf.id)} />
-                <Avatar className="h-8 w-8">
-                  <AvatarImage src={inf.accounts?.[0]?.profileImageUrl || undefined} />
-                  <AvatarFallback className="text-xs">
-                    {inf.name.substring(0, 2)}
-                  </AvatarFallback>
-                </Avatar>
+                <CachedAvatar
+                  className="h-8 w-8"
+                  src={inf.accounts?.[0]?.profileImageUrl}
+                  fallback={inf.name.substring(0, 2)}
+                  fallbackClassName="text-xs"
+                />
                 <div className="flex-1 min-w-0">
                   <div className="font-medium truncate">{inf.name}</div>
                   <div className="text-xs text-muted-foreground truncate">
@@ -1959,12 +1960,11 @@ function LineItemDetailDrawer({
       <SheetContent className="w-[500px] sm:max-w-[500px] flex flex-col h-full">
         <SheetHeader className="shrink-0">
           <div className="flex items-center gap-4">
-            <Avatar className="h-12 w-12">
-              <AvatarImage src={item.influencer?.accounts?.[0]?.profileImageUrl || undefined} />
-              <AvatarFallback>
-                {item.influencer?.name?.substring(0, 2) || "IN"}
-              </AvatarFallback>
-            </Avatar>
+            <CachedAvatar
+              className="h-12 w-12"
+              src={item.influencer?.accounts?.[0]?.profileImageUrl}
+              fallback={item.influencer?.name?.substring(0, 2) || "IN"}
+            />
             <div>
               <SheetTitle>
                 {item.influencer?.name || `인플루언서 #${item.influencerId}`}
