@@ -627,9 +627,9 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                       <Avatar className="h-8 w-8 shrink-0 mt-0.5">
                         <AvatarFallback className="text-xs">{li.influencer?.name?.substring(0, 2) || 'IN'}</AvatarFallback>
                       </Avatar>
-                      <div className="flex-1 min-w-0 overflow-hidden">
+                      <div className="flex-1 w-0 min-w-0 overflow-hidden">
                         <div className="flex items-center gap-2 overflow-hidden">
-                          <span className={`text-sm truncate min-w-0 ${hasUnread ? 'font-bold' : 'font-medium'}`}>{li.influencer?.name}</span>
+                          <span className={`text-sm truncate w-0 flex-1 ${hasUnread ? 'font-bold' : 'font-medium'}`}>{li.influencer?.name}</span>
                           {aiEnabled && conv && pendingDraftConvIds?.includes(conv.id) && (
                             <Sparkles className="w-3 h-3 text-purple-500 shrink-0" data-testid={`icon-ai-draft-${li.id}`} />
                           )}
@@ -652,7 +652,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                           </div>
                         </div>
                         <div className={`text-xs flex items-center gap-1 mt-0.5 overflow-hidden ${hasUnread ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
-                          <span className="truncate min-w-0">
+                          <span className="truncate w-0 flex-1">
                             {conv?.lastMessage?.snippet || li.influencer?.email || KO.pages.communication.noConversations}
                           </span>
                           <div className="flex items-center gap-1 shrink-0 ml-auto">
