@@ -968,9 +968,10 @@ function MessageThread({ messages, onViewFull, influencerName, influencerEmail }
   return (
     <div className="space-y-3">
       {messages.map(msg => {
+        const isFromInfluencer = influencerEmail && msg.senderEmail?.toLowerCase() === influencerEmail.toLowerCase();
+        const isOutbound = !isFromInfluencer;
         const senderName = getSenderDisplayName(msg);
         const timeStr = (msg.sentAt || msg.receivedAt) ? formatMessageTime(new Date(msg.sentAt || msg.receivedAt!)) : null;
-        const isOutbound = msg.direction === 'outbound';
         return (
           <div key={msg.id} className={`flex ${isOutbound ? 'justify-end' : 'justify-start'} items-end gap-1.5`}>
             {isOutbound && timeStr && (
@@ -980,7 +981,7 @@ function MessageThread({ messages, onViewFull, influencerName, influencerEmail }
               </span>
             )}
             <div className="max-w-[75%]">
-              {senderName && msg.direction === 'inbound' && (
+              {senderName && isFromInfluencer && (
                 <p className="text-[11px] font-medium text-muted-foreground mb-0.5 ml-1">{senderName}</p>
               )}
               <div 
