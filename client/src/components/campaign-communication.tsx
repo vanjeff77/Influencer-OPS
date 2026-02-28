@@ -164,6 +164,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
   const [aiInstructionOpen, setAiInstructionOpen] = useState(false);
   const [aiInstructionText, setAiInstructionText] = useState("");
   const [aiInstructionEdited, setAiInstructionEdited] = useState(false);
+  const [stepConfirmDialog, setStepConfirmDialog] = useState<{ open: boolean; targetStatus: string; type: 'contact_no_thread' | 'confirm_missing' | null }>({ open: false, targetStatus: '', type: null });
 
   const { data: workspaceData } = useQuery<any>({
     queryKey: ['/api/workspaces'],
@@ -350,6 +351,61 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
       queryClient.invalidateQueries({ queryKey: [api.campaigns.list.path] });
     },
   });
+
+  const HEADER_STEPS = [
+    { key: 'waiting', label: '대기' },
+    { key: 'contacted', label: '컨택' },
+    { key: 'confirmed', label: '확정' },
+    { key: 'contracted', label: '계약' },
+  ] as const;
+
+  const headerCurrentStatus = selectedLineItem?.status || 'waiting';
+  const headerCurrentStepIndex = HEADER_STEPS.findIndex(s => s.key === headerCurrentStatus);
+
+  const updateLineItemStatus = useMutation({
+    mutationFn: (data: any) => apiRequest('PATCH', `/api/line-items/${selectedLineItem?.id}/operations`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.campaigns.get.path, campaignId] });
+      queryClient.invalidateQueries({ queryKey: [api.campaigns.list.path] });
+      queryClient.invalidateQueries({ queryKey: ['/api/conversations'] });
+      toast({ title: KO.pages.communication.saved });
+    }
+  });
+
+  const handleHeaderStepClick = async (stepKey: string) => {
+    if (!selectedLineItem || stepKey === headerCurrentStatus) return;
+    const targetIndex = HEADER_STEPS.findIndex(s => s.key === stepKey);
+
+    if (targetIndex < headerCurrentStepIndex) {
+      updateLineItemStatus.mutate({ status: stepKey });
+      return;
+    }
+
+    if (targetIndex >= 1 && headerCurrentStepIndex < 1) {
+      try {
+        const res = await fetch(`/api/campaigns/${selectedLineItem.campaignId}/line-items/${selectedLineItem.id}/has-thread`);
+        const data = await res.json();
+        if (!data.hasThread) {
+          setStepConfirmDialog({ open: true, targetStatus: stepKey, type: 'contact_no_thread' });
+          return;
+        }
+      } catch {
+        setStepConfirmDialog({ open: true, targetStatus: stepKey, type: 'contact_no_thread' });
+        return;
+      }
+    }
+
+    if (targetIndex >= 2) {
+      const hasFee = selectedLineItem.offerFee && selectedLineItem.offerFee > 0;
+      const hasUploadDate = !!selectedLineItem.uploadDueAt;
+      if (!hasFee || !hasUploadDate) {
+        setStepConfirmDialog({ open: true, targetStatus: stepKey, type: 'confirm_missing' });
+        return;
+      }
+    }
+
+    updateLineItemStatus.mutate({ status: stepKey });
+  };
 
   const handleSelectLineItem = async (li: CampaignLineItem) => {
     setSelectedLineItemId(li.id);
@@ -572,8 +628,8 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                         <AvatarFallback className="text-xs">{li.influencer?.name?.substring(0, 2) || 'IN'}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0 overflow-hidden">
-                        <div className="flex items-center gap-1 overflow-hidden">
-                          <span className={`text-sm truncate flex-1 min-w-0 ${hasUnread ? 'font-bold' : 'font-medium'}`}>{li.influencer?.name}</span>
+                        <div className="flex items-center gap-1">
+                          <span className={`text-sm truncate flex-1 min-w-0 ${hasUnread ? 'font-bold' : 'font-medium'}`} style={{ maxWidth: 'calc(100% - 70px)' }}>{li.influencer?.name}</span>
                           <div className="flex items-center gap-1 shrink-0 ml-auto">
                             {conv?.lastMessage && (
                               <span className={`text-[11px] tabular-nums whitespace-nowrap ${hasUnread ? 'text-primary font-semibold' : 'text-muted-foreground'}`} data-testid={`text-last-message-date-${li.id}`}>
@@ -582,8 +638,8 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                             )}
                           </div>
                         </div>
-                        <div className={`text-xs flex items-center gap-1 overflow-hidden ${hasUnread ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
-                          <span className="truncate flex-1 min-w-0">
+                        <div className={`text-xs flex items-center gap-1 ${hasUnread ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
+                          <span className="truncate flex-1 min-w-0" style={{ maxWidth: 'calc(100% - 60px)' }}>
                             {conv?.lastMessage?.snippet || li.influencer?.email || KO.pages.communication.noConversations}
                           </span>
                           <div className="flex items-center gap-1 shrink-0">
@@ -643,20 +699,49 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
         </ScrollArea>
       </div>
       {/* Center Panel: Message Thread */}
-      <div className="lg:col-span-5 border rounded-lg overflow-hidden flex flex-col" data-testid="panel-message-thread">
+      <div className="lg:col-span-7 border rounded-lg overflow-hidden flex flex-col" data-testid="panel-message-thread">
         {selectedLineItem ? (
           <>
-            <div className="p-3 border-b flex items-center justify-between gap-2 flex-wrap bg-[#ffffff]">
-              <div className="flex items-center gap-2 min-w-0">
-                <Avatar className="h-8 w-8 shrink-0">
-                  <AvatarFallback className="text-xs">{selectedLineItem.influencer?.name?.substring(0, 2)}</AvatarFallback>
-                </Avatar>
-                <div className="min-w-0">
-                  <div className="font-medium text-sm truncate">{selectedLineItem.influencer?.name}</div>
-                  <div className="text-xs text-muted-foreground truncate">{selectedLineItem.influencer?.email || KO.pages.communication.noEmail}</div>
+            <div className="p-3 border-b flex flex-col gap-2 bg-[#ffffff]">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Avatar className="h-8 w-8 shrink-0">
+                    <AvatarFallback className="text-xs">{selectedLineItem.influencer?.name?.substring(0, 2)}</AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0">
+                    <div className="font-medium text-sm truncate">{selectedLineItem.influencer?.name}</div>
+                    <div className="text-xs text-muted-foreground truncate">{selectedLineItem.influencer?.email || KO.pages.communication.noEmail}</div>
+                  </div>
+                  <div
+                    className="inline-flex items-center gap-0.5 rounded-md bg-muted dark:bg-muted/60 p-0.5 ml-2"
+                    data-testid={`progress-bar-header-${selectedLineItem.id}`}
+                  >
+                    {HEADER_STEPS.map((step, idx) => {
+                      const isCurrent = step.key === headerCurrentStatus;
+                      const isCompleted = idx < headerCurrentStepIndex;
+                      return (
+                        <Button
+                          key={step.key}
+                          variant={isCurrent ? "default" : "ghost"}
+                          size="sm"
+                          onClick={() => handleHeaderStepClick(step.key)}
+                          className={`gap-1 h-7 px-2 text-xs ${isCompleted ? 'text-primary font-medium' : ''}`}
+                          data-testid={`step-header-${step.key}-${selectedLineItem.id}`}
+                        >
+                          {isCompleted ? (
+                            <CheckCircle2 className="w-3 h-3 shrink-0" />
+                          ) : isCurrent ? (
+                            <CircleDot className="w-3 h-3 shrink-0" />
+                          ) : (
+                            <Circle className="w-3 h-3 shrink-0" />
+                          )}
+                          {step.label}
+                        </Button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 shrink-0">
                 <Button 
                   size="sm" 
                   variant="outline"
@@ -681,8 +766,36 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                   </TooltipTrigger>
                   <TooltipContent>새 이메일 동기화</TooltipContent>
                 </Tooltip>
+                </div>
               </div>
             </div>
+            {stepConfirmDialog.open && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                <div className="bg-background rounded-lg p-6 max-w-[400px] shadow-lg space-y-4">
+                  <h3 className="font-semibold">
+                    {stepConfirmDialog.type === 'contact_no_thread' ? '컨택 확인' : '확정 불가'}
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    {stepConfirmDialog.type === 'contact_no_thread'
+                      ? '메일에 컨택내역이 없습니다. 컨택으로 기록할까요?'
+                      : '확정 처리 전 광고비와 업로드 일정을 입력해주세요'}
+                  </p>
+                  <div className="flex justify-end gap-2">
+                    {stepConfirmDialog.type === 'contact_no_thread' ? (
+                      <>
+                        <Button variant="outline" onClick={() => setStepConfirmDialog({ open: false, targetStatus: '', type: null })}>취소</Button>
+                        <Button onClick={() => {
+                          updateLineItemStatus.mutate({ status: stepConfirmDialog.targetStatus });
+                          setStepConfirmDialog({ open: false, targetStatus: '', type: null });
+                        }}>확인</Button>
+                      </>
+                    ) : (
+                      <Button onClick={() => setStepConfirmDialog({ open: false, targetStatus: '', type: null })}>확인</Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
             <ScrollArea className="relative overflow-hidden flex-1 p-4 bg-[#ffffff]">
               {isLoadingMessages ? (
                 <div className="flex items-center justify-center h-full">
@@ -745,7 +858,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
         )}
       </div>
       {/* Right Panel: Influencer Details */}
-      <div className="lg:col-span-4 border rounded-lg overflow-hidden" data-testid="panel-influencer-details">
+      <div className="lg:col-span-2 border rounded-lg overflow-hidden" data-testid="panel-influencer-details">
         {selectedLineItem ? (
           <InfluencerDetailPanel 
             key={selectedLineItem.influencer?.id ?? selectedLineItem.id}
@@ -1059,23 +1172,12 @@ function MessageComposer({ conversationId, influencerEmail, senderEmail, lastMes
               size="sm"
               variant="outline"
               className="text-xs text-purple-600 border-purple-200 hover:bg-purple-50"
-              onClick={() => onGenerateDraft?.()}
-              disabled={isGeneratingDraft}
-              data-testid="button-regenerate-draft"
-            >
-              {isGeneratingDraft ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <RefreshCw className="w-3 h-3 mr-1" />}
-              재생성
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="text-xs text-purple-600 border-purple-200 hover:bg-purple-50"
               onClick={() => setShowFeedbackInput(!showFeedbackInput)}
               disabled={isGeneratingDraft}
               data-testid="button-toggle-feedback"
             >
               <MessageSquare className="w-3 h-3 mr-1" />
-              요청 반영
+              다른 답변 요청하기
             </Button>
           </div>
         </div>
@@ -1371,69 +1473,17 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
     return false;
   };
 
-  const STEPS = [
-    { key: 'waiting', label: '대기' },
-    { key: 'contacted', label: '컨택' },
-    { key: 'confirmed', label: '확정' },
-    { key: 'contracted', label: '계약' },
-  ] as const;
-
-  const currentStatus = lineItem.status || 'waiting';
-  const currentStepIndex = STEPS.findIndex(s => s.key === currentStatus);
-
-  const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; targetStatus: string; type: 'contact_no_thread' | 'confirm_missing' | null }>({ open: false, targetStatus: '', type: null });
-
-  const handleStepClick = async (stepKey: string) => {
-    if (stepKey === currentStatus) return;
-    const targetIndex = STEPS.findIndex(s => s.key === stepKey);
-
-    if (targetIndex < currentStepIndex) {
-      updateLineItem.mutate({ status: stepKey });
-      return;
-    }
-
-    if (targetIndex >= 1 && currentStepIndex < 1) {
-      try {
-        const res = await fetch(`/api/campaigns/${lineItem.campaignId}/line-items/${lineItem.id}/has-thread`);
-        const data = await res.json();
-        if (!data.hasThread) {
-          setConfirmDialog({ open: true, targetStatus: stepKey, type: 'contact_no_thread' });
-          return;
-        }
-      } catch {
-        setConfirmDialog({ open: true, targetStatus: stepKey, type: 'contact_no_thread' });
-        return;
-      }
-    }
-
-    if (targetIndex >= 2) {
-      const hasFee = lineItem.offerFee && lineItem.offerFee > 0;
-      const hasUploadDate = !!lineItem.uploadDueAt;
-      if (!hasFee || !hasUploadDate) {
-        setConfirmDialog({ open: true, targetStatus: stepKey, type: 'confirm_missing' });
-        return;
-      }
-    }
-
-    updateLineItem.mutate({ status: stepKey });
-  };
-
   return (
     <div className="flex flex-col h-full">
-      <div className="sticky top-0 z-10 bg-background border-b p-3 space-y-2">
-        <div className="flex items-center gap-3">
-          <Avatar className="h-10 w-10 shrink-0">
-            <AvatarFallback className="text-xs">{influencer.name?.substring(0, 2)}</AvatarFallback>
+      <div className="sticky top-0 z-10 bg-background border-b p-3">
+        <div className="flex items-center gap-2">
+          <Avatar className="h-8 w-8 shrink-0">
+            <AvatarFallback className="text-[10px]">{influencer.name?.substring(0, 2)}</AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5">
-              <h3 className="font-semibold text-sm truncate">{influencer.name}</h3>
-              {influencer.accounts?.[0] && (
-                <span className="text-xs text-muted-foreground truncate">@{influencer.accounts[0].handle}</span>
-              )}
-            </div>
+            <h3 className="font-semibold text-xs truncate">{influencer.name}</h3>
             {influencer.email && (
-              <div className="text-[11px] text-muted-foreground truncate">{influencer.email}</div>
+              <div className="text-[10px] text-muted-foreground truncate">{influencer.email}</div>
             )}
           </div>
           <Button 
@@ -1443,69 +1493,14 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
             data-testid="button-save-influencer"
           >
             {(updateInfluencer.isPending || updateLineItem.isPending) ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <Loader2 className="w-3 h-3 animate-spin" />
             ) : (
-              <Save className="w-3.5 h-3.5 mr-1" />
+              <Save className="w-3 h-3 mr-1" />
             )}
             저장
           </Button>
         </div>
-        <div
-          className="inline-flex items-center gap-0.5 rounded-md bg-muted dark:bg-muted/60 p-0.5"
-          data-testid={`progress-bar-detail-${lineItem.id}`}
-        >
-          {STEPS.map((step, idx) => {
-            const isCurrent = step.key === currentStatus;
-            const isCompleted = idx < currentStepIndex;
-            return (
-              <Button
-                key={step.key}
-                variant={isCurrent ? "default" : "ghost"}
-                size="sm"
-                onClick={() => handleStepClick(step.key)}
-                className={`gap-1 ${isCompleted ? 'text-primary font-medium' : ''}`}
-                data-testid={`step-detail-${step.key}-${lineItem.id}`}
-              >
-                {isCompleted ? (
-                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                ) : isCurrent ? (
-                  <CircleDot className="w-3.5 h-3.5 shrink-0" />
-                ) : (
-                  <Circle className="w-3.5 h-3.5 shrink-0" />
-                )}
-                {step.label}
-              </Button>
-            );
-          })}
-        </div>
       </div>
-      {confirmDialog.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-background rounded-lg p-6 max-w-[400px] shadow-lg space-y-4">
-            <h3 className="font-semibold">
-              {confirmDialog.type === 'contact_no_thread' ? '컨택 확인' : '확정 불가'}
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              {confirmDialog.type === 'contact_no_thread'
-                ? '메일에 컨택내역이 없습니다. 컨택으로 기록할까요?'
-                : '확정 처리 전 광고비와 업로드 일정을 입력해주세요'}
-            </p>
-            <div className="flex justify-end gap-2">
-              {confirmDialog.type === 'contact_no_thread' ? (
-                <>
-                  <Button variant="outline" onClick={() => setConfirmDialog({ open: false, targetStatus: '', type: null })}>취소</Button>
-                  <Button onClick={() => {
-                    updateLineItem.mutate({ status: confirmDialog.targetStatus });
-                    setConfirmDialog({ open: false, targetStatus: '', type: null });
-                  }}>확인</Button>
-                </>
-              ) : (
-                <Button onClick={() => setConfirmDialog({ open: false, targetStatus: '', type: null })}>확인</Button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
       <ScrollArea className="flex-1">
         <div className="p-4 space-y-4 bg-[#ffffff]">
         <div className="space-y-3">
@@ -1528,33 +1523,31 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">원</span>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">초안 예정일</label>
-              <Input 
-                type="date"
-                value={draftDueAt}
-                onChange={(e) => {
-                  setDraftDueAt(e.target.value);
-                  updateLineItem.mutate({ draftDueAt: e.target.value || null });
-                }}
-                className="mt-1 h-8 text-sm"
-                data-testid="input-lineitem-draft-due"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">업로드 예정일</label>
-              <Input 
-                type="date"
-                value={uploadDueAt}
-                onChange={(e) => {
-                  setUploadDueAt(e.target.value);
-                  updateLineItem.mutate({ uploadDueAt: e.target.value || null });
-                }}
-                className="mt-1 h-8 text-sm"
-                data-testid="input-lineitem-upload-due"
-              />
-            </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">초안 예정일</label>
+            <Input 
+              type="date"
+              value={draftDueAt}
+              onChange={(e) => {
+                setDraftDueAt(e.target.value);
+                updateLineItem.mutate({ draftDueAt: e.target.value || null });
+              }}
+              className="mt-1 h-7 text-xs"
+              data-testid="input-lineitem-draft-due"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">업로드 예정일</label>
+            <Input 
+              type="date"
+              value={uploadDueAt}
+              onChange={(e) => {
+                setUploadDueAt(e.target.value);
+                updateLineItem.mutate({ uploadDueAt: e.target.value || null });
+              }}
+              className="mt-1 h-7 text-xs"
+              data-testid="input-lineitem-upload-due"
+            />
           </div>
           <div>
             <label className="text-xs font-medium text-muted-foreground">{KO.pages.communication.memo}</label>
@@ -1596,47 +1589,45 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
               </SelectContent>
             </Select>
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">{KO.pages.settlement.bankName}</label>
-              <Input 
-                value={bankName}
-                onChange={(e) => setBankName(e.target.value)}
-                placeholder="은행명"
-                className="mt-1 h-8 text-sm"
-                data-testid="input-bank-name"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">{KO.pages.settlement.accountHolder}</label>
-              <Input 
-                value={accountHolder}
-                onChange={(e) => setAccountHolder(e.target.value)}
-                placeholder="예금주"
-                className="mt-1 h-8 text-sm"
-                data-testid="input-account-holder"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">{KO.pages.settlement.accountNumber}</label>
-              <Input 
-                value={accountNumber}
-                onChange={(e) => setAccountNumber(e.target.value)}
-                placeholder="계좌번호"
-                className="mt-1 h-8 text-sm"
-                data-testid="input-account-number"
-              />
-            </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">{KO.pages.settlement.bankName}</label>
+            <Input 
+              value={bankName}
+              onChange={(e) => setBankName(e.target.value)}
+              placeholder="은행명"
+              className="mt-1 h-7 text-xs"
+              data-testid="input-bank-name"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">{KO.pages.settlement.accountHolder}</label>
+            <Input 
+              value={accountHolder}
+              onChange={(e) => setAccountHolder(e.target.value)}
+              placeholder="예금주"
+              className="mt-1 h-7 text-xs"
+              data-testid="input-account-holder"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">{KO.pages.settlement.accountNumber}</label>
+            <Input 
+              value={accountNumber}
+              onChange={(e) => setAccountNumber(e.target.value)}
+              placeholder="계좌번호"
+              className="mt-1 h-7 text-xs"
+              data-testid="input-account-number"
+            />
           </div>
           {settlementType === '사업자' && (
-            <div className="grid grid-cols-2 gap-2">
+            <>
               <div>
                 <label className="text-xs font-medium text-muted-foreground">{KO.pages.settlement.businessName}</label>
                 <Input 
                   value={businessName}
                   onChange={(e) => setBusinessName(e.target.value)}
                   placeholder="사업자명"
-                  className="mt-1 h-8 text-sm"
+                  className="mt-1 h-7 text-xs"
                   data-testid="input-business-name"
                 />
               </div>
@@ -1646,11 +1637,11 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
                   value={businessRegNo}
                   onChange={(e) => setBusinessRegNo(e.target.value)}
                   placeholder="000-00-00000"
-                  className="mt-1 h-8 text-sm"
+                  className="mt-1 h-7 text-xs"
                   data-testid="input-business-reg-no"
                 />
               </div>
-            </div>
+            </>
           )}
           {settlementType === '프리랜서' && (
             <div>
@@ -1670,29 +1661,27 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
 
         <div className="space-y-3">
           <span className="text-sm font-semibold">2차활용</span>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">2차활용 기간 (개월)</label>
-              <Input 
-                type="number"
-                value={offerUsageMonths}
-                onChange={(e) => setOfferUsageMonths(e.target.value)}
-                placeholder="0"
-                className="mt-1 h-8 text-sm"
-                data-testid="input-usage-months"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">2차활용 갱신 비용 (원)</label>
-              <Input 
-                type="number"
-                value={offerUsageRenewalFee}
-                onChange={(e) => setOfferUsageRenewalFee(e.target.value)}
-                placeholder="0"
-                className="mt-1 h-8 text-sm"
-                data-testid="input-renewal-fee"
-              />
-            </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">2차활용 기간 (개월)</label>
+            <Input 
+              type="number"
+              value={offerUsageMonths}
+              onChange={(e) => setOfferUsageMonths(e.target.value)}
+              placeholder="0"
+              className="mt-1 h-7 text-xs"
+              data-testid="input-usage-months"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">2차활용 갱신 비용 (원)</label>
+            <Input 
+              type="number"
+              value={offerUsageRenewalFee}
+              onChange={(e) => setOfferUsageRenewalFee(e.target.value)}
+              placeholder="0"
+              className="mt-1 h-7 text-xs"
+              data-testid="input-renewal-fee"
+            />
           </div>
         </div>
       </div>
