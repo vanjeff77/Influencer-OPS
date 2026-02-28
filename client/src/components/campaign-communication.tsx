@@ -789,6 +789,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                   messages={conversationDetail?.messages || []} 
                   onViewFull={setShowFullMessage}
                   influencerName={selectedLineItem.influencer?.name}
+                  influencerEmail={selectedLineItem.influencer?.email}
                 />
               )}
             </ScrollArea>
@@ -905,7 +906,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
   );
 }
 
-function MessageThread({ messages, onViewFull, influencerName }: { messages: ConversationMessage[]; onViewFull: (msg: ConversationMessage) => void; influencerName?: string }) {
+function MessageThread({ messages, onViewFull, influencerName, influencerEmail }: { messages: ConversationMessage[]; onViewFull: (msg: ConversationMessage) => void; influencerName?: string; influencerEmail?: string }) {
   if (messages.length === 0) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
@@ -956,7 +957,9 @@ function MessageThread({ messages, onViewFull, influencerName }: { messages: Con
 
   const getSenderDisplayName = (msg: ConversationMessage): string | null => {
     if (msg.direction === 'outbound') return null;
-    if (influencerName) return influencerName;
+    if (influencerName && influencerEmail && msg.senderEmail?.toLowerCase() === influencerEmail.toLowerCase()) {
+      return influencerName;
+    }
     if (msg.senderName) return msg.senderName;
     if (msg.senderEmail) return msg.senderEmail.split('@')[0];
     return null;
@@ -970,11 +973,6 @@ function MessageThread({ messages, onViewFull, influencerName }: { messages: Con
         const isOutbound = msg.direction === 'outbound';
         return (
           <div key={msg.id} className={`flex ${isOutbound ? 'justify-end' : 'justify-start'} items-end gap-1.5`}>
-            {!isOutbound && timeStr && (
-              <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0 mb-1" data-testid={`text-msg-time-${msg.id}`}>
-                {timeStr}
-              </span>
-            )}
             <div className="max-w-[75%]">
               {senderName && msg.direction === 'inbound' && (
                 <p className="text-[11px] font-medium text-muted-foreground mb-0.5 ml-1">{senderName}</p>
@@ -999,9 +997,9 @@ function MessageThread({ messages, onViewFull, influencerName }: { messages: Con
                 )}
               </div>
             </div>
-            {isOutbound && timeStr && (
+            {timeStr && (
               <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0 mb-1 flex items-center gap-1" data-testid={`text-msg-time-${msg.id}`}>
-                {msg.sendStatus === 'sent' && <CheckCircle2 className="w-3 h-3" />}
+                {isOutbound && msg.sendStatus === 'sent' && <CheckCircle2 className="w-3 h-3" />}
                 {timeStr}
               </span>
             )}
