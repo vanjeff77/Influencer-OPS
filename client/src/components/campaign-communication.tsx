@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -631,6 +631,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                   >
                     <div className="flex items-start gap-2 overflow-hidden">
                       <Avatar className="h-8 w-8 shrink-0 mt-0.5">
+                        <AvatarImage src={li.influencer?.accounts?.[0]?.profileImageUrl || undefined} />
                         <AvatarFallback className="text-xs">{li.influencer?.name?.substring(0, 2) || 'IN'}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1 w-0 min-w-0 overflow-hidden">
@@ -689,6 +690,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                   <Avatar className="h-8 w-8 shrink-0">
+                    <AvatarImage src={selectedLineItem.influencer?.accounts?.[0]?.profileImageUrl || undefined} />
                     <AvatarFallback className="text-xs">{selectedLineItem.influencer?.name?.substring(0, 2)}</AvatarFallback>
                   </Avatar>
                   <div className="min-w-0">
@@ -1476,6 +1478,7 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
       <div className="sticky top-0 z-10 bg-background border-b p-3">
         <div className="flex items-center gap-2">
           <Avatar className="h-8 w-8 shrink-0">
+            <AvatarImage src={influencer.accounts?.[0]?.profileImageUrl || undefined} />
             <AvatarFallback className="text-[10px]">{influencer.name?.substring(0, 2)}</AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">

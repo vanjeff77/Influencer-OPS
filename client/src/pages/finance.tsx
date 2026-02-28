@@ -12,7 +12,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Clock, AlertTriangle, Pause, CheckCircle2, Copy, CreditCard, X, Download, Send } from "lucide-react";
 import { KO } from "@/i18n/ko";
@@ -526,6 +526,7 @@ function SettlementDetailSheet({ item, workspaceId, onClose, onMarkPaid, isMarki
         <SheetHeader className="shrink-0">
           <div className="flex items-center gap-4">
             <Avatar className="h-12 w-12">
+              <AvatarImage src={inf?.accounts?.[0]?.profileImageUrl || undefined} />
               <AvatarFallback>{inf?.name?.substring(0, 2) || 'IN'}</AvatarFallback>
             </Avatar>
             <div className="min-w-0 flex-1">

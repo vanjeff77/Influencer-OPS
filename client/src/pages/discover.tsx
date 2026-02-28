@@ -17,7 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -1482,6 +1482,7 @@ function InfluencerDetailDrawer({ influencerId, onClose, workspaceId }: { influe
             <SheetHeader>
               <div className="flex items-center gap-4 pr-8">
                 <Avatar className="h-16 w-16">
+                  <AvatarImage src={influencer.accounts?.[0]?.profileImageUrl || undefined} />
                   <AvatarFallback className="bg-gradient-to-br from-blue-100 to-blue-200 text-blue-700 text-xl font-bold">
                     {influencer.name.substring(0, 2).toUpperCase()}
                   </AvatarFallback>

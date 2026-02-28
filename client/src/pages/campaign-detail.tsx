@@ -99,7 +99,7 @@ import { useState, useCallback, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type {
   CampaignLineItem,
   CampaignContentWithInfluencer,
@@ -1667,6 +1667,7 @@ function AddInfluencerModal({
               >
                 <Checkbox checked={selectedIds.has(inf.id)} />
                 <Avatar className="h-8 w-8">
+                  <AvatarImage src={inf.accounts?.[0]?.profileImageUrl || undefined} />
                   <AvatarFallback className="text-xs">
                     {inf.name.substring(0, 2)}
                   </AvatarFallback>
@@ -1959,6 +1960,7 @@ function LineItemDetailDrawer({
         <SheetHeader className="shrink-0">
           <div className="flex items-center gap-4">
             <Avatar className="h-12 w-12">
+              <AvatarImage src={item.influencer?.accounts?.[0]?.profileImageUrl || undefined} />
               <AvatarFallback>
                 {item.influencer?.name?.substring(0, 2) || "IN"}
               </AvatarFallback>

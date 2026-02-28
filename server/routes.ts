@@ -13,6 +13,7 @@ import { getImapSmtpSettings } from "./smtp";
 import { encryptPassword } from "./imap";
 import { normalizeInstagramHandle, normalizeInstagramUrl } from "@shared/utils";
 import { getDefaultFrameworkDoc } from "./ai/draft-generator";
+import { fetchProfileImage } from "./profile-fetcher";
 
 // Singleton browser instance for PDF generation
 let sharedBrowser: any = null;
@@ -4778,6 +4779,77 @@ export async function registerRoutes(
       res.json({ total: allConvs.length, nullified, recalculated });
     } catch (err: any) {
       console.error('Backfill conversations error:', err);
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post('/api/influencer-accounts/:id/refresh-profile-image', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const user = req.user as any;
+      const accountId = parseInt(req.params.id);
+      const [account] = await db.select().from(influencerAccounts).where(eq(influencerAccounts.id, accountId));
+      if (!account) return res.status(404).json({ message: "Account not found" });
+
+      const [inf] = await db.select().from(influencers).where(eq(influencers.id, account.influencerId));
+      if (!inf) return res.status(404).json({ message: "Influencer not found" });
+      const membership = await storage.getWorkspaceMember(inf.workspaceId, user.id);
+      if (!membership) return res.status(403).json({ message: "Forbidden" });
+
+      const imageUrl = await fetchProfileImage(account.platform, account.handle);
+      if (imageUrl) {
+        await db.update(influencerAccounts).set({ profileImageUrl: imageUrl }).where(eq(influencerAccounts.id, accountId));
+        res.json({ success: true, profileImageUrl: imageUrl });
+      } else {
+        res.json({ success: false, message: "Could not fetch profile image" });
+      }
+    } catch (err: any) {
+      console.error('Refresh profile image error:', err);
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post('/api/workspaces/:workspaceId/influencers/refresh-all-profile-images', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const user = req.user as any;
+      const workspaceId = parseInt(req.params.workspaceId);
+      const membership = await storage.getWorkspaceMember(workspaceId, user.id);
+      if (!membership) return res.status(403).json({ message: "Forbidden" });
+      
+      const allInfluencers = await db.select().from(influencers).where(eq(influencers.workspaceId, workspaceId));
+      const inflIds = allInfluencers.map(i => i.id);
+      if (inflIds.length === 0) return res.json({ total: 0, updated: 0 });
+
+      const accounts = await db.select().from(influencerAccounts).where(
+        and(
+          inArray(influencerAccounts.influencerId, inflIds),
+          or(eq(influencerAccounts.platform, 'IG'), eq(influencerAccounts.platform, 'YT'))
+        )
+      );
+
+      const toFetch = accounts.filter(a => !a.profileImageUrl);
+      let updated = 0;
+
+      const BATCH_SIZE = 5;
+      for (let i = 0; i < toFetch.length; i += BATCH_SIZE) {
+        const batch = toFetch.slice(i, i + BATCH_SIZE);
+        const results = await Promise.allSettled(
+          batch.map(async (acc) => {
+            const imageUrl = await fetchProfileImage(acc.platform, acc.handle);
+            if (imageUrl) {
+              await db.update(influencerAccounts).set({ profileImageUrl: imageUrl }).where(eq(influencerAccounts.id, acc.id));
+              return true;
+            }
+            return false;
+          })
+        );
+        updated += results.filter(r => r.status === 'fulfilled' && r.value).length;
+      }
+
+      res.json({ total: accounts.length, needsFetch: toFetch.length, updated });
+    } catch (err: any) {
+      console.error('Refresh all profile images error:', err);
       res.status(500).json({ message: err.message });
     }
   });

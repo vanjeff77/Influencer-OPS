@@ -20,6 +20,7 @@ import {
   type AiDraftReply, type InsertAiDraftReply
 } from "@shared/schema";
 import { eq, like, or, and, sql, inArray, desc } from "drizzle-orm";
+import { fetchProfileImage } from "./profile-fetcher";
 
 export interface IStorage {
   // User & Workspace
@@ -298,6 +299,7 @@ export class DatabaseStorage implements IStorage {
       createdAccounts = await db.insert(influencerAccounts).values(
         accounts.map(a => ({ ...a, influencerId: inf.id }))
       ).returning();
+      this.fetchAndUpdateProfileImages(createdAccounts);
     }
     return { ...inf, accounts: createdAccounts };
   }
@@ -319,6 +321,7 @@ export class DatabaseStorage implements IStorage {
         }).returning();
         createdAccounts.push(account);
       }
+      this.fetchAndUpdateProfileImages(createdAccounts);
       return { ...inf, accounts: createdAccounts };
     }
     
@@ -1201,6 +1204,9 @@ export class DatabaseStorage implements IStorage {
             followers: accountData.followers || existingAccounts[0].followers
           }).where(eq(influencerAccounts.id, existingAccounts[0].id)).returning();
           updatedAccount = acc;
+          if (!acc.profileImageUrl) {
+            this.fetchAndUpdateProfileImages([acc]);
+          }
         } else {
           const [acc] = await db.insert(influencerAccounts).values({
             influencerId: existingInfluencer.id,
@@ -1210,6 +1216,7 @@ export class DatabaseStorage implements IStorage {
             followers: accountData.followers || 0
           }).returning();
           updatedAccount = acc;
+          this.fetchAndUpdateProfileImages([acc]);
         }
       }
       return { influencer: updatedInf, account: updatedAccount, isNew: false };
@@ -1240,6 +1247,7 @@ export class DatabaseStorage implements IStorage {
           followers: accountData.followers || 0
         }).returning();
         newAccount = acc;
+        this.fetchAndUpdateProfileImages([acc]);
       }
       return { influencer: newInf, account: newAccount, isNew: true };
     }
@@ -1546,6 +1554,27 @@ export class DatabaseStorage implements IStorage {
       .where(eq(aiDraftReplies.id, id))
       .returning();
     return updated;
+  }
+
+  private fetchAndUpdateProfileImages(accounts: InfluencerAccount[]): void {
+    const supportedPlatforms = ['IG', 'YT'];
+    const toFetch = accounts.filter(a => supportedPlatforms.includes(a.platform) && !a.profileImageUrl);
+    if (toFetch.length === 0) return;
+
+    Promise.allSettled(
+      toFetch.map(async (acc) => {
+        try {
+          const imageUrl = await fetchProfileImage(acc.platform, acc.handle);
+          if (imageUrl) {
+            await db.update(influencerAccounts)
+              .set({ profileImageUrl: imageUrl })
+              .where(eq(influencerAccounts.id, acc.id));
+          }
+        } catch (err) {
+          console.error(`Failed to fetch profile image for ${acc.platform}/${acc.handle}:`, err);
+        }
+      })
+    ).catch(() => {});
   }
 
   async getPendingDraftConversationIds(conversationIds: number[]): Promise<number[]> {

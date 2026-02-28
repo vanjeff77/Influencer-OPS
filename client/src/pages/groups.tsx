@@ -15,7 +15,7 @@ import { Plus, Users, Download, Trash2, Search, Instagram, Youtube, Twitter } fr
 import { useToast } from "@/hooks/use-toast";
 import { useLocation, useSearch } from "wouter";
 import { KO } from "@/i18n/ko";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export default function Groups() {
   const { data: workspaces } = useWorkspaces();
@@ -233,6 +233,7 @@ function GroupDetailView({ groupId, workspaceId, isAddMemberOpen, setIsAddMember
                     <TableCell className="py-2">
                       <div className="flex items-center gap-2 md:gap-3">
                         <Avatar className="h-6 w-6 md:h-8 md:w-8">
+                          <AvatarImage src={member.influencer.accounts?.[0]?.profileImageUrl || undefined} />
                           <AvatarFallback className="text-[10px] md:text-xs">{member.influencer.name.substring(0, 2)}</AvatarFallback>
                         </Avatar>
                         <div className="min-w-0">
@@ -364,6 +365,7 @@ function AddMemberModal({ open, onOpenChange, groupId, workspaceId, existingMemb
               >
                 <Checkbox checked={selectedIds.has(inf.id)} className="h-4 w-4" />
                 <Avatar className="h-6 w-6 md:h-8 md:w-8">
+                  <AvatarImage src={inf.accounts?.[0]?.profileImageUrl || undefined} />
                   <AvatarFallback className="text-[10px] md:text-xs">{inf.name.substring(0, 2)}</AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
