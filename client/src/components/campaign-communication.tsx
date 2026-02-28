@@ -421,6 +421,12 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
     }
   };
 
+  const stripSubjectFromSnippet = (snippet: string | null): string => {
+    if (!snippet) return '';
+    const subjectPattern = /^\[(?:Re:\s*)?(?:\[[^\]]*\])?\s*[^\]]*\]\s*/i;
+    return snippet.replace(subjectPattern, '').trim() || snippet;
+  };
+
   const getFirstContactBadge = (li: CampaignLineItem) => {
     if (li.firstContactCompleted) {
       return (
@@ -644,7 +650,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                                 ) : (
                                   <ArrowUpRight className="w-3.5 h-3.5 text-muted-foreground/50" data-testid={`icon-sent-${li.id}`} />
                                 )}
-                                <span className={`text-[11px] tabular-nums whitespace-nowrap ${hasUnread ? 'text-primary font-semibold' : 'text-muted-foreground'}`} data-testid={`text-last-message-date-${li.id}`}>
+                                <span className="text-xs tabular-nums whitespace-nowrap text-foreground font-semibold" data-testid={`text-last-message-date-${li.id}`}>
                                   {formatConversationDate(conv.lastMessage.sentAt || conv.lastMessage.createdAt)}
                                 </span>
                               </>
@@ -653,7 +659,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                         </div>
                         <div className={`text-xs flex items-center gap-1 mt-0.5 overflow-hidden ${hasUnread ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
                           <span className="truncate w-0 flex-1">
-                            {conv?.lastMessage?.snippet || li.influencer?.email || KO.pages.communication.noConversations}
+                            {conv?.lastMessage?.snippet ? stripSubjectFromSnippet(conv.lastMessage.snippet) : (li.influencer?.email || KO.pages.communication.noConversations)}
                           </span>
                         </div>
                       </div>
@@ -782,6 +788,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                 <MessageThread 
                   messages={conversationDetail?.messages || []} 
                   onViewFull={setShowFullMessage}
+                  influencerName={selectedLineItem.influencer?.name}
                 />
               )}
             </ScrollArea>
@@ -898,7 +905,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
   );
 }
 
-function MessageThread({ messages, onViewFull }: { messages: ConversationMessage[]; onViewFull: (msg: ConversationMessage) => void }) {
+function MessageThread({ messages, onViewFull, influencerName }: { messages: ConversationMessage[]; onViewFull: (msg: ConversationMessage) => void; influencerName?: string }) {
   if (messages.length === 0) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
@@ -949,6 +956,7 @@ function MessageThread({ messages, onViewFull }: { messages: ConversationMessage
 
   const getSenderDisplayName = (msg: ConversationMessage): string | null => {
     if (msg.direction === 'outbound') return null;
+    if (influencerName) return influencerName;
     if (msg.senderName) return msg.senderName;
     if (msg.senderEmail) return msg.senderEmail.split('@')[0];
     return null;
@@ -958,36 +966,45 @@ function MessageThread({ messages, onViewFull }: { messages: ConversationMessage
     <div className="space-y-3">
       {messages.map(msg => {
         const senderName = getSenderDisplayName(msg);
+        const timeStr = (msg.sentAt || msg.receivedAt) ? formatMessageTime(new Date(msg.sentAt || msg.receivedAt!)) : null;
+        const isOutbound = msg.direction === 'outbound';
         return (
-          <div key={msg.id} className={`flex ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}>
-            <div 
-              className={`max-w-[80%] rounded-lg p-3 cursor-pointer transition-colors ${
-                msg.direction === 'outbound' 
-                  ? 'bg-primary text-primary-foreground' 
-                  : getSenderColor(msg.senderEmail)
-              } ${msg.sendStatus === 'failed' ? 'border-2 border-red-500' : ''}`}
-              onClick={() => onViewFull(msg)}
-              data-testid={`message-bubble-${msg.id}`}
-            >
-              {senderName && uniqueInboundSenders.length > 1 && (
-                <p className="text-xs font-medium text-muted-foreground mb-1">{senderName}</p>
+          <div key={msg.id} className={`flex ${isOutbound ? 'justify-end' : 'justify-start'} items-end gap-1.5`}>
+            {!isOutbound && timeStr && (
+              <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0 mb-1" data-testid={`text-msg-time-${msg.id}`}>
+                {timeStr}
+              </span>
+            )}
+            <div className="max-w-[75%]">
+              {senderName && msg.direction === 'inbound' && (
+                <p className="text-[11px] font-medium text-muted-foreground mb-0.5 ml-1">{senderName}</p>
               )}
-              <p className="text-sm line-clamp-2">{getDisplaySnippet(msg.snippet)}</p>
-              <div className={`flex items-center gap-2 mt-1 text-xs ${msg.direction === 'outbound' ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
-                {msg.sentAt || msg.receivedAt ? (
-                  <span>{formatMessageTime(new Date(msg.sentAt || msg.receivedAt!))}</span>
-                ) : null}
+              <div 
+                className={`rounded-lg p-3 cursor-pointer transition-colors ${
+                  isOutbound 
+                    ? 'bg-primary text-primary-foreground' 
+                    : getSenderColor(msg.senderEmail)
+                } ${msg.sendStatus === 'failed' ? 'border-2 border-red-500' : ''}`}
+                onClick={() => onViewFull(msg)}
+                data-testid={`message-bubble-${msg.id}`}
+              >
+                <p className="text-sm line-clamp-2">{getDisplaySnippet(msg.snippet)}</p>
                 {msg.sendStatus === 'failed' && (
-                  <Badge variant="destructive" className="text-[10px]" data-testid={`badge-send-failed-${msg.id}`}>
-                    <AlertCircle className="w-3 h-3 mr-1" />
-                    {KO.pages.communication.failed}
-                  </Badge>
-                )}
-                {msg.sendStatus === 'sent' && msg.direction === 'outbound' && (
-                  <CheckCircle2 className="w-3 h-3" />
+                  <div className="flex items-center gap-1 mt-1">
+                    <Badge variant="destructive" className="text-[10px]" data-testid={`badge-send-failed-${msg.id}`}>
+                      <AlertCircle className="w-3 h-3 mr-1" />
+                      {KO.pages.communication.failed}
+                    </Badge>
+                  </div>
                 )}
               </div>
             </div>
+            {isOutbound && timeStr && (
+              <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0 mb-1 flex items-center gap-1" data-testid={`text-msg-time-${msg.id}`}>
+                {msg.sendStatus === 'sent' && <CheckCircle2 className="w-3 h-3" />}
+                {timeStr}
+              </span>
+            )}
           </div>
         );
       })}
