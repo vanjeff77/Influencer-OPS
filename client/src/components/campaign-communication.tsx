@@ -973,6 +973,12 @@ function MessageThread({ messages, onViewFull, influencerName, influencerEmail }
         const isOutbound = msg.direction === 'outbound';
         return (
           <div key={msg.id} className={`flex ${isOutbound ? 'justify-end' : 'justify-start'} items-end gap-1.5`}>
+            {isOutbound && timeStr && (
+              <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0 mb-1 flex items-center gap-1" data-testid={`text-msg-time-${msg.id}`}>
+                {msg.sendStatus === 'sent' && <CheckCircle2 className="w-3 h-3" />}
+                {timeStr}
+              </span>
+            )}
             <div className="max-w-[75%]">
               {senderName && msg.direction === 'inbound' && (
                 <p className="text-[11px] font-medium text-muted-foreground mb-0.5 ml-1">{senderName}</p>
@@ -980,7 +986,7 @@ function MessageThread({ messages, onViewFull, influencerName, influencerEmail }
               <div 
                 className={`rounded-lg p-3 cursor-pointer transition-colors ${
                   isOutbound 
-                    ? 'bg-primary text-primary-foreground' 
+                    ? 'bg-yellow-300 text-gray-900' 
                     : getSenderColor(msg.senderEmail)
                 } ${msg.sendStatus === 'failed' ? 'border-2 border-red-500' : ''}`}
                 onClick={() => onViewFull(msg)}
@@ -997,9 +1003,8 @@ function MessageThread({ messages, onViewFull, influencerName, influencerEmail }
                 )}
               </div>
             </div>
-            {timeStr && (
-              <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0 mb-1 flex items-center gap-1" data-testid={`text-msg-time-${msg.id}`}>
-                {isOutbound && msg.sendStatus === 'sent' && <CheckCircle2 className="w-3 h-3" />}
+            {!isOutbound && timeStr && (
+              <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0 mb-1" data-testid={`text-msg-time-${msg.id}`}>
                 {timeStr}
               </span>
             )}
