@@ -1,4 +1,4 @@
-const FETCH_TIMEOUT = 5000;
+const FETCH_TIMEOUT = 8000;
 
 async function fetchWithTimeout(url: string, headers: Record<string, string> = {}): Promise<string | null> {
   const controller = new AbortController();
@@ -35,9 +35,44 @@ function sanitizeHandle(handle: string): string {
   return clean;
 }
 
+async function fetchInstagramViaRapidAPI(handle: string): Promise<string | null> {
+  const apiKey = process.env.RAPIDAPI_KEY;
+  if (!apiKey) return null;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+  try {
+    const res = await fetch(
+      `https://instagram-profile-picture1.p.rapidapi.com/profile?username=${encodeURIComponent(handle)}`,
+      {
+        headers: {
+          'X-RapidAPI-Key': apiKey,
+          'X-RapidAPI-Host': 'instagram-profile-picture1.p.rapidapi.com',
+        },
+        signal: controller.signal,
+      }
+    );
+    if (!res.ok) {
+      console.log(`[ProfileFetch] RapidAPI IG response ${res.status} for @${handle}`);
+      return null;
+    }
+    const data = await res.json() as any;
+    return data?.profile_pic_url_hd || data?.profile_pic_url || null;
+  } catch (err: any) {
+    console.log(`[ProfileFetch] RapidAPI IG error for @${handle}:`, err.message);
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function fetchInstagramProfileImage(handle: string): Promise<string | null> {
   const cleanHandle = sanitizeHandle(handle);
   if (!cleanHandle) return null;
+
+  const rapidResult = await fetchInstagramViaRapidAPI(cleanHandle);
+  if (rapidResult) return rapidResult;
+
   const html = await fetchWithTimeout(`https://www.instagram.com/${cleanHandle}/`);
   if (!html) return null;
   return extractOgImage(html);
@@ -60,7 +95,6 @@ async function fetchYouTubeProfileImage(handle: string): Promise<string | null> 
         }
       }
     } catch {
-      // fall through to og:image fallback
     }
   }
 
