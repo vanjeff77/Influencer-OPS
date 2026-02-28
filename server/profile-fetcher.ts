@@ -60,7 +60,8 @@ async function fetchInstagramViaRapidAPI(handle: string): Promise<string | null>
       return null;
     }
     const data = await res.json() as any;
-    return data?.profile_pic_url_hd || data?.profile_pic_url || null;
+    const profile = data?.result || data;
+    return profile?.profile_pic_url_hd || profile?.profile_pic_url || null;
   } catch (err: any) {
     console.log(`[ProfileFetch] RapidAPI IG error for @${handle}:`, err.message);
     return null;
