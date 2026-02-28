@@ -43,12 +43,15 @@ async function fetchInstagramViaRapidAPI(handle: string): Promise<string | null>
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
   try {
     const res = await fetch(
-      `https://instagram-profile-picture1.p.rapidapi.com/profile?username=${encodeURIComponent(handle)}`,
+      'https://instagram120.p.rapidapi.com/api/instagram/profile',
       {
+        method: 'POST',
         headers: {
-          'X-RapidAPI-Key': apiKey,
-          'X-RapidAPI-Host': 'instagram-profile-picture1.p.rapidapi.com',
+          'Content-Type': 'application/json',
+          'x-rapidapi-key': apiKey,
+          'x-rapidapi-host': 'instagram120.p.rapidapi.com',
         },
+        body: JSON.stringify({ username: handle }),
         signal: controller.signal,
       }
     );
