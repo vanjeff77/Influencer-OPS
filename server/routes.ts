@@ -4864,8 +4864,15 @@ export async function registerRoutes(
       const downloadUrl = await getDirectDownloadUrl(fileId);
       if (!downloadUrl) return res.status(404).json({ message: "Image not found" });
 
-      res.set('Cache-Control', 'public, max-age=86400');
-      res.redirect(302, downloadUrl);
+      res.set('Cache-Control', 'public, max-age=31536000, immutable');
+      res.set('ETag', `"${fileId}"`);
+
+      const ifNoneMatch = req.headers['if-none-match'];
+      if (ifNoneMatch === `"${fileId}"`) {
+        return res.status(304).end();
+      }
+
+      res.redirect(301, downloadUrl);
     } catch (err: any) {
       console.error('Profile image proxy error:', err.message);
       res.status(500).json({ message: "Failed to serve image" });
