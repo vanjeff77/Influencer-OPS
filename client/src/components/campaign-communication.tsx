@@ -75,7 +75,7 @@ interface CampaignLineItem {
     businessRegNo: string | null;
     freelancerId: string | null;
     birthDate: string | null;
-    accounts?: { platform: string; handle: string }[];
+    accounts?: { platform: string; handle: string; profileImageUrl?: string | null }[];
   };
 }
 
