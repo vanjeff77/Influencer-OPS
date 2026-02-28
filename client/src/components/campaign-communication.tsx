@@ -619,26 +619,24 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                 return (
                   <div
                     key={li.id}
-                    className={`p-3 cursor-pointer transition-colors ${isSelected ? 'bg-primary/10' : 'hover:bg-muted/50'}`}
+                    className={`p-3 cursor-pointer transition-colors overflow-hidden ${isSelected ? 'bg-primary/10' : 'hover:bg-muted/50'}`}
                     onClick={() => handleSelectLineItem(li)}
                     data-testid={`conversation-item-${li.id}`}
                   >
-                    <div className="flex items-start gap-2">
+                    <div className="flex items-start gap-2 overflow-hidden">
                       <Avatar className="h-8 w-8 shrink-0 mt-0.5">
                         <AvatarFallback className="text-xs">{li.influencer?.name?.substring(0, 2) || 'IN'}</AvatarFallback>
                       </Avatar>
-                      <div className="min-w-0" style={{ width: 'calc(100% - 40px)' }}>
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-1 min-w-0 overflow-hidden">
-                            <span className={`text-sm truncate ${hasUnread ? 'font-bold' : 'font-medium'}`}>{li.influencer?.name}</span>
-                            {aiEnabled && conv && pendingDraftConvIds?.includes(conv.id) && (
-                              <Sparkles className="w-3 h-3 text-purple-500 shrink-0" data-testid={`icon-ai-draft-${li.id}`} />
-                            )}
-                            {hasUnread && (
-                              <span className="w-2 h-2 bg-destructive rounded-full shrink-0" aria-label="새 메시지" data-testid={`badge-unread-${li.id}`} />
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
+                      <div className="flex-1 min-w-0 overflow-hidden">
+                        <div className="flex items-center gap-2 overflow-hidden">
+                          <span className={`text-sm truncate min-w-0 ${hasUnread ? 'font-bold' : 'font-medium'}`}>{li.influencer?.name}</span>
+                          {aiEnabled && conv && pendingDraftConvIds?.includes(conv.id) && (
+                            <Sparkles className="w-3 h-3 text-purple-500 shrink-0" data-testid={`icon-ai-draft-${li.id}`} />
+                          )}
+                          {hasUnread && (
+                            <span className="w-2 h-2 bg-destructive rounded-full shrink-0" aria-label="새 메시지" data-testid={`badge-unread-${li.id}`} />
+                          )}
+                          <div className="flex items-center gap-1.5 shrink-0 ml-auto">
                             {conv?.lastMessage && (
                               <>
                                 {conv.lastMessage.direction === 'inbound' ? (
@@ -653,11 +651,11 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                             )}
                           </div>
                         </div>
-                        <div className={`text-xs flex items-center gap-1 mt-0.5 ${hasUnread ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
-                          <span className="truncate min-w-0 flex-1">
+                        <div className={`text-xs flex items-center gap-1 mt-0.5 overflow-hidden ${hasUnread ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
+                          <span className="truncate min-w-0">
                             {conv?.lastMessage?.snippet || li.influencer?.email || KO.pages.communication.noConversations}
                           </span>
-                          <div className="flex items-center gap-1 shrink-0">
+                          <div className="flex items-center gap-1 shrink-0 ml-auto">
                             {getFirstContactBadge(li)}
                             {getStatusBadge(conv)}
                           </div>
