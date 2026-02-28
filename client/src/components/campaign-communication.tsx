@@ -623,23 +623,38 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                     onClick={() => handleSelectLineItem(li)}
                     data-testid={`conversation-item-${li.id}`}
                   >
-                    <div className="flex items-center gap-2 overflow-hidden">
-                      <Avatar className="h-8 w-8 shrink-0">
+                    <div className="flex items-start gap-2">
+                      <Avatar className="h-8 w-8 shrink-0 mt-0.5">
                         <AvatarFallback className="text-xs">{li.influencer?.name?.substring(0, 2) || 'IN'}</AvatarFallback>
                       </Avatar>
-                      <div className="flex-1 min-w-0 overflow-hidden">
-                        <div className="flex items-center gap-1">
-                          <span className={`text-sm truncate flex-1 min-w-0 ${hasUnread ? 'font-bold' : 'font-medium'}`} style={{ maxWidth: 'calc(100% - 70px)' }}>{li.influencer?.name}</span>
-                          <div className="flex items-center gap-1 shrink-0 ml-auto">
+                      <div className="min-w-0" style={{ width: 'calc(100% - 40px)' }}>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1 min-w-0 overflow-hidden">
+                            <span className={`text-sm truncate ${hasUnread ? 'font-bold' : 'font-medium'}`}>{li.influencer?.name}</span>
+                            {aiEnabled && conv && pendingDraftConvIds?.includes(conv.id) && (
+                              <Sparkles className="w-3 h-3 text-purple-500 shrink-0" data-testid={`icon-ai-draft-${li.id}`} />
+                            )}
+                            {hasUnread && (
+                              <span className="w-2 h-2 bg-destructive rounded-full shrink-0" aria-label="새 메시지" data-testid={`badge-unread-${li.id}`} />
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
                             {conv?.lastMessage && (
-                              <span className={`text-[11px] tabular-nums whitespace-nowrap ${hasUnread ? 'text-primary font-semibold' : 'text-muted-foreground'}`} data-testid={`text-last-message-date-${li.id}`}>
-                                {formatConversationDate(conv.lastMessage.sentAt || conv.lastMessage.createdAt)}
-                              </span>
+                              <>
+                                {conv.lastMessage.direction === 'inbound' ? (
+                                  <Reply className="w-3.5 h-3.5 text-orange-500" data-testid={`icon-needs-reply-${li.id}`} />
+                                ) : (
+                                  <ArrowUpRight className="w-3.5 h-3.5 text-muted-foreground/50" data-testid={`icon-sent-${li.id}`} />
+                                )}
+                                <span className={`text-[11px] tabular-nums whitespace-nowrap ${hasUnread ? 'text-primary font-semibold' : 'text-muted-foreground'}`} data-testid={`text-last-message-date-${li.id}`}>
+                                  {formatConversationDate(conv.lastMessage.sentAt || conv.lastMessage.createdAt)}
+                                </span>
+                              </>
                             )}
                           </div>
                         </div>
-                        <div className={`text-xs flex items-center gap-1 ${hasUnread ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
-                          <span className="truncate flex-1 min-w-0" style={{ maxWidth: 'calc(100% - 60px)' }}>
+                        <div className={`text-xs flex items-center gap-1 mt-0.5 ${hasUnread ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
+                          <span className="truncate min-w-0 flex-1">
                             {conv?.lastMessage?.snippet || li.influencer?.email || KO.pages.communication.noConversations}
                           </span>
                           <div className="flex items-center gap-1 shrink-0">
@@ -647,38 +662,6 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                             {getStatusBadge(conv)}
                           </div>
                         </div>
-                      </div>
-                      <div className="flex flex-col items-center gap-0.5 shrink-0 w-5">
-                        {aiEnabled && conv && pendingDraftConvIds?.includes(conv.id) && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Sparkles className="w-3.5 h-3.5 text-purple-500" data-testid={`icon-ai-draft-${li.id}`} />
-                            </TooltipTrigger>
-                            <TooltipContent side="left"><p>AI 초안 준비됨</p></TooltipContent>
-                          </Tooltip>
-                        )}
-                        {hasUnread && (
-                          <span className="w-2.5 h-2.5 bg-destructive rounded-full" aria-label="새 메시지" data-testid={`badge-unread-${li.id}`} />
-                        )}
-                        {conv?.lastMessage ? (
-                          conv.lastMessage.direction === 'inbound' ? (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Reply className="w-4 h-4 text-orange-500" data-testid={`icon-needs-reply-${li.id}`} />
-                              </TooltipTrigger>
-                              <TooltipContent side="left"><p>답장 필요</p></TooltipContent>
-                            </Tooltip>
-                          ) : (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <ArrowUpRight className="w-4 h-4 text-muted-foreground/50" data-testid={`icon-sent-${li.id}`} />
-                              </TooltipTrigger>
-                              <TooltipContent side="left"><p>발송 완료</p></TooltipContent>
-                            </Tooltip>
-                          )
-                        ) : (
-                          <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-                        )}
                       </div>
                     </div>
                   </div>
