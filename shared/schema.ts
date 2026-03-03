@@ -47,6 +47,9 @@ export const workspaces = pgTable("workspaces", {
   aiApiKey: text("ai_api_key"),
   aiModel: text("ai_model"),
   aiFrameworkDoc: text("ai_framework_doc"),
+  slackBotToken: text("slack_bot_token"),
+  slackChannelId: text("slack_channel_id"),
+  slackEnabled: boolean("slack_enabled").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

@@ -319,13 +319,16 @@ export async function registerRoutes(
       return res.status(403).json({ message: '워크스페이스 소유자만 이름을 변경할 수 있습니다.' });
     }
 
-    const { name, tabDescriptions, aiDraftEnabled, aiProvider, aiApiKey, aiModel } = req.body as {
+    const { name, tabDescriptions, aiDraftEnabled, aiProvider, aiApiKey, aiModel, slackBotToken, slackChannelId, slackEnabled } = req.body as {
       name?: string;
       tabDescriptions?: Record<string, string>;
       aiDraftEnabled?: boolean;
       aiProvider?: string;
       aiApiKey?: string;
       aiModel?: string;
+      slackBotToken?: string;
+      slackChannelId?: string;
+      slackEnabled?: boolean;
     };
 
     const updateData: any = {};
@@ -369,12 +372,22 @@ export async function registerRoutes(
       updateData.aiModel = aiModel || null;
     }
 
+    if (slackEnabled !== undefined) {
+      updateData.slackEnabled = slackEnabled;
+    }
+    if (slackBotToken !== undefined) {
+      updateData.slackBotToken = slackBotToken || null;
+    }
+    if (slackChannelId !== undefined) {
+      updateData.slackChannelId = slackChannelId || null;
+    }
+
     if (Object.keys(updateData).length === 0) {
       return res.status(400).json({ message: '변경할 내용이 없습니다.' });
     }
 
     const updated = await storage.updateWorkspace(workspaceId, updateData);
-    const responseData = { ...updated, aiApiKey: updated.aiApiKey ? '••••••••' : null };
+    const responseData = { ...updated, aiApiKey: updated.aiApiKey ? '••••••••' : null, slackBotToken: updated.slackBotToken ? '••••••••' : null };
     res.json(responseData);
   });
 
@@ -5197,6 +5210,37 @@ export async function registerRoutes(
       res.json({ total: allAccounts.length, cleaned, skipped, rejected, details });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post('/api/slack/interactions', async (req, res) => {
+    try {
+      const rawBody = req.body;
+      let payload: any;
+      if (typeof rawBody === 'string') {
+        payload = JSON.parse(rawBody);
+      } else if (rawBody.payload) {
+        payload = JSON.parse(rawBody.payload);
+      } else {
+        payload = rawBody;
+      }
+
+      const { handleSlackInteraction, handleSlackModalSubmission } = await import('./slack-bot');
+
+      if (payload.type === 'view_submission') {
+        const result = await handleSlackModalSubmission(payload);
+        return res.status(result.status).json(result.body);
+      }
+
+      if (payload.type === 'block_actions') {
+        const result = await handleSlackInteraction(payload);
+        return res.status(result.status).json(result.body);
+      }
+
+      res.status(200).json({});
+    } catch (err) {
+      console.error('[SlackRoute] Interaction error:', err);
+      res.status(200).json({});
     }
   });
 

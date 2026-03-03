@@ -1,6 +1,7 @@
 import { storage } from "./storage";
 import * as gmail from "./gmail";
 import type { EmailAccount } from "@shared/schema";
+import { notifyInboundEmail } from "./slack-bot";
 
 let isSyncing = false;
 let syncInterval: NodeJS.Timeout | null = null;
@@ -23,7 +24,14 @@ async function triggerAiDraftGeneration(conversationId: number, triggerMessageId
 
     const allWorkspaces = await storage.getWorkspaces();
     const workspace = allWorkspaces.find(w => w.id === campaign.workspaceId);
-    if (!workspace || !workspace.aiDraftEnabled) return;
+    if (!workspace) return;
+
+    if (!workspace.aiDraftEnabled) {
+      notifyInboundEmail(conversationId, triggerMessageId).catch(err => {
+        console.error('[AutoDraft] Slack notification failed (no AI):', err);
+      });
+      return;
+    }
 
     const messages = await storage.getConversationMessages(conversationId);
     if (messages.length === 0) return;
@@ -37,16 +45,21 @@ async function triggerAiDraftGeneration(conversationId: number, triggerMessageId
       lineItem.offerFee,
     );
 
-    await storage.createAiDraft({
+    const createdDraft = await storage.createAiDraft({
       conversationId,
       triggerMessageId,
       draft: result.draft,
       classification: result.classification,
       classificationLabel: result.classificationLabel,
+      alternatives: result.alternatives ? JSON.stringify(result.alternatives) : undefined,
       status: 'pending',
     });
 
     console.log(`[AutoDraft] Generated AI draft for conversation ${conversationId}, classification: ${result.classification}`);
+
+    notifyInboundEmail(conversationId, triggerMessageId).catch(err => {
+      console.error('[AutoDraft] Slack notification failed:', err);
+    });
   } catch (err) {
     console.error(`[AutoDraft] Failed to generate draft for conversation ${conversationId}:`, err);
   }

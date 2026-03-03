@@ -17,7 +17,8 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { KO } from "@/i18n/ko";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Pencil, Trash2, Building2, Users, Shield, FileText, Star, Settings, RotateCcw, Mail, X, Sparkles, ImageDown, Loader2, CheckCircle, AlertCircle } from "lucide-react";
+import { Plus, Pencil, Trash2, Building2, Users, Shield, FileText, Star, Settings, RotateCcw, Mail, X, Sparkles, ImageDown, Loader2, CheckCircle, AlertCircle, Bell } from "lucide-react";
+import { SiSlack } from "react-icons/si";
 import { useResetOnboarding } from "@/hooks/use-auth";
 
 
@@ -71,6 +72,9 @@ export default function SettingsPage() {
   const [aiProvider, setAiProvider] = useState("replit");
   const [aiApiKey, setAiApiKey] = useState("");
   const [aiModel, setAiModel] = useState("");
+  const [slackEnabled, setSlackEnabled] = useState(false);
+  const [slackBotToken, setSlackBotToken] = useState("");
+  const [slackChannelId, setSlackChannelId] = useState("");
 
   const [userName, setUserName] = useState("");
   const [userEmail, setUserEmail] = useState("");
@@ -221,8 +225,11 @@ export default function SettingsPage() {
       setAiProvider(fullWorkspace.aiProvider || "replit");
       setAiModel(fullWorkspace.aiModel || "");
       setAiApiKey("");
+      setSlackEnabled(fullWorkspace.slackEnabled || false);
+      setSlackChannelId(fullWorkspace.slackChannelId || "");
+      setSlackBotToken("");
     }
-  }, [fullWorkspace?.id, fullWorkspace?.aiDraftEnabled, fullWorkspace?.aiProvider, fullWorkspace?.aiModel]);
+  }, [fullWorkspace?.id, fullWorkspace?.aiDraftEnabled, fullWorkspace?.aiProvider, fullWorkspace?.aiModel, fullWorkspace?.slackEnabled, fullWorkspace?.slackChannelId]);
 
   const { data: frameworkData, isLoading: isLoadingFramework } = useQuery<{ content: string; isCustom: boolean }>({
     queryKey: ['/api/workspaces', workspaceId, 'ai-framework'],
@@ -277,6 +284,19 @@ export default function SettingsPage() {
     },
     onError: (err: any) => {
       toast({ title: "AI 설정 저장 실패", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const saveSlackSettingsMutation = useMutation({
+    mutationFn: (data: { slackEnabled?: boolean; slackBotToken?: string; slackChannelId?: string }) =>
+      apiRequest('PATCH', `/api/workspaces/${workspaceId}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/workspaces'] });
+      setSlackBotToken("");
+      toast({ title: "Slack 설정이 저장되었습니다" });
+    },
+    onError: (err: any) => {
+      toast({ title: "Slack 설정 저장 실패", description: err.message, variant: "destructive" });
     },
   });
 
@@ -706,6 +726,90 @@ export default function SettingsPage() {
                     data-testid="button-disable-ai"
                   >
                     AI 초안 비활성화 저장
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="mt-4">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <SiSlack className="h-5 w-5 text-[#4A154B]" />
+                  Slack 알림 봇
+                </CardTitle>
+                <CardDescription>인플루언서 메일 수신 시 Slack으로 실시간 알림을 보내고, AI 초안을 통해 바로 답장할 수 있습니다</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-sm font-medium">Slack 알림 활성화</Label>
+                    <p className="text-xs text-muted-foreground mt-1">인바운드 메일 수신 시 Slack 채널에 알림이 전송됩니다</p>
+                  </div>
+                  <Switch
+                    checked={slackEnabled}
+                    onCheckedChange={setSlackEnabled}
+                    data-testid="switch-slack-enabled"
+                  />
+                </div>
+
+                {slackEnabled && (
+                  <div className="space-y-4 pt-2 border-t">
+                    <div>
+                      <Label className="text-sm">Bot Token (xoxb-...)</Label>
+                      <Input
+                        type="password"
+                        value={slackBotToken}
+                        onChange={(e) => setSlackBotToken(e.target.value)}
+                        placeholder={fullWorkspace?.slackBotToken ? "••••••••  (변경하려면 새 토큰 입력)" : "xoxb-로 시작하는 Bot Token"}
+                        className="mt-1"
+                        data-testid="input-slack-bot-token"
+                      />
+                      <p className="text-[10px] text-muted-foreground mt-1">Slack App &gt; OAuth &amp; Permissions에서 Bot User OAuth Token을 복사하세요</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm">채널 ID</Label>
+                      <Input
+                        value={slackChannelId}
+                        onChange={(e) => setSlackChannelId(e.target.value)}
+                        placeholder="C01234ABCDE"
+                        className="mt-1"
+                        data-testid="input-slack-channel-id"
+                      />
+                      <p className="text-[10px] text-muted-foreground mt-1">알림을 보낼 채널의 ID (채널 우클릭 &gt; 채널 세부정보 보기에서 확인)</p>
+                    </div>
+
+                    <div className="bg-muted/50 rounded-lg p-3 text-xs space-y-1">
+                      <p className="font-medium text-sm">Slack App 설정 안내</p>
+                      <p>1. <a href="https://api.slack.com/apps" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">api.slack.com/apps</a>에서 새 앱을 만드세요</p>
+                      <p>2. OAuth Scopes에 <code className="bg-muted px-1 rounded">chat:write</code>, <code className="bg-muted px-1 rounded">chat:write.public</code> 권한 추가</p>
+                      <p>3. Interactivity를 켜고 Request URL을 설정하세요:</p>
+                      <code className="block bg-muted px-2 py-1 rounded text-[10px] break-all">{window.location.origin}/api/slack/interactions</code>
+                      <p>4. 워크스페이스에 앱을 설치하고 Bot Token을 복사하세요</p>
+                    </div>
+
+                    <Button
+                      onClick={() => {
+                        const data: any = { slackEnabled };
+                        if (slackBotToken) data.slackBotToken = slackBotToken;
+                        data.slackChannelId = slackChannelId;
+                        saveSlackSettingsMutation.mutate(data);
+                      }}
+                      disabled={saveSlackSettingsMutation.isPending}
+                      data-testid="button-save-slack-settings"
+                    >
+                      {saveSlackSettingsMutation.isPending ? "저장 중..." : "Slack 설정 저장"}
+                    </Button>
+                  </div>
+                )}
+
+                {!slackEnabled && fullWorkspace?.slackEnabled && (
+                  <Button
+                    variant="outline"
+                    onClick={() => saveSlackSettingsMutation.mutate({ slackEnabled: false })}
+                    disabled={saveSlackSettingsMutation.isPending}
+                    data-testid="button-disable-slack"
+                  >
+                    Slack 알림 비활성화 저장
                   </Button>
                 )}
               </CardContent>
