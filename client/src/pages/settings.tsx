@@ -299,6 +299,31 @@ export default function SettingsPage() {
     },
   });
 
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string>("");
+  const [campaignRefreshResult, setCampaignRefreshResult] = useState<{
+    total: number;
+    needsFetch: number;
+    updated: number;
+  } | null>(null);
+
+  const { data: campaignList = [] } = useQuery<{ id: number; name: string; status: string }[]>({
+    queryKey: ['/api/campaigns'],
+    enabled: !!workspaceId,
+  });
+
+  const refreshCampaignProfileImagesMutation = useMutation({
+    mutationFn: (campaignId: number) =>
+      apiRequest('POST', `/api/campaigns/${campaignId}/refresh-profile-images`).then(r => r.json()),
+    onSuccess: (data: any) => {
+      setCampaignRefreshResult(data);
+      queryClient.invalidateQueries({ queryKey: ['/api/campaigns'] });
+      toast({ title: `프로필 이미지 ${data.updated}개 수집 완료` });
+    },
+    onError: (err: any) => {
+      toast({ title: "프로필 수집 실패", description: err.message, variant: "destructive" });
+    },
+  });
+
   const resetClientForm = () => {
     setClientName("");
     setClientMemo("");
@@ -542,6 +567,74 @@ export default function SettingsPage() {
                     </div>
                   </div>
                 )}
+
+                <div className="border-t pt-4 space-y-3">
+                  <div>
+                    <Label className="text-sm font-medium">캠페인별 수집</Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">특정 캠페인에 등록된 인플루언서만 프로필 이미지를 수집합니다</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Select value={selectedCampaignId} onValueChange={setSelectedCampaignId}>
+                      <SelectTrigger className="w-[280px]" data-testid="select-campaign-for-profile">
+                        <SelectValue placeholder="캠페인 선택" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {campaignList.map((c) => (
+                          <SelectItem key={c.id} value={c.id.toString()}>
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      onClick={() => {
+                        if (!selectedCampaignId) return;
+                        setCampaignRefreshResult(null);
+                        refreshCampaignProfileImagesMutation.mutate(parseInt(selectedCampaignId));
+                      }}
+                      disabled={!selectedCampaignId || refreshCampaignProfileImagesMutation.isPending}
+                      variant="outline"
+                      className="gap-2"
+                      data-testid="button-refresh-campaign-profile-images"
+                    >
+                      {refreshCampaignProfileImagesMutation.isPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          수집 중...
+                        </>
+                      ) : (
+                        <>
+                          <ImageDown className="h-4 w-4" />
+                          수집
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  {refreshCampaignProfileImagesMutation.isPending && (
+                    <p className="text-xs text-muted-foreground">
+                      인플루언서 수에 따라 수 분이 소요될 수 있습니다. 페이지를 닫지 마세요.
+                    </p>
+                  )}
+                  {campaignRefreshResult && (
+                    <div className="rounded-md border p-3 space-y-1">
+                      <div className="flex items-center gap-2 text-sm font-medium">
+                        <CheckCircle className="h-4 w-4 text-green-500" />
+                        수집 완료
+                      </div>
+                      <div className="text-xs text-muted-foreground space-y-0.5">
+                        <p>전체 계정: {campaignRefreshResult.total}개</p>
+                        <p>수집 대상: {campaignRefreshResult.needsFetch}개</p>
+                        <p>성공: {campaignRefreshResult.updated}개</p>
+                        {campaignRefreshResult.needsFetch > campaignRefreshResult.updated && (
+                          <p className="flex items-center gap-1 text-yellow-600">
+                            <AlertCircle className="h-3 w-3" />
+                            일부 계정은 프로필 이미지를 가져올 수 없었습니다
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
 

@@ -4856,6 +4856,56 @@ export async function registerRoutes(
     }
   });
 
+  app.post('/api/campaigns/:campaignId/refresh-profile-images', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const user = req.user as any;
+      const campaignId = parseInt(req.params.campaignId);
+
+      const [campaign] = await db.select().from(campaigns).where(eq(campaigns.id, campaignId));
+      if (!campaign) return res.status(404).json({ message: "Campaign not found" });
+
+      const membership = await storage.getWorkspaceMember(user.id, campaign.workspaceId);
+      if (!membership) return res.status(403).json({ message: "Forbidden" });
+
+      const campInfs = await db.select().from(campaignInfluencers).where(eq(campaignInfluencers.campaignId, campaignId));
+      const inflIds = campInfs.map(ci => ci.influencerId);
+      if (inflIds.length === 0) return res.json({ total: 0, needsFetch: 0, updated: 0 });
+
+      const accounts = await db.select().from(influencerAccounts).where(
+        and(
+          inArray(influencerAccounts.influencerId, inflIds),
+          or(eq(influencerAccounts.platform, 'IG'), eq(influencerAccounts.platform, 'YT'))
+        )
+      );
+
+      const toFetch = accounts.filter(a => !a.profileImageFileId && a.handle && !a.handle.startsWith('http') && a.handle.length > 1);
+      let updated = 0;
+
+      const BATCH_SIZE = 5;
+      for (let i = 0; i < toFetch.length; i += BATCH_SIZE) {
+        const batch = toFetch.slice(i, i + BATCH_SIZE);
+        const results = await Promise.allSettled(
+          batch.map(async (acc) => {
+            const result = await fetchProfileImage(acc.platform, acc.handle);
+            if (result) {
+              const proxyUrl = `/api/profile-image/${result.fileId}`;
+              await db.update(influencerAccounts).set({ profileImageUrl: proxyUrl, profileImageFileId: result.fileId }).where(eq(influencerAccounts.id, acc.id));
+              return true;
+            }
+            return false;
+          })
+        );
+        updated += results.filter(r => r.status === 'fulfilled' && r.value).length;
+      }
+
+      res.json({ total: accounts.length, needsFetch: toFetch.length, updated });
+    } catch (err: any) {
+      console.error('Refresh campaign profile images error:', err);
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   app.post('/api/admin/refresh-campaign-profile-images', async (req, res) => {
     try {
       const adminKey = req.headers['x-admin-key'];
