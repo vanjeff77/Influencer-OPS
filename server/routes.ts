@@ -7,7 +7,7 @@ import { api } from "@shared/routes";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
-import { campaignInfluencers, campaigns, influencers, influencerAccounts, users, workspaceMembers, workspaces, emailAccounts, contentSubmissions, conversations, conversationMessages } from "@shared/schema";
+import { campaignInfluencers, campaigns, influencers, influencerAccounts, users, workspaceMembers, workspaces, emailAccounts, contentSubmissions, conversations, conversationMessages, clients, aiDraftReplies } from "@shared/schema";
 import { eq, and, or, inArray, sql, isNull, desc } from "drizzle-orm";
 import { getImapSmtpSettings } from "./smtp";
 import { encryptPassword } from "./imap";
@@ -1585,6 +1585,169 @@ export async function registerRoutes(
     tasks.sort((a, b) => a.priority - b.priority);
     
     res.json(tasks);
+  });
+
+  app.get('/api/overview/feed', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const workspaceId = parseInt(req.query.workspaceId as string);
+      if (isNaN(workspaceId)) return res.status(400).json({ message: "workspaceId required" });
+
+      const userId = (req.user as any)?.id;
+      const member = await storage.getWorkspaceMember(userId, workspaceId);
+      if (!member) return res.status(403).json({ message: "워크스페이스 접근 권한이 없습니다" });
+
+      const workspaceCampaigns = await db.select({ id: campaigns.id, name: campaigns.name, clientId: campaigns.clientId, client: campaigns.client }).from(campaigns).where(eq(campaigns.workspaceId, workspaceId));
+      const campaignIds = workspaceCampaigns.map(c => c.id);
+      if (campaignIds.length === 0) {
+        return res.json({ recentReplies: [], recentSubmissions: [], recentSettlements: [], clients: [] });
+      }
+
+      const workspaceClients = await db.select({ id: clients.id, name: clients.name, logoUrl: clients.logoUrl }).from(clients).where(eq(clients.workspaceId, workspaceId));
+      const clientMap = new Map(workspaceClients.map(c => [c.id, c]));
+      const campaignMap = new Map(workspaceCampaigns.map(c => [c.id, c]));
+
+      const lineItems = await db.select({
+        id: campaignInfluencers.id,
+        campaignId: campaignInfluencers.campaignId,
+        influencerId: campaignInfluencers.influencerId,
+      }).from(campaignInfluencers).where(inArray(campaignInfluencers.campaignId, campaignIds));
+      const lineItemMap = new Map(lineItems.map(li => [li.id, li]));
+
+      const workspaceInfluencerIds = [...new Set(lineItems.map(li => li.influencerId))];
+      const influencerRows = workspaceInfluencerIds.length > 0
+        ? await db.select({ id: influencers.id, name: influencers.name, email: influencers.email, settlementType: influencers.settlementType, bankName: influencers.bankName, accountNumber: influencers.accountNumber, settlementInfoUpdatedAt: influencers.settlementInfoUpdatedAt }).from(influencers).where(inArray(influencers.id, workspaceInfluencerIds))
+        : [];
+      const influencerMap = new Map(influencerRows.map(i => [i.id, i]));
+
+      const convRows = lineItems.length > 0
+        ? await db.select({ id: conversations.id, campaignLineItemId: conversations.campaignLineItemId, emailAccountId: conversations.emailAccountId }).from(conversations).where(inArray(conversations.campaignLineItemId, lineItems.map(li => li.id)))
+        : [];
+      const convMap = new Map(convRows.map(c => [c.id, c]));
+      const convByLineItem = new Map(convRows.map(c => [c.campaignLineItemId, c]));
+
+      let recentReplies: any[] = [];
+      if (convRows.length > 0) {
+        const convIds = convRows.map(c => c.id);
+        const inboundMessages = await db.select()
+          .from(conversationMessages)
+          .where(and(
+            inArray(conversationMessages.conversationId, convIds),
+            eq(conversationMessages.direction, 'inbound')
+          ))
+          .orderBy(desc(conversationMessages.createdAt))
+          .limit(15);
+
+        const pendingDrafts = await db.select()
+          .from(aiDraftReplies)
+          .where(and(
+            inArray(aiDraftReplies.conversationId, convIds),
+            eq(aiDraftReplies.status, 'pending')
+          ));
+        const draftByConv = new Map<number, any>();
+        for (const d of pendingDrafts) {
+          const existing = draftByConv.get(d.conversationId);
+          if (!existing || (d.createdAt && existing.createdAt && d.createdAt > existing.createdAt)) {
+            draftByConv.set(d.conversationId, d);
+          }
+        }
+
+        recentReplies = inboundMessages.map(msg => {
+          const conv = convMap.get(msg.conversationId);
+          const li = conv ? lineItemMap.get(conv.campaignLineItemId) : null;
+          const campaign = li ? campaignMap.get(li.campaignId) : null;
+          const inf = li ? influencerMap.get(li.influencerId) : null;
+          const cl = campaign?.clientId ? clientMap.get(campaign.clientId) : null;
+          const draft = draftByConv.get(msg.conversationId);
+          let alternativesParsed: any = null;
+          if (draft?.alternatives) {
+            try { alternativesParsed = JSON.parse(draft.alternatives); } catch {}
+          }
+          return {
+            type: 'email' as const,
+            id: msg.id,
+            conversationId: msg.conversationId,
+            snippet: msg.snippet || msg.bodyText?.substring(0, 200) || '',
+            senderEmail: msg.senderEmail,
+            senderName: msg.senderName,
+            receivedAt: msg.receivedAt || msg.createdAt,
+            campaignName: campaign?.name || '',
+            campaignId: li?.campaignId,
+            influencerName: inf?.name || '',
+            influencerEmail: inf?.email || '',
+            clientName: cl?.name || campaign?.client || '',
+            clientLogoUrl: cl?.logoUrl || null,
+            aiDraft: draft ? {
+              id: draft.id,
+              draft: draft.draft,
+              classification: draft.classification,
+              classificationLabel: draft.classificationLabel,
+              alternativesParsed,
+            } : null,
+          };
+        });
+      }
+
+      const recentSubmissions = await db.select()
+        .from(contentSubmissions)
+        .where(inArray(contentSubmissions.campaignId, campaignIds))
+        .orderBy(desc(contentSubmissions.submittedAt))
+        .limit(10);
+
+      const submissionsFeed = recentSubmissions.map(sub => {
+        const campaign = campaignMap.get(sub.campaignId);
+        const inf = influencerMap.get(sub.influencerId);
+        const cl = campaign?.clientId ? clientMap.get(campaign.clientId) : null;
+        return {
+          type: 'submission' as const,
+          id: sub.id,
+          submissionType: sub.submissionType,
+          fileName: sub.fileName,
+          oneDriveLink: sub.oneDriveLink,
+          submittedAt: sub.submittedAt,
+          campaignName: campaign?.name || '',
+          campaignId: sub.campaignId,
+          influencerName: inf?.name || '',
+          clientName: cl?.name || campaign?.client || '',
+          clientLogoUrl: cl?.logoUrl || null,
+        };
+      });
+
+      const settlementInfluencers = influencerRows
+        .filter(i => i.settlementInfoUpdatedAt)
+        .sort((a, b) => (b.settlementInfoUpdatedAt!.getTime()) - (a.settlementInfoUpdatedAt!.getTime()))
+        .slice(0, 10);
+
+      const settlementFeed = settlementInfluencers.map(inf => {
+        const relatedLis = lineItems.filter(li => li.influencerId === inf.id);
+        const relatedLi = relatedLis.length > 0 ? relatedLis[relatedLis.length - 1] : null;
+        const campaign = relatedLi ? campaignMap.get(relatedLi.campaignId) : null;
+        const cl = campaign?.clientId ? clientMap.get(campaign.clientId) : null;
+        return {
+          type: 'settlement' as const,
+          id: inf.id,
+          influencerName: inf.name,
+          settlementType: inf.settlementType,
+          bankName: inf.bankName,
+          accountNumber: inf.accountNumber ? inf.accountNumber.replace(/(\d{3})\d+(\d{3})/, '$1****$2') : null,
+          updatedAt: inf.settlementInfoUpdatedAt,
+          campaignName: campaign?.name || '',
+          campaignId: relatedLi?.campaignId,
+          clientName: cl?.name || campaign?.client || '',
+          clientLogoUrl: cl?.logoUrl || null,
+        };
+      });
+
+      res.json({
+        recentReplies,
+        recentSubmissions: submissionsFeed,
+        recentSettlements: settlementFeed,
+        clients: workspaceClients,
+      });
+    } catch (err) {
+      console.error('Overview feed error:', err);
+      res.status(500).json({ message: "피드 조회 실패" });
+    }
   });
 
   // === EMAIL ===

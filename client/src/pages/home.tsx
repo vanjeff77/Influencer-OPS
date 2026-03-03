@@ -1,30 +1,35 @@
 import { useUser } from "@/hooks/use-auth";
 import { useWorkspaces } from "@/hooks/use-workspaces";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import Layout from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
-import { 
-  ArrowRight, 
-  Megaphone, 
-  MessageSquare, 
-  AlertTriangle, 
-  Upload, 
-  Wallet,
-  ChevronRight,
-  Clock,
+import { Textarea } from "@/components/ui/textarea";
+import {
+  ArrowRight,
   ExternalLink,
-  AlertCircle,
-  Eye,
-  FileWarning,
-  CreditCard
+  Clock,
+  Mail,
+  FileVideo,
+  Wallet,
+  Building2,
+  Sparkles,
+  RefreshCw,
+  MessageSquare,
+  Loader2,
+  X,
+  Send,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { KO } from "@/i18n/ko";
 import { useState, useEffect, useMemo } from "react";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 interface ApiTask {
   id: string;
@@ -53,46 +58,454 @@ interface Task {
   completed: boolean;
 }
 
-interface CommunicationThread {
-  id: string;
-  influencerName: string;
+interface EmailFeedItem {
+  type: 'email';
+  id: number;
+  conversationId: number;
+  snippet: string;
+  senderEmail: string;
+  senderName: string;
+  receivedAt: string;
   campaignName: string;
-  lastMessage: string;
-  time: string;
-  status: "replied" | "noResponse" | "failed";
+  campaignId: number;
+  influencerName: string;
+  influencerEmail: string;
+  clientName: string;
+  clientLogoUrl: string | null;
+  aiDraft: {
+    id: number;
+    draft: string;
+    classification: string;
+    classificationLabel: string;
+    alternativesParsed: { classification: string; classificationLabel: string }[] | null;
+  } | null;
 }
 
-interface RiskItem {
-  id: string;
-  type: "trackingError" | "contentPrivate" | "contractIncomplete" | "settlementUrgent";
-  message: string;
-  link: string;
+interface SubmissionFeedItem {
+  type: 'submission';
+  id: number;
+  submissionType: string;
+  fileName: string;
+  oneDriveLink: string | null;
+  submittedAt: string;
+  campaignName: string;
+  campaignId: number;
+  influencerName: string;
+  clientName: string;
+  clientLogoUrl: string | null;
 }
 
+interface SettlementFeedItem {
+  type: 'settlement';
+  id: number;
+  influencerName: string;
+  settlementType: string | null;
+  bankName: string | null;
+  accountNumber: string | null;
+  updatedAt: string;
+  campaignName: string;
+  campaignId: number;
+  clientName: string;
+  clientLogoUrl: string | null;
+}
 
-const SAMPLE_THREADS: CommunicationThread[] = [
-  { id: "1", influencerName: "인플루언서 1", campaignName: "서머 런칭 2025", lastMessage: "안녕하세요, 초안 검토 부탁드립니다.", time: "2시간 전", status: "replied" },
-  { id: "2", influencerName: "인플루언서 2", campaignName: "서머 런칭 2025", lastMessage: "계약서 확인 후 서명 부탁드립니다.", time: "1일 전", status: "noResponse" },
-  { id: "3", influencerName: "인플루언서 4", campaignName: "가을 캠페인", lastMessage: "협업 제안 드립니다.", time: "3일 전", status: "noResponse" },
-  { id: "4", influencerName: "인플루언서 3", campaignName: "서머 런칭 2025", lastMessage: "업로드 일정 확인 부탁드립니다.", time: "5시간 전", status: "replied" },
-  { id: "5", influencerName: "인플루언서 5", campaignName: "서머 런칭 2025", lastMessage: "정산 정보 요청드립니다.", time: "1일 전", status: "failed" },
-];
+type FeedItem = EmailFeedItem | SubmissionFeedItem | SettlementFeedItem;
 
-const SAMPLE_RISKS: RiskItem[] = [
-  { id: "1", type: "trackingError", message: "인플루언서 3의 Instagram 트래킹 수집 실패", link: "/tracking?hasIssue=true" },
-  { id: "2", type: "contentPrivate", message: "인플루언서 2의 콘텐츠가 비공개로 전환됨", link: "/tracking?hasIssue=true" },
-  { id: "3", type: "contractIncomplete", message: "인플루언서 4 - 계약 미완료 상태에서 콘텐츠 진행 중", link: "/campaigns/2?tab=contract" },
-  { id: "4", type: "settlementUrgent", message: "인플루언서 1 - 정산 정보 미수집, 지급일 D-3", link: "/finance?settlementStatus=지급대기" },
-];
+interface FeedResponse {
+  recentReplies: EmailFeedItem[];
+  recentSubmissions: SubmissionFeedItem[];
+  recentSettlements: SettlementFeedItem[];
+}
 
 const STORAGE_KEY = "overview_completed_tasks";
+
+function timeAgo(dateStr: string) {
+  const d = new Date(dateStr);
+  const now = new Date();
+  const diff = now.getTime() - d.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "방금";
+  if (mins < 60) return `${mins}분 전`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}시간 전`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}일 전`;
+  return d.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+}
+
+function ClientLogo({ logoUrl, name }: { logoUrl: string | null; name: string }) {
+  if (logoUrl) {
+    return (
+      <img
+        src={logoUrl}
+        alt={name}
+        className="w-9 h-9 rounded-lg object-cover border border-border/50"
+        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+        data-testid="img-client-logo"
+      />
+    );
+  }
+  return (
+    <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center border border-border/50" data-testid="icon-client-fallback">
+      <Building2 className="w-4 h-4 text-muted-foreground" />
+    </div>
+  );
+}
+
+function EmailReplyCard({ item, aiEnabled }: { item: EmailFeedItem; aiEnabled: boolean }) {
+  const { toast } = useToast();
+  const [replyText, setReplyText] = useState("");
+  const [showReply, setShowReply] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [aiDraft, setAiDraft] = useState(item.aiDraft);
+  const [dismissed, setDismissed] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [feedbackText, setFeedbackText] = useState("");
+
+  const sendMutation = useMutation({
+    mutationFn: (data: { body: string }) =>
+      apiRequest('POST', `/api/conversations/${item.conversationId}/messages`, data),
+    onSuccess: () => {
+      setReplyText("");
+      setShowReply(false);
+      toast({ title: "답장이 발송되었습니다" });
+      queryClient.invalidateQueries({ queryKey: ['/api/overview/feed'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/conversations'] });
+    },
+    onError: () => {
+      toast({ variant: "destructive", title: "답장 발송에 실패했습니다" });
+    }
+  });
+
+  const generateDraftMutation = useMutation({
+    mutationFn: async (data?: { userFeedback?: string; requestedClassification?: string; requestedClassificationLabel?: string }) => {
+      await apiRequest('POST', `/api/conversations/${item.conversationId}/ai-draft`, data || {});
+      const res = await fetch(`/api/conversations/${item.conversationId}/ai-draft`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch draft');
+      return res.json();
+    },
+    onSuccess: (draft: any) => {
+      if (draft && draft.alternatives) {
+        try { draft.alternativesParsed = JSON.parse(draft.alternatives); } catch {}
+      }
+      setAiDraft(draft);
+      setDismissed(false);
+    },
+    onError: () => {
+      toast({ variant: "destructive", title: "AI 초안 생성에 실패했습니다" });
+    }
+  });
+
+  const dismissDraft = async (draftId: number) => {
+    try {
+      await apiRequest('PATCH', `/api/ai-drafts/${draftId}`, { status: 'dismissed' });
+      setDismissed(true);
+    } catch {}
+  };
+
+  const handleUseDraft = () => {
+    if (aiDraft) {
+      setReplyText(aiDraft.draft);
+      setShowReply(true);
+      apiRequest('PATCH', `/api/ai-drafts/${aiDraft.id}`, { status: 'used' }).catch(() => {});
+    }
+  };
+
+  const handleSend = () => {
+    if (!replyText.trim()) return;
+    sendMutation.mutate({ body: replyText });
+  };
+
+  const visibleDraft = aiEnabled && aiDraft && !dismissed ? aiDraft : null;
+
+  return (
+    <Card className="border-l-4 border-l-blue-400" data-testid={`feed-email-${item.id}`}>
+      <CardContent className="p-4">
+        <div className="flex items-start gap-3">
+          <ClientLogo logoUrl={item.clientLogoUrl} name={item.clientName} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <Badge variant="outline" className="text-[10px] shrink-0" data-testid="badge-campaign-name">{item.campaignName}</Badge>
+              <Badge variant="secondary" className="text-[10px] bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                <Mail className="w-2.5 h-2.5 mr-0.5" />수신
+              </Badge>
+              <span className="text-[10px] text-muted-foreground ml-auto shrink-0">
+                <Clock className="w-2.5 h-2.5 inline mr-0.5" />{timeAgo(item.receivedAt)}
+              </span>
+            </div>
+            <p className="text-sm font-medium" data-testid="text-influencer-name">{item.influencerName}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{item.senderEmail}</p>
+            <div className="mt-2">
+              <p className={`text-sm text-foreground/80 ${expanded ? '' : 'line-clamp-2'}`} data-testid="text-email-snippet">
+                {item.snippet}
+              </p>
+              {item.snippet && item.snippet.length > 100 && (
+                <button
+                  className="text-xs text-muted-foreground hover:text-foreground mt-0.5 flex items-center gap-0.5"
+                  onClick={() => setExpanded(!expanded)}
+                  data-testid="button-toggle-expand"
+                >
+                  {expanded ? <><ChevronUp className="w-3 h-3" />접기</> : <><ChevronDown className="w-3 h-3" />더보기</>}
+                </button>
+              )}
+            </div>
+
+            {visibleDraft && (
+              <div className="mt-3 rounded-lg border border-purple-200 bg-purple-50/50 p-3" data-testid="card-ai-draft">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-purple-500" />
+                    <span className="text-sm font-medium text-purple-700">AI 초안</span>
+                    {visibleDraft.classification && (
+                      <Badge variant="outline" className="text-[10px] bg-purple-100 text-purple-600 border-purple-200" data-testid="badge-ai-classification">
+                        {visibleDraft.classification} {visibleDraft.classificationLabel}
+                      </Badge>
+                    )}
+                  </div>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                    onClick={() => dismissDraft(visibleDraft.id)}
+                    data-testid="button-dismiss-draft"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+                <div className="text-sm text-foreground whitespace-pre-wrap mb-2 max-h-[120px] overflow-y-auto" data-testid="text-ai-draft-body">
+                  {visibleDraft.draft}
+                </div>
+                {visibleDraft.alternativesParsed && visibleDraft.alternativesParsed.length > 0 && (
+                  <div className="mb-2 flex items-center gap-1.5 flex-wrap" data-testid="section-alternatives">
+                    <span className="text-[10px] text-muted-foreground">다른 옵션:</span>
+                    {visibleDraft.alternativesParsed.map((alt, idx) => (
+                      <Button
+                        key={idx}
+                        size="sm"
+                        variant="outline"
+                        className="text-[10px] h-6 px-2 py-0 text-purple-600 border-purple-200 hover:bg-purple-50"
+                        onClick={() => generateDraftMutation.mutate({ requestedClassification: alt.classification, requestedClassificationLabel: alt.classificationLabel })}
+                        disabled={generateDraftMutation.isPending}
+                        data-testid={`button-alternative-${idx}`}
+                      >
+                        {alt.classification} {alt.classificationLabel}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+                {showFeedback && (
+                  <div className="mb-2 space-y-2" data-testid="section-feedback-input">
+                    <Textarea
+                      value={feedbackText}
+                      onChange={(e) => setFeedbackText(e.target.value)}
+                      placeholder="수정 요청사항을 입력하세요 (예: 좀 더 정중하게, 단가를 강조해주세요)"
+                      className="text-xs min-h-[60px] max-h-[100px] resize-none bg-white dark:bg-gray-900"
+                      data-testid="textarea-feedback"
+                    />
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        className="text-xs bg-purple-600 text-white"
+                        onClick={() => {
+                          generateDraftMutation.mutate({ userFeedback: feedbackText || undefined });
+                          setShowFeedback(false);
+                          setFeedbackText("");
+                        }}
+                        disabled={generateDraftMutation.isPending}
+                        data-testid="button-submit-regenerate"
+                      >
+                        {generateDraftMutation.isPending ? (
+                          <><Loader2 className="w-3 h-3 mr-1 animate-spin" />재생성 중...</>
+                        ) : (
+                          <><RefreshCw className="w-3 h-3 mr-1" />재생성</>
+                        )}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-xs"
+                        onClick={() => { setShowFeedback(false); setFeedbackText(""); }}
+                        data-testid="button-cancel-feedback"
+                      >
+                        취소
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-xs bg-purple-100 hover:bg-purple-200 text-purple-700 border-purple-200"
+                    onClick={handleUseDraft}
+                    data-testid="button-use-draft"
+                  >
+                    <Sparkles className="w-3 h-3 mr-1" />초안 사용
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-xs text-purple-600 border-purple-200 hover:bg-purple-50"
+                    onClick={() => setShowFeedback(!showFeedback)}
+                    disabled={generateDraftMutation.isPending}
+                    data-testid="button-toggle-feedback"
+                  >
+                    <MessageSquare className="w-3 h-3 mr-1" />다른 답변 요청하기
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {!visibleDraft && aiEnabled && (
+              <div className="mt-2">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-xs text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                  onClick={() => generateDraftMutation.mutate({})}
+                  disabled={generateDraftMutation.isPending}
+                  data-testid="button-generate-draft"
+                >
+                  {generateDraftMutation.isPending ? (
+                    <><Loader2 className="w-3 h-3 mr-1 animate-spin" />AI 초안 생성 중...</>
+                  ) : (
+                    <><Sparkles className="w-3 h-3 mr-1" />AI 초안 생성</>
+                  )}
+                </Button>
+              </div>
+            )}
+
+            {!showReply ? (
+              <div className="mt-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-xs"
+                  onClick={() => setShowReply(true)}
+                  data-testid="button-open-reply"
+                >
+                  <Mail className="w-3 h-3 mr-1" />답장하기
+                </Button>
+              </div>
+            ) : (
+              <div className="mt-3 space-y-2" data-testid="section-reply-composer">
+                <Textarea
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  placeholder="답장을 입력하세요..."
+                  className="text-sm min-h-[80px] max-h-[200px] resize-none"
+                  data-testid="textarea-reply"
+                />
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    onClick={handleSend}
+                    disabled={!replyText.trim() || sendMutation.isPending}
+                    data-testid="button-send-reply"
+                  >
+                    {sendMutation.isPending ? (
+                      <><Loader2 className="w-3 h-3 mr-1 animate-spin" />발송 중...</>
+                    ) : (
+                      <><Send className="w-3 h-3 mr-1" />발송</>
+                    )}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-xs"
+                    onClick={() => { setShowReply(false); setReplyText(""); }}
+                    data-testid="button-cancel-reply"
+                  >
+                    취소
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SubmissionCard({ item }: { item: SubmissionFeedItem }) {
+  return (
+    <Card className="border-l-4 border-l-green-400" data-testid={`feed-submission-${item.id}`}>
+      <CardContent className="p-4">
+        <div className="flex items-start gap-3">
+          <ClientLogo logoUrl={item.clientLogoUrl} name={item.clientName} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <Badge variant="outline" className="text-[10px] shrink-0" data-testid="badge-campaign-name">{item.campaignName}</Badge>
+              <Badge
+                variant="secondary"
+                className={`text-[10px] ${item.submissionType === 'draft' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300' : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'}`}
+              >
+                <FileVideo className="w-2.5 h-2.5 mr-0.5" />
+                {item.submissionType === 'draft' ? '초안' : '완성본'}
+              </Badge>
+              <span className="text-[10px] text-muted-foreground ml-auto shrink-0">
+                <Clock className="w-2.5 h-2.5 inline mr-0.5" />{timeAgo(item.submittedAt)}
+              </span>
+            </div>
+            <p className="text-sm font-medium" data-testid="text-influencer-name">{item.influencerName}</p>
+            <p className="text-xs text-muted-foreground mt-1">{item.fileName}</p>
+            {item.oneDriveLink && (
+              <a
+                href={item.oneDriveLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline mt-1"
+                data-testid="link-onedrive"
+              >
+                <ExternalLink className="w-3 h-3" />파일 열기
+              </a>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SettlementCard({ item }: { item: SettlementFeedItem }) {
+  return (
+    <Card className="border-l-4 border-l-orange-400" data-testid={`feed-settlement-${item.id}`}>
+      <CardContent className="p-4">
+        <div className="flex items-start gap-3">
+          <ClientLogo logoUrl={item.clientLogoUrl} name={item.clientName} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <Badge variant="outline" className="text-[10px] shrink-0" data-testid="badge-campaign-name">{item.campaignName}</Badge>
+              <Badge variant="secondary" className="text-[10px] bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300">
+                <Wallet className="w-2.5 h-2.5 mr-0.5" />정산정보
+              </Badge>
+              <span className="text-[10px] text-muted-foreground ml-auto shrink-0">
+                <Clock className="w-2.5 h-2.5 inline mr-0.5" />{timeAgo(item.updatedAt)}
+              </span>
+            </div>
+            <p className="text-sm font-medium" data-testid="text-influencer-name">{item.influencerName}</p>
+            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+              {item.settlementType && <span>{item.settlementType}</span>}
+              {item.bankName && <span>{item.bankName}</span>}
+              {item.accountNumber && <span>{item.accountNumber}</span>}
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function Home() {
   const { data: user } = useUser();
   const { data: workspaces } = useWorkspaces();
-  const workspaceId = workspaces?.[0]?.id;
+  const workspace = workspaces?.[0];
+  const workspaceId = workspace?.id;
+  const aiEnabled = (workspace as any)?.aiDraftEnabled === true;
   const [, navigate] = useLocation();
   const [completedTaskIds, setCompletedTaskIds] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState<'all' | 'email' | 'submission' | 'settlement'>('all');
 
   const { data: apiTasks = [], isLoading: tasksLoading } = useQuery<ApiTask[]>({
     queryKey: ["/api/overview/tasks", workspaceId],
@@ -102,6 +515,17 @@ export default function Home() {
       return res.json();
     },
     enabled: !!workspaceId,
+  });
+
+  const { data: feedData, isLoading: feedLoading, isError: feedError, refetch: refetchFeed } = useQuery<FeedResponse>({
+    queryKey: ["/api/overview/feed", workspaceId],
+    queryFn: async () => {
+      const res = await fetch(`/api/overview/feed?workspaceId=${workspaceId}`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to fetch feed');
+      return res.json();
+    },
+    enabled: !!workspaceId,
+    refetchInterval: 60000,
   });
 
   useEffect(() => {
@@ -127,7 +551,7 @@ export default function Home() {
 
   const handleTaskToggle = (taskId: string) => {
     setCompletedTaskIds(prev => {
-      const newIds = prev.includes(taskId) 
+      const newIds = prev.includes(taskId)
         ? prev.filter(id => id !== taskId)
         : [...prev, taskId];
       localStorage.setItem(STORAGE_KEY, JSON.stringify(newIds));
@@ -140,25 +564,23 @@ export default function Home() {
     return a.priority - b.priority;
   });
 
-  const kpiData = {
-    activeCampaigns: 3,
-    pendingResponses: 5,
-    issuesCount: 4,
-    upcomingContent: 7,
-    pendingSettlement: 2500000,
-  };
+  const feedItems = useMemo(() => {
+    if (!feedData) return [];
+    const all: (FeedItem & { sortDate: number })[] = [];
+    for (const r of feedData.recentReplies) {
+      all.push({ ...r, sortDate: new Date(r.receivedAt).getTime() });
+    }
+    for (const s of feedData.recentSubmissions) {
+      all.push({ ...s, sortDate: new Date(s.submittedAt).getTime() });
+    }
+    for (const st of feedData.recentSettlements) {
+      all.push({ ...st, sortDate: new Date(st.updatedAt).getTime() });
+    }
+    all.sort((a, b) => b.sortDate - a.sortDate);
+    return all;
+  }, [feedData]);
 
-  const contentStats = {
-    draftWaiting: 3,
-    feedbackWaiting: 2,
-    uploadScheduled: 4,
-    uploadCompleted: 8,
-  };
-
-  const commStats = {
-    newReplies: 2,
-    noResponse: 3,
-  };
+  const filteredFeed = activeTab === 'all' ? feedItems : feedItems.filter(f => f.type === activeTab);
 
   const getDueBadge = (dueIn: number) => {
     if (dueIn < 0) return <Badge variant="destructive" className="text-xs">{KO.pages.home.todaysTasks.delayed}</Badge>;
@@ -167,267 +589,122 @@ export default function Home() {
     return <Badge variant="secondary" className="text-xs">{KO.pages.home.todaysTasks.dDay}-{dueIn}</Badge>;
   };
 
-  const getStatusBadge = (status: "replied" | "noResponse" | "failed") => {
-    switch (status) {
-      case "replied": return <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">{KO.pages.communication.replied}</Badge>;
-      case "noResponse": return <Badge variant="secondary" className="text-xs bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300">{KO.pages.communication.noResponse}</Badge>;
-      case "failed": return <Badge variant="destructive" className="text-xs">{KO.pages.communication.failed}</Badge>;
-    }
-  };
-
-  const getRiskIcon = (type: RiskItem["type"]) => {
-    switch (type) {
-      case "trackingError": return <AlertCircle className="w-4 h-4 text-red-500" />;
-      case "contentPrivate": return <Eye className="w-4 h-4 text-orange-500" />;
-      case "contractIncomplete": return <FileWarning className="w-4 h-4 text-yellow-500" />;
-      case "settlementUrgent": return <CreditCard className="w-4 h-4 text-purple-500" />;
-    }
-  };
-
-  const getRiskBadge = (type: RiskItem["type"]) => {
-    const labels: Record<RiskItem["type"], string> = {
-      trackingError: KO.pages.home.risks.trackingError,
-      contentPrivate: KO.pages.home.risks.contentPrivate,
-      contractIncomplete: KO.pages.home.risks.contractIncomplete,
-      settlementUrgent: KO.pages.home.risks.settlementUrgent,
-    };
-    const colors: Record<RiskItem["type"], string> = {
-      trackingError: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300",
-      contentPrivate: "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300",
-      contractIncomplete: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300",
-      settlementUrgent: "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300",
-    };
-    return <Badge variant="secondary" className={`text-xs ${colors[type]}`}>{labels[type]}</Badge>;
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW', maximumFractionDigits: 0 }).format(amount);
-  };
-
-  const kpiCards = [
-    { label: KO.pages.home.kpi.activeCampaigns, value: kpiData.activeCampaigns, unit: KO.pages.home.kpi.count, icon: Megaphone, color: "text-purple-500", bg: "bg-purple-100 dark:bg-purple-900", href: "/campaigns?campaignStatus=진행중" },
-    { label: KO.pages.home.kpi.pendingResponses, value: kpiData.pendingResponses, unit: KO.pages.home.kpi.people, icon: MessageSquare, color: "text-blue-500", bg: "bg-blue-100 dark:bg-blue-900", href: "/campaigns?commStatus=미응답" },
-    { label: KO.pages.home.kpi.issuesCount, value: kpiData.issuesCount, unit: KO.pages.home.kpi.count, icon: AlertTriangle, color: "text-red-500", bg: "bg-red-100 dark:bg-red-900", href: "/tracking?hasIssue=true" },
-    { label: KO.pages.home.kpi.upcomingContent, value: kpiData.upcomingContent, unit: KO.pages.home.kpi.count, icon: Upload, color: "text-green-500", bg: "bg-green-100 dark:bg-green-900", href: "/campaigns?contentStatus=업로드예정&dueIn=7" },
-    { label: KO.pages.home.kpi.pendingSettlement, value: formatCurrency(kpiData.pendingSettlement), unit: "", icon: Wallet, color: "text-orange-500", bg: "bg-orange-100 dark:bg-orange-900", href: "/finance?settlementStatus=지급대기" },
-  ];
+  const emailCount = feedData?.recentReplies?.length || 0;
+  const submissionCount = feedData?.recentSubmissions?.length || 0;
+  const settlementCount = feedData?.recentSettlements?.length || 0;
 
   return (
     <Layout>
-      <div className="space-y-6 md:space-y-8 max-w-[1400px] mx-auto">
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
-          {kpiCards.map((kpi, index) => (
-            <Link key={index} href={kpi.href}>
-              <Card className="cursor-pointer hover-elevate h-full" data-testid={`card-kpi-${index}`}>
-                <CardContent className="p-3 md:p-4">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-muted-foreground truncate">{kpi.label}</p>
-                      <p className="text-lg md:text-2xl font-bold mt-1">{kpi.value}<span className="text-xs md:text-sm font-normal text-muted-foreground ml-0.5">{kpi.unit}</span></p>
-                    </div>
-                    <div className={`p-2 rounded-full ${kpi.bg} shrink-0`}>
-                      <kpi.icon className={`h-4 w-4 ${kpi.color}`} />
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-muted-foreground absolute bottom-2 right-2 opacity-50" />
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
-            <Card className="h-full">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base md:text-lg" data-testid="text-tasks-title">{KO.pages.home.todaysTasks.title}</CardTitle>
-                <CardDescription className="text-xs md:text-sm">{KO.pages.home.todaysTasks.subtitle}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {sortedTasks.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-8">{KO.pages.home.todaysTasks.empty}</p>
-                ) : (
-                  sortedTasks.map((task) => (
-                    <div key={task.id} className={`flex items-start gap-3 p-3 rounded-lg border ${task.completed ? 'bg-muted/50 opacity-60' : 'bg-card'}`} data-testid={`task-item-${task.id}`}>
-                      <Checkbox 
-                        checked={task.completed} 
-                        onCheckedChange={() => handleTaskToggle(task.id)}
-                        className="mt-0.5"
-                        data-testid={`checkbox-task-${task.id}`}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`text-sm font-medium ${task.completed ? 'line-through text-muted-foreground' : ''}`}>{task.title}</span>
-                          {getDueBadge(task.dueIn)}
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1 truncate">
-                          {task.campaignName} · {task.influencerName} · {task.status}
-                        </p>
-                      </div>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="shrink-0"
-                        onClick={() => navigate(task.link)}
-                        data-testid={`button-task-goto-${task.id}`}
-                      >
-                        {KO.pages.home.todaysTasks.goTo}
-                        <ExternalLink className="w-3 h-3 ml-1" />
-                      </Button>
-                    </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="space-y-6">
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base md:text-lg">{KO.pages.home.communication.title}</CardTitle>
-                  <Link href="/email">
-                    <Button variant="ghost" size="sm" data-testid="button-comm-viewall">
-                      {KO.pages.home.communication.viewAll}
-                      <ChevronRight className="w-4 h-4 ml-1" />
-                    </Button>
-                  </Link>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="flex gap-4 mb-4">
-                  <div className="flex-1 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg text-center">
-                    <p className="text-2xl font-bold text-green-600 dark:text-green-400">{commStats.newReplies}</p>
-                    <p className="text-xs text-muted-foreground">{KO.pages.home.communication.newReplies}</p>
-                  </div>
-                  <div className="flex-1 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg text-center">
-                    <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{commStats.noResponse}</p>
-                    <p className="text-xs text-muted-foreground">{KO.pages.home.communication.noResponse}</p>
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground mb-2">{KO.pages.home.communication.recentThreads}</p>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {SAMPLE_THREADS.slice(0, 5).map((thread) => (
-                    <Link key={thread.id} href={`/campaigns/1?tab=communication`}>
-                      <div className="flex items-center gap-2 p-2 rounded-md hover-elevate cursor-pointer" data-testid={`thread-item-${thread.id}`}>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{thread.influencerName}</p>
-                          <p className="text-xs text-muted-foreground truncate">{thread.campaignName} · {thread.time}</p>
-                        </div>
-                        {getStatusBadge(thread.status)}
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base md:text-lg">{KO.pages.home.content.title}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 gap-2">
-                  <Link href="/campaigns?contentStatus=초안대기">
-                    <div className="p-3 rounded-lg border hover-elevate cursor-pointer text-center" data-testid="content-stat-draft">
-                      <p className="text-xl font-bold">{contentStats.draftWaiting}</p>
-                      <p className="text-xs text-muted-foreground">{KO.pages.home.content.draftWaiting}</p>
-                    </div>
-                  </Link>
-                  <Link href="/campaigns?contentStatus=피드백대기">
-                    <div className="p-3 rounded-lg border hover-elevate cursor-pointer text-center" data-testid="content-stat-feedback">
-                      <p className="text-xl font-bold">{contentStats.feedbackWaiting}</p>
-                      <p className="text-xs text-muted-foreground">{KO.pages.home.content.feedbackWaiting}</p>
-                    </div>
-                  </Link>
-                  <Link href="/campaigns?contentStatus=업로드예정&dueIn=3">
-                    <div className="p-3 rounded-lg border hover-elevate cursor-pointer text-center" data-testid="content-stat-scheduled">
-                      <p className="text-xl font-bold">{contentStats.uploadScheduled}</p>
-                      <p className="text-xs text-muted-foreground">{KO.pages.home.content.uploadScheduled}</p>
-                    </div>
-                  </Link>
-                  <Link href="/campaigns?contentStatus=업로드완료">
-                    <div className="p-3 rounded-lg border hover-elevate cursor-pointer text-center" data-testid="content-stat-completed">
-                      <p className="text-xl font-bold">{contentStats.uploadCompleted}</p>
-                      <p className="text-xs text-muted-foreground">{KO.pages.home.content.uploadCompleted}</p>
-                    </div>
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="space-y-6 md:space-y-8 max-w-[1000px] mx-auto">
+        {sortedTasks.length > 0 && (
           <Card>
             <CardHeader className="pb-3">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-orange-500" />
-                <CardTitle className="text-base md:text-lg">{KO.pages.home.risks.title}</CardTitle>
-              </div>
+              <CardTitle className="text-base md:text-lg" data-testid="text-tasks-title">{KO.pages.home.todaysTasks.title}</CardTitle>
+              <CardDescription className="text-xs md:text-sm">{KO.pages.home.todaysTasks.subtitle}</CardDescription>
             </CardHeader>
-            <CardContent>
-              {SAMPLE_RISKS.length === 0 ? (
-                <p className="text-center text-muted-foreground py-4">{KO.pages.home.risks.noIssues}</p>
-              ) : (
-                <div className="space-y-2">
-                  {SAMPLE_RISKS.map((risk) => (
-                    <div key={risk.id} className="flex items-center gap-3 p-3 rounded-lg border" data-testid={`risk-item-${risk.id}`}>
-                      {getRiskIcon(risk.type)}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap mb-1">
-                          {getRiskBadge(risk.type)}
-                        </div>
-                        <p className="text-sm truncate">{risk.message}</p>
-                      </div>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => navigate(risk.link)}
-                        data-testid={`button-risk-open-${risk.id}`}
-                      >
-                        {KO.pages.home.risks.open}
-                      </Button>
+            <CardContent className="space-y-2">
+              {sortedTasks.map((task) => (
+                <div key={task.id} className={`flex items-start gap-3 p-3 rounded-lg border ${task.completed ? 'bg-muted/50 opacity-60' : 'bg-card'}`} data-testid={`task-item-${task.id}`}>
+                  <Checkbox
+                    checked={task.completed}
+                    onCheckedChange={() => handleTaskToggle(task.id)}
+                    className="mt-0.5"
+                    data-testid={`checkbox-task-${task.id}`}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-sm font-medium ${task.completed ? 'line-through text-muted-foreground' : ''}`}>{task.title}</span>
+                      {getDueBadge(task.dueIn)}
                     </div>
-                  ))}
+                    <p className="text-xs text-muted-foreground mt-1 truncate">
+                      {task.campaignName} · {task.influencerName} · {task.status}
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={() => navigate(task.link)}
+                    data-testid={`button-task-goto-${task.id}`}
+                  >
+                    {KO.pages.home.todaysTasks.goTo}
+                    <ExternalLink className="w-3 h-3 ml-1" />
+                  </Button>
                 </div>
-              )}
+              ))}
             </CardContent>
           </Card>
+        )}
 
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base md:text-lg">{KO.pages.home.recentActivity}</CardTitle>
-                <Button variant="ghost" size="sm" data-testid="button-activity-more">
-                  {KO.pages.home.viewMore}
-                  <ChevronRight className="w-4 h-4 ml-1" />
+        <div>
+          <div className="flex items-center gap-2 mb-4 flex-wrap">
+            <h2 className="text-lg font-semibold" data-testid="text-feed-title">최근 피드</h2>
+            <div className="flex gap-1 ml-auto">
+              {[
+                { key: 'all' as const, label: '전체' },
+                { key: 'email' as const, label: `이메일 (${emailCount})`, icon: Mail },
+                { key: 'submission' as const, label: `콘텐츠 (${submissionCount})`, icon: FileVideo },
+                { key: 'settlement' as const, label: `정산 (${settlementCount})`, icon: Wallet },
+              ].map(tab => (
+                <Button
+                  key={tab.key}
+                  size="sm"
+                  variant={activeTab === tab.key ? "default" : "ghost"}
+                  className="text-xs h-7 px-2"
+                  onClick={() => setActiveTab(tab.key)}
+                  data-testid={`button-tab-${tab.key}`}
+                >
+                  {tab.label}
                 </Button>
-              </div>
-              <CardDescription className="text-xs">{KO.pages.home.latestUpdates}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {[
-                  { text: "인플루언서 1이 '서머 런칭 2025'에 추가되었습니다", time: "2시간 전", by: "Admin" },
-                  { text: "인플루언서 2의 계약서가 서명되었습니다", time: "4시간 전", by: "Manager" },
-                  { text: "가을 캠페인이 생성되었습니다", time: "1일 전", by: "Admin" },
-                  { text: "인플루언서 3의 콘텐츠가 업로드되었습니다", time: "2일 전", by: "Coordinator" },
-                ].map((activity, i) => (
-                  <div key={i} className="flex items-start gap-3 pb-3 border-b last:border-0 last:pb-0">
-                    <div className="w-2 h-2 rounded-full bg-primary mt-1.5 shrink-0"></div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm">{activity.text}</p>
-                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                        <Clock className="w-3 h-3" />
-                        {activity.time} · {activity.by}
-                      </p>
+              ))}
+            </div>
+          </div>
+
+          {feedError ? (
+            <Card>
+              <CardContent className="p-8 text-center" data-testid="text-feed-error">
+                <p className="text-sm text-destructive mb-3">피드를 불러오는 데 실패했습니다.</p>
+                <Button size="sm" variant="outline" onClick={() => refetchFeed()} data-testid="button-retry-feed">
+                  <RefreshCw className="w-3 h-3 mr-1" />다시 시도
+                </Button>
+              </CardContent>
+            </Card>
+          ) : feedLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map(i => (
+                <Card key={i}>
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <Skeleton className="w-9 h-9 rounded-lg" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-4 w-1/3" />
+                        <Skeleton className="h-3 w-1/2" />
+                        <Skeleton className="h-3 w-2/3" />
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : filteredFeed.length === 0 ? (
+            <Card>
+              <CardContent className="p-8 text-center text-muted-foreground text-sm" data-testid="text-feed-empty">
+                {activeTab === 'all' ? '아직 피드 항목이 없습니다.' :
+                  activeTab === 'email' ? '최근 수신 이메일이 없습니다.' :
+                  activeTab === 'submission' ? '최근 콘텐츠 제출이 없습니다.' :
+                  '최근 정산정보 기입이 없습니다.'}
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3" data-testid="section-feed-list">
+              {filteredFeed.map((item) => {
+                if (item.type === 'email') return <EmailReplyCard key={`email-${item.id}`} item={item} aiEnabled={aiEnabled} />;
+                if (item.type === 'submission') return <SubmissionCard key={`sub-${item.id}`} item={item} />;
+                if (item.type === 'settlement') return <SettlementCard key={`set-${item.id}`} item={item} />;
+                return null;
+              })}
+            </div>
+          )}
         </div>
       </div>
     </Layout>
