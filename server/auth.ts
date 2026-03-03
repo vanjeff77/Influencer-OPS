@@ -17,10 +17,7 @@ declare global {
 export function setupAuth(app: Express) {
   const PgSession = connectPg(session);
 
-  const isProduction = process.env.NODE_ENV === 'production' || process.env.REPLIT_DEPLOYMENT === '1';
-  if (isProduction) {
-    app.set('trust proxy', 1);
-  }
+  app.set('trust proxy', 1);
 
   app.use(
     session({
@@ -30,7 +27,6 @@ export function setupAuth(app: Express) {
       saveUninitialized: false,
       cookie: {
         maxAge: 30 * 24 * 60 * 60 * 1000,
-        secure: isProduction,
       },
     }),
   );
