@@ -1652,7 +1652,17 @@ export async function registerRoutes(
           }
         }
 
-        recentReplies = inboundMessages.map(msg => {
+        const influencerEmails = new Set<string>();
+        for (const inf of influencerRows) {
+          if (inf.email) influencerEmails.add(inf.email.toLowerCase());
+        }
+
+        const filteredMessages = inboundMessages.filter(msg => {
+          if (!msg.senderEmail) return false;
+          return influencerEmails.has(msg.senderEmail.toLowerCase());
+        });
+
+        recentReplies = filteredMessages.map(msg => {
           const conv = convMap.get(msg.conversationId);
           const li = conv ? lineItemMap.get(conv.campaignLineItemId) : null;
           const campaign = li ? campaignMap.get(li.campaignId) : null;
@@ -1668,6 +1678,8 @@ export async function registerRoutes(
             id: msg.id,
             conversationId: msg.conversationId,
             snippet: msg.snippet || msg.bodyText?.substring(0, 200) || '',
+            bodyHtml: msg.bodyHtml,
+            bodyText: msg.bodyText,
             senderEmail: msg.senderEmail,
             senderName: msg.senderName,
             receivedAt: msg.receivedAt || msg.createdAt,

@@ -9,7 +9,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  ArrowRight,
   ExternalLink,
   Clock,
   Mail,
@@ -22,12 +21,13 @@ import {
   Loader2,
   X,
   Send,
-  ChevronDown,
-  ChevronUp,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { KO } from "@/i18n/ko";
 import { useState, useEffect, useMemo } from "react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import DOMPurify from "dompurify";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
@@ -63,6 +63,8 @@ interface EmailFeedItem {
   id: number;
   conversationId: number;
   snippet: string;
+  bodyHtml: string | null;
+  bodyText: string | null;
   senderEmail: string;
   senderName: string;
   receivedAt: string;
@@ -156,7 +158,7 @@ function EmailReplyCard({ item, aiEnabled }: { item: EmailFeedItem; aiEnabled: b
   const { toast } = useToast();
   const [replyText, setReplyText] = useState("");
   const [showReply, setShowReply] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [showFullMessage, setShowFullMessage] = useState(false);
   const [aiDraft, setAiDraft] = useState(item.aiDraft);
   const [dismissed, setDismissed] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
@@ -235,19 +237,15 @@ function EmailReplyCard({ item, aiEnabled }: { item: EmailFeedItem; aiEnabled: b
             </div>
             <p className="text-sm font-medium" data-testid="text-influencer-name">{item.influencerName}</p>
             <p className="text-xs text-muted-foreground mt-0.5">{item.senderEmail}</p>
-            <div className="mt-2">
-              <p className={`text-sm text-foreground/80 ${expanded ? '' : 'line-clamp-2'}`} data-testid="text-email-snippet">
-                {item.snippet}
+            <div
+              className="mt-2 cursor-pointer hover:bg-muted/30 rounded p-1.5 -mx-1.5 transition-colors"
+              onClick={() => setShowFullMessage(true)}
+              data-testid="button-view-full-message"
+            >
+              <p className="text-sm text-foreground/80 line-clamp-3" data-testid="text-email-body">
+                {item.bodyText || item.snippet}
               </p>
-              {item.snippet && item.snippet.length > 100 && (
-                <button
-                  className="text-xs text-muted-foreground hover:text-foreground mt-0.5 flex items-center gap-0.5"
-                  onClick={() => setExpanded(!expanded)}
-                  data-testid="button-toggle-expand"
-                >
-                  {expanded ? <><ChevronUp className="w-3 h-3" />접기</> : <><ChevronDown className="w-3 h-3" />더보기</>}
-                </button>
-              )}
+              <span className="text-[10px] text-blue-600 hover:underline mt-0.5 inline-block">전문 보기</span>
             </div>
 
             {visibleDraft && (
@@ -424,6 +422,22 @@ function EmailReplyCard({ item, aiEnabled }: { item: EmailFeedItem; aiEnabled: b
           </div>
         </div>
       </CardContent>
+      <Sheet open={showFullMessage} onOpenChange={setShowFullMessage}>
+        <SheetContent className="w-[500px] sm:max-w-[500px] flex flex-col h-full">
+          <SheetHeader className="shrink-0">
+            <SheetTitle>
+              <span className="text-sm font-normal text-muted-foreground">{item.influencerName}</span>
+            </SheetTitle>
+          </SheetHeader>
+          <ScrollArea className="flex-1 mt-4">
+            <div
+              className="prose prose-sm max-w-none dark:prose-invert pr-4"
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(item.bodyHtml || item.bodyText || item.snippet || '') }}
+              data-testid="text-full-message-body"
+            />
+          </ScrollArea>
+        </SheetContent>
+      </Sheet>
     </Card>
   );
 }
