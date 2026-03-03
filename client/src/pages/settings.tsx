@@ -17,7 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { KO } from "@/i18n/ko";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Pencil, Trash2, Building2, Users, Shield, FileText, Star, Settings, RotateCcw, Mail, X, Sparkles } from "lucide-react";
+import { Plus, Pencil, Trash2, Building2, Users, Shield, FileText, Star, Settings, RotateCcw, Mail, X, Sparkles, ImageDown, Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import { useResetOnboarding } from "@/hooks/use-auth";
 
 
@@ -280,6 +280,25 @@ export default function SettingsPage() {
     },
   });
 
+  const [profileRefreshResult, setProfileRefreshResult] = useState<{
+    total: number;
+    needsFetch: number;
+    updated: number;
+  } | null>(null);
+
+  const refreshProfileImagesMutation = useMutation({
+    mutationFn: () =>
+      apiRequest('POST', `/api/workspaces/${workspaceId}/influencers/refresh-all-profile-images`).then(r => r.json()),
+    onSuccess: (data: any) => {
+      setProfileRefreshResult(data);
+      queryClient.invalidateQueries({ queryKey: ['/api/campaigns'] });
+      toast({ title: `프로필 이미지 ${data.updated}개 수집 완료` });
+    },
+    onError: (err: any) => {
+      toast({ title: "프로필 수집 실패", description: err.message, variant: "destructive" });
+    },
+  });
+
   const resetClientForm = () => {
     setClientName("");
     setClientMemo("");
@@ -464,6 +483,65 @@ export default function SettingsPage() {
                   <RotateCcw className="h-4 w-4" />
                   온보딩 다시 보기
                 </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <ImageDown className="h-5 w-5 text-blue-500" />
+                  프로필 이미지 수집
+                </CardTitle>
+                <CardDescription>워크스페이스의 모든 인플루언서에 대해 Instagram/YouTube 프로필 이미지를 자동으로 수집합니다</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <Button
+                    onClick={() => {
+                      setProfileRefreshResult(null);
+                      refreshProfileImagesMutation.mutate();
+                    }}
+                    disabled={refreshProfileImagesMutation.isPending}
+                    className="gap-2"
+                    data-testid="button-refresh-profile-images"
+                  >
+                    {refreshProfileImagesMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        수집 중...
+                      </>
+                    ) : (
+                      <>
+                        <ImageDown className="h-4 w-4" />
+                        프로필 이미지 수집하기
+                      </>
+                    )}
+                  </Button>
+                </div>
+                {refreshProfileImagesMutation.isPending && (
+                  <p className="text-xs text-muted-foreground">
+                    인플루언서 수에 따라 수 분이 소요될 수 있습니다. 페이지를 닫지 마세요.
+                  </p>
+                )}
+                {profileRefreshResult && (
+                  <div className="rounded-md border p-3 space-y-1">
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                      수집 완료
+                    </div>
+                    <div className="text-xs text-muted-foreground space-y-0.5">
+                      <p>전체 계정: {profileRefreshResult.total}개</p>
+                      <p>수집 대상: {profileRefreshResult.needsFetch}개</p>
+                      <p>성공: {profileRefreshResult.updated}개</p>
+                      {profileRefreshResult.needsFetch > profileRefreshResult.updated && (
+                        <p className="flex items-center gap-1 text-yellow-600">
+                          <AlertCircle className="h-3 w-3" />
+                          일부 계정은 프로필 이미지를 가져올 수 없었습니다
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 

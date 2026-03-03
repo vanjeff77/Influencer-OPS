@@ -4793,7 +4793,7 @@ export async function registerRoutes(
 
       const [inf] = await db.select().from(influencers).where(eq(influencers.id, account.influencerId));
       if (!inf) return res.status(404).json({ message: "Influencer not found" });
-      const membership = await storage.getWorkspaceMember(inf.workspaceId, user.id);
+      const membership = await storage.getWorkspaceMember(user.id, inf.workspaceId);
       if (!membership) return res.status(403).json({ message: "Forbidden" });
 
       const result = await fetchProfileImage(account.platform, account.handle);
@@ -4815,12 +4815,12 @@ export async function registerRoutes(
       if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
       const user = req.user as any;
       const workspaceId = parseInt(req.params.workspaceId);
-      const membership = await storage.getWorkspaceMember(workspaceId, user.id);
+      const membership = await storage.getWorkspaceMember(user.id, workspaceId);
       if (!membership) return res.status(403).json({ message: "Forbidden" });
       
       const allInfluencers = await db.select().from(influencers).where(eq(influencers.workspaceId, workspaceId));
       const inflIds = allInfluencers.map(i => i.id);
-      if (inflIds.length === 0) return res.json({ total: 0, updated: 0 });
+      if (inflIds.length === 0) return res.json({ total: 0, needsFetch: 0, updated: 0 });
 
       const accounts = await db.select().from(influencerAccounts).where(
         and(
