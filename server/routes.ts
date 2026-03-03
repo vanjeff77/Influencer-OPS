@@ -4856,25 +4856,25 @@ export async function registerRoutes(
     }
   });
 
-  app.post('/api/campaigns/:campaignId/refresh-profile-images', async (req, res) => {
+  app.post('/api/workspaces/:workspaceId/campaign-influencers/refresh-profile-images', async (req, res) => {
     try {
       if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
       const user = req.user as any;
-      const campaignId = parseInt(req.params.campaignId);
-
-      const [campaign] = await db.select().from(campaigns).where(eq(campaigns.id, campaignId));
-      if (!campaign) return res.status(404).json({ message: "Campaign not found" });
-
-      const membership = await storage.getWorkspaceMember(user.id, campaign.workspaceId);
+      const workspaceId = parseInt(req.params.workspaceId);
+      const membership = await storage.getWorkspaceMember(user.id, workspaceId);
       if (!membership) return res.status(403).json({ message: "Forbidden" });
 
-      const campInfs = await db.select().from(campaignInfluencers).where(eq(campaignInfluencers.campaignId, campaignId));
-      const inflIds = campInfs.map(ci => ci.influencerId);
-      if (inflIds.length === 0) return res.json({ total: 0, needsFetch: 0, updated: 0 });
+      const wsCampaigns = await db.select().from(campaigns).where(eq(campaigns.workspaceId, workspaceId));
+      const campaignIds = wsCampaigns.map(c => c.id);
+      if (campaignIds.length === 0) return res.json({ total: 0, needsFetch: 0, updated: 0 });
+
+      const campInfs = await db.select().from(campaignInfluencers).where(inArray(campaignInfluencers.campaignId, campaignIds));
+      const uniqueInflIds = [...new Set(campInfs.map(ci => ci.influencerId))];
+      if (uniqueInflIds.length === 0) return res.json({ total: 0, needsFetch: 0, updated: 0 });
 
       const accounts = await db.select().from(influencerAccounts).where(
         and(
-          inArray(influencerAccounts.influencerId, inflIds),
+          inArray(influencerAccounts.influencerId, uniqueInflIds),
           or(eq(influencerAccounts.platform, 'IG'), eq(influencerAccounts.platform, 'YT'))
         )
       );
@@ -4901,7 +4901,7 @@ export async function registerRoutes(
 
       res.json({ total: accounts.length, needsFetch: toFetch.length, updated });
     } catch (err: any) {
-      console.error('Refresh campaign profile images error:', err);
+      console.error('Refresh campaign influencers profile images error:', err);
       res.status(500).json({ message: err.message });
     }
   });
