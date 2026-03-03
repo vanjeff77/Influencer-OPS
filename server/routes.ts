@@ -4856,6 +4856,55 @@ export async function registerRoutes(
     }
   });
 
+  app.post('/api/admin/refresh-campaign-profile-images', async (req, res) => {
+    try {
+      const adminKey = req.headers['x-admin-key'];
+      if (adminKey !== process.env.SESSION_SECRET) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
+      const allCampInf = await db.select().from(campaignInfluencers);
+      const uniqueInfluencerIds = [...new Set(allCampInf.map(ci => ci.influencerId))];
+      if (uniqueInfluencerIds.length === 0) return res.json({ total: 0, results: [] });
+
+      const accounts = await db.select().from(influencerAccounts).where(
+        inArray(influencerAccounts.influencerId, uniqueInfluencerIds)
+      );
+
+      const toFetch = accounts.filter(acc =>
+        !acc.profileImageFileId &&
+        acc.handle &&
+        !acc.handle.startsWith('http') &&
+        acc.handle.length > 1 &&
+        (acc.platform === 'IG' || acc.platform === 'YT')
+      );
+
+      const results: any[] = [];
+      for (const acc of toFetch) {
+        try {
+          const result = await fetchProfileImage(acc.platform, acc.handle);
+          if (result) {
+            await db.update(influencerAccounts).set({
+              profileImageUrl: `/api/profile-image/${result.fileId}`,
+              profileImageFileId: result.fileId,
+            }).where(eq(influencerAccounts.id, acc.id));
+            results.push({ accId: acc.id, handle: acc.handle, status: 'ok' });
+          } else {
+            results.push({ accId: acc.id, handle: acc.handle, status: 'no_image' });
+          }
+          await new Promise(r => setTimeout(r, 1500));
+        } catch (err: any) {
+          results.push({ accId: acc.id, handle: acc.handle, status: 'error', error: err.message });
+        }
+      }
+
+      res.json({ total: toFetch.length, succeeded: results.filter(r => r.status === 'ok').length, results });
+    } catch (err: any) {
+      console.error('Admin refresh campaign profile images error:', err);
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   app.get('/api/profile-image/:fileId', async (req, res) => {
     try {
       const { fileId } = req.params;
