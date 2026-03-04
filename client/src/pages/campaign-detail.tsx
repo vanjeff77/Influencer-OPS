@@ -120,9 +120,9 @@ interface Client {
 
 const STEPS = [
   { key: "waiting", label: "대기" },
-  { key: "contacted", label: "컨택" },
-  { key: "confirmed", label: "확정" },
-  { key: "contracted", label: "계약" },
+  { key: "contacted", label: "컨택완료" },
+  { key: "confirmed", label: "확정완료" },
+  { key: "contracted", label: "계약완료" },
 ] as const;
 
 function StepProgressBar({
@@ -206,7 +206,7 @@ function StepProgressBar({
   return (
     <>
       <div
-        className="inline-flex items-center gap-0.5 rounded-md bg-muted dark:bg-muted/60 p-0.5"
+        className="flex items-center gap-0.5 rounded-md bg-muted dark:bg-muted/60 p-0.5"
         data-testid={`progress-bar-${itemId}`}
       >
         {STEPS.map((step, idx) => {
@@ -219,7 +219,7 @@ function StepProgressBar({
               variant={isCurrent ? "default" : "ghost"}
               size="sm"
               onClick={() => handleStepClick(step.key)}
-              className={`gap-1 ${isCompleted ? "text-primary font-medium" : ""} ${isOnHold ? "opacity-40" : ""}`}
+              className={`flex-1 gap-1 ${isCompleted ? "text-primary font-medium" : ""} ${isOnHold ? "opacity-40" : ""}`}
               data-testid={`step-${step.key}-${itemId}`}
             >
               {isCompleted ? (
@@ -606,11 +606,11 @@ export default function CampaignDetail() {
       case "waiting":
         return "대기";
       case "contacted":
-        return "컨택";
+        return "컨택완료";
       case "confirmed":
-        return "확정";
+        return "확정완료";
       case "contracted":
-        return "계약";
+        return "계약완료";
       default:
         return status;
     }
