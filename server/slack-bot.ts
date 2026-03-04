@@ -73,7 +73,7 @@ function buildThreadReplyBlocks(
 
   setCacheEntry(`email_${ctx.conversationId}`, ctx.emailBody);
 
-  const quotedBody = bodyPreview.split('\n').map(line => `> ${line}`).join('\n');
+  const quotedBody = `\`\`\`\n${bodyPreview}\n\`\`\``;
 
   const blocks: SlackBlock[] = [
     {
@@ -102,7 +102,7 @@ function buildThreadReplyBlocks(
       classificationLabel: aiDraft.classificationLabel,
     }));
 
-    const quotedDraft = draftPreview.split('\n').map(line => `> ${line}`).join('\n');
+    const quotedDraft = `\`\`\`\n${draftPreview}\n\`\`\``;
 
     blocks.push({
       type: "section",
@@ -235,10 +235,11 @@ function buildStepperLine(status: string | null | undefined): string {
   const currentIdx = steps.findIndex(s => s.key === (status || 'waiting'));
   const resolvedIdx = currentIdx === -1 ? 0 : currentIdx;
 
-  return steps.map((step, i) => {
-    const icon = i <= resolvedIdx ? '✅' : '⬜';
+  const stepStr = steps.map((step, i) => {
+    const icon = i <= resolvedIdx ? ':white_check_mark:' : ':white_large_square:';
     return `${icon} ${step.label}`;
   }).join(' → ');
+  return `▶️진행 상태 :  ${stepStr}`;
 }
 
 async function buildParentMessageBlocks(
@@ -896,6 +897,33 @@ async function updateParentAfterAction(conversationId: number, workspace: Worksp
   }
 }
 
+export async function refreshSlackParentForLineItem(lineItemId: number): Promise<void> {
+  try {
+    const conv = await storage.getConversationByLineItem(lineItemId);
+    if (!conv?.slackThreadTs || !conv?.slackChannelId) return;
+
+    const lineItem = await storage.getLineItemWithDetails(lineItemId);
+    if (!lineItem) return;
+
+    const campaign = await storage.getCampaign(lineItem.campaignId);
+    const workspace = (await storage.getWorkspaces()).find(w => w.id === campaign?.workspaceId);
+    if (!workspace?.slackBotToken || !workspace.slackEnabled) return;
+
+    const influencerName = lineItem.influencer?.name || 'Unknown';
+    const campaignName = campaign?.name || '';
+
+    const { blocks, text } = await buildParentMessageBlocks({
+      conversationId: conv.id, influencerName, campaignName,
+      lineItemStatus: lineItem.status, offerFee: lineItem.offerFee,
+      uploadDueAt: lineItem.uploadDueAt,
+    });
+    await updateSlackMessage(workspace.slackBotToken, conv.slackChannelId, conv.slackThreadTs, blocks, text);
+    console.log(`[SlackBot] Parent message refreshed for lineItem ${lineItemId}`);
+  } catch (err) {
+    console.error('[SlackBot] refreshSlackParentForLineItem error:', err);
+  }
+}
+
 async function handleDismissDraft(payload: any, parsed: any): Promise<{ status: number; body: any }> {
   const { draftId, conversationId, workspaceId } = parsed;
 
@@ -1044,7 +1072,7 @@ async function regenerateInBackground(
     const existingBlocks = (payload.message.blocks || []).slice(0, 3);
     const draftPreview = result.draft.length > 150 ? result.draft.substring(0, 150) + '...' : result.draft;
 
-    const quotedDraftRegen = draftPreview.split('\n').map(line => `> ${line}`).join('\n');
+    const quotedDraftRegen = `\`\`\`\n${draftPreview}\n\`\`\``;
 
     const newBlocks: SlackBlock[] = [
       ...existingBlocks,

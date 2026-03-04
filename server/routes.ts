@@ -1228,6 +1228,12 @@ export async function registerRoutes(
         });
       }
     }
+
+    if ('status' in req.body || 'offerFee' in req.body || 'uploadDueAt' in req.body) {
+      import('./slack-bot').then(({ refreshSlackParentForLineItem }) => {
+        refreshSlackParentForLineItem(itemId).catch(err => console.error('[API] Slack parent refresh error:', err));
+      });
+    }
     
     res.json(item);
   });
@@ -3378,6 +3384,13 @@ export async function registerRoutes(
       updates.updatedAt = new Date();
       
       const updated = await storage.updateCampaignItem(lineItemId, updates);
+
+      if ('status' in req.body || 'offerFee' in req.body || 'uploadDueAt' in req.body) {
+        import('./slack-bot').then(({ refreshSlackParentForLineItem }) => {
+          refreshSlackParentForLineItem(lineItemId).catch(err => console.error('[API] Slack parent refresh error:', err));
+        });
+      }
+
       res.json(updated);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
