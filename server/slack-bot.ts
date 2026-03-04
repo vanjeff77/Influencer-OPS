@@ -31,6 +31,10 @@ interface AiDraftContext {
   alternatives?: { classification: string; classificationLabel: string }[];
 }
 
+function truncateForSlack(text: string, maxLen = 2900): string {
+  return text.length > maxLen ? text.substring(0, maxLen) + '...' : text;
+}
+
 function buildNotificationBlocks(
   ctx: InboundEmailContext,
   aiDraft: AiDraftContext | null,
@@ -53,7 +57,7 @@ function buildNotificationBlocks(
         type: "button",
         text: { type: "plain_text", text: "📄 전체 보기", emoji: true },
         action_id: "view_full_email",
-        value: JSON.stringify({ conversationId: ctx.conversationId, workspaceId: ctx.workspaceId }),
+        value: JSON.stringify({ conversationId: ctx.conversationId, workspaceId: ctx.workspaceId, mode: 'expand' }),
       }
     },
     { type: "divider" },
@@ -69,17 +73,17 @@ function buildNotificationBlocks(
         type: "button",
         text: { type: "plain_text", text: "📋 초안 전문", emoji: true },
         action_id: "view_full_draft",
-        value: JSON.stringify({ conversationId: ctx.conversationId, workspaceId: ctx.workspaceId, draftId: aiDraft.draftId }),
+        value: JSON.stringify({ conversationId: ctx.conversationId, workspaceId: ctx.workspaceId, draftId: aiDraft.draftId, mode: 'expand' }),
       }
     });
 
     const actionElements: any[] = [
       {
         type: "button",
-        text: { type: "plain_text", text: "📤 초안으로 발송", emoji: true },
+        text: { type: "plain_text", text: "✏️ 초안 사용하기", emoji: true },
         style: "primary",
         action_id: "send_draft",
-        value: JSON.stringify({ conversationId: ctx.conversationId, draftId: aiDraft.draftId, draft: aiDraft.draft }),
+        value: JSON.stringify({ conversationId: ctx.conversationId, workspaceId: ctx.workspaceId, draftId: aiDraft.draftId }),
       },
     ];
 
@@ -260,11 +264,7 @@ export async function handleSlackInteraction(payload: any): Promise<{ status: nu
   }
 
   if (actionId === 'send_draft') {
-    return handleSendDraftConfirm(payload, parsed);
-  } else if (actionId === 'confirm_send_draft') {
-    return handleSendDraft(payload, parsed);
-  } else if (actionId === 'cancel_send_draft') {
-    return handleCancelSend(payload, parsed);
+    return handleOpenSendDraftModal(payload, parsed);
   } else if (actionId.startsWith('regenerate_alt_')) {
     return handleRegenerateAlt(payload, parsed);
   } else if (actionId === 'open_regenerate_modal') {
@@ -283,6 +283,7 @@ export async function handleSlackInteraction(payload: any): Promise<{ status: nu
 }
 
 export async function handleSlackModalSubmission(payload: any): Promise<{ status: number; body: any }> {
+  const callbackId = payload.view?.callback_id;
   const values = payload.view?.state?.values;
   const metadata = payload.view?.private_metadata;
 
@@ -295,6 +296,10 @@ export async function handleSlackModalSubmission(payload: any): Promise<{ status
     return { status: 200, body: {} };
   }
 
+  if (callbackId === 'send_edited_draft') {
+    return handleSendEditedDraft(parsed, values);
+  }
+
   const feedbackText = values?.feedback_block?.feedback_input?.value || '';
 
   regenerateInBackground(parsed.conversationId, parsed.workspaceId, feedbackText, payload).catch(err => {
@@ -304,118 +309,135 @@ export async function handleSlackModalSubmission(payload: any): Promise<{ status
   return { status: 200, body: {} };
 }
 
-async function handleSendDraftConfirm(payload: any, parsed: any): Promise<{ status: number; body: any }> {
-  const workspace = await findWorkspaceFromPayload(payload);
-  if (!workspace?.slackBotToken || !payload.message?.ts) {
-    return { status: 200, body: {} };
+async function getConversationCcEmails(conversationId: number, accountEmail: string, toEmail: string): Promise<string[]> {
+  const existingMsgs = await storage.getConversationMessages(conversationId);
+  const firstOutbound = existingMsgs.find(m => m.direction === 'outbound');
+  const ccSet = new Set<string>();
+  if (firstOutbound?.ccEmails && Array.isArray(firstOutbound.ccEmails)) {
+    for (const e of firstOutbound.ccEmails) {
+      if (e) ccSet.add(e.toLowerCase().trim());
+    }
+  }
+  ccSet.delete(accountEmail.toLowerCase().trim());
+  ccSet.delete(toEmail.toLowerCase().trim());
+  return Array.from(ccSet);
+}
+
+async function handleOpenSendDraftModal(payload: any, parsed: any): Promise<{ status: number; body: any }> {
+  const { conversationId, workspaceId, draftId } = parsed;
+  const triggerId = payload.trigger_id;
+  if (!triggerId) return { status: 200, body: {} };
+
+  const workspace = (await storage.getWorkspaces()).find(w => w.id === workspaceId);
+  if (!workspace?.slackBotToken) return { status: 200, body: {} };
+
+  const conv = await storage.getConversation(conversationId);
+  if (!conv) return { status: 200, body: { text: '대화를 찾을 수 없습니다.' } };
+
+  let draftText = '';
+  if (draftId) {
+    const draftRecord = await storage.getAiDraft(draftId);
+    draftText = draftRecord?.draft || '';
+  }
+  if (!draftText) {
+    const latestDraft = await storage.getLatestPendingDraft(conversationId);
+    draftText = latestDraft?.draft || '';
   }
 
-  const existingBlocks = (payload.message.blocks || []).slice(0, 4);
+  const lineItem = await storage.getLineItemWithDetails(conv.campaignLineItemId);
+  const toEmail = lineItem?.influencer?.email || '(이메일 없음)';
 
-  const confirmBlocks: SlackBlock[] = [
-    ...existingBlocks,
+  const members = await storage.getWorkspaceMembers(workspace.id);
+  const ownerMember = members.find(m => m.role === 'WORKSPACE_OWNER') || members[0];
+  let accountEmail = '';
+  if (ownerMember) {
+    const userAccounts = await storage.getEmailAccounts(ownerMember.userId, workspace.id);
+    const account = (conv.emailAccountId && userAccounts.find(a => a.id === conv.emailAccountId)) || userAccounts[0];
+    accountEmail = account?.email || '';
+  }
+
+  const ccEmails = await getConversationCcEmails(conversationId, accountEmail, toEmail);
+  const ccDisplay = ccEmails.length > 0 ? ccEmails.join(', ') : '(없음)';
+
+  const modalBlocks: SlackBlock[] = [
     {
       type: "section",
-      text: { type: "mrkdwn", text: "⚠️ *정말 이 초안을 발송하시겠습니까?*" }
+      text: { type: "mrkdwn", text: `*수신:* ${toEmail}` }
     },
     {
-      type: "actions",
-      block_id: `confirm_${Date.now()}`,
-      elements: [
-        {
-          type: "button",
-          text: { type: "plain_text", text: "✅ 확인 발송", emoji: true },
-          style: "danger",
-          action_id: "confirm_send_draft",
-          value: JSON.stringify(parsed),
-        },
-        {
-          type: "button",
-          text: { type: "plain_text", text: "↩️ 취소", emoji: true },
-          action_id: "cancel_send_draft",
-          value: JSON.stringify({ ...parsed, originalBlocks: payload.message.blocks }),
-        },
-      ]
+      type: "section",
+      text: { type: "mrkdwn", text: `*참조 (CC):* ${ccDisplay}` }
     },
+    { type: "divider" },
+    {
+      type: "input",
+      block_id: "draft_body_block",
+      element: {
+        type: "plain_text_input",
+        action_id: "draft_body_input",
+        multiline: true,
+        initial_value: draftText,
+      },
+      label: { type: "plain_text", text: "메일 본문" },
+    } as any,
   ];
 
-  await updateSlackMessage(
+  const metadata = JSON.stringify({
+    conversationId,
+    workspaceId,
+    draftId,
+    messageTs: payload.message?.ts,
+    channelId: payload.channel?.id,
+  });
+
+  await openSlackModal(
     workspace.slackBotToken,
-    payload.channel?.id || workspace.slackChannelId!,
-    payload.message.ts,
-    confirmBlocks,
-    '발송 확인 대기중...',
+    triggerId,
+    "초안 편집 및 발송",
+    modalBlocks,
+    "send_edited_draft",
+    metadata,
+    { type: "plain_text", text: "📤 발송하기" },
   );
 
   return { status: 200, body: {} };
 }
 
-async function handleCancelSend(payload: any, parsed: any): Promise<{ status: number; body: any }> {
-  const workspace = await findWorkspaceFromPayload(payload);
-  if (!workspace?.slackBotToken || !payload.message?.ts) {
-    return { status: 200, body: {} };
-  }
-
-  const originalBlocks = parsed.originalBlocks;
-  if (originalBlocks) {
-    await updateSlackMessage(
-      workspace.slackBotToken,
-      payload.channel?.id || workspace.slackChannelId!,
-      payload.message.ts,
-      originalBlocks,
-      '발송이 취소되었습니다.',
-    );
-  }
-
-  return { status: 200, body: {} };
-}
-
-async function handleSendDraft(payload: any, parsed: any): Promise<{ status: number; body: any }> {
-  const { conversationId, draftId, draft } = parsed;
+async function handleSendEditedDraft(parsed: any, values: any): Promise<{ status: number; body: any }> {
+  const { conversationId, workspaceId, draftId, messageTs, channelId } = parsed;
+  const editedDraft = values?.draft_body_block?.draft_body_input?.value || '';
 
   try {
     const conv = await storage.getConversation(conversationId);
-    if (!conv) {
-      return { status: 200, body: { text: '대화를 찾을 수 없습니다.' } };
-    }
+    if (!conv) return { status: 200, body: { response_action: 'errors', errors: { draft_body_block: '대화를 찾을 수 없습니다.' } } };
 
     const lineItem = await storage.getLineItemWithDetails(conv.campaignLineItemId);
-    if (!lineItem) {
-      return { status: 200, body: { text: '라인아이템을 찾을 수 없습니다.' } };
-    }
+    if (!lineItem) return { status: 200, body: { response_action: 'errors', errors: { draft_body_block: '라인아이템을 찾을 수 없습니다.' } } };
 
     const campaign = await storage.getCampaign(lineItem.campaignId);
-    if (!campaign) {
-      return { status: 200, body: { text: '캠페인을 찾을 수 없습니다.' } };
-    }
+    if (!campaign) return { status: 200, body: { response_action: 'errors', errors: { draft_body_block: '캠페인을 찾을 수 없습니다.' } } };
 
     const workspace = (await storage.getWorkspaces()).find(w => w.id === campaign.workspaceId);
-    if (!workspace) {
-      return { status: 200, body: { text: '워크스페이스를 찾을 수 없습니다.' } };
-    }
+    if (!workspace) return { status: 200, body: { response_action: 'errors', errors: { draft_body_block: '워크스페이스를 찾을 수 없습니다.' } } };
 
     const members = await storage.getWorkspaceMembers(workspace.id);
     const ownerMember = members.find(m => m.role === 'WORKSPACE_OWNER') || members[0];
-    if (!ownerMember) {
-      return { status: 200, body: { text: '워크스페이스 멤버를 찾을 수 없습니다.' } };
-    }
+    if (!ownerMember) return { status: 200, body: { response_action: 'errors', errors: { draft_body_block: '워크스페이스 멤버를 찾을 수 없습니다.' } } };
 
     const userAccounts = await storage.getEmailAccounts(ownerMember.userId, workspace.id);
-    if (!userAccounts || userAccounts.length === 0) {
-      return { status: 200, body: { text: '이메일 계정이 없습니다.' } };
-    }
+    if (!userAccounts || userAccounts.length === 0) return { status: 200, body: { response_action: 'errors', errors: { draft_body_block: '이메일 계정이 없습니다.' } } };
 
     const account = (conv.emailAccountId && userAccounts.find(a => a.id === conv.emailAccountId)) || userAccounts[0];
     const toEmail = lineItem.influencer?.email;
-    if (!toEmail) {
-      return { status: 200, body: { text: '인플루언서 이메일이 없습니다.' } };
-    }
+    if (!toEmail) return { status: 200, body: { response_action: 'errors', errors: { draft_body_block: '인플루언서 이메일이 없습니다.' } } };
+
+    const ccEmails = await getConversationCcEmails(conversationId, account.email, toEmail);
 
     const { convertToGmailCompatibleHtml } = await import('./smtp');
-    const isPlainText = !/<[a-z][\s\S]*>/i.test(draft);
+    const isPlainText = !/<[a-z][\s\S]*>/i.test(editedDraft);
     const htmlBody = isPlainText
-      ? draft.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')
-      : draft;
+      ? editedDraft.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')
+      : editedDraft;
     let finalBody = convertToGmailCompatibleHtml(htmlBody);
     if (account.useSignature && account.signature) {
       finalBody += `<br><br>--<br>${account.signature}`;
@@ -448,6 +470,7 @@ async function handleSendDraft(payload: any, parsed: any): Promise<{ status: num
     await transporter.sendMail({
       from: `"${account.senderName || account.email}" <${account.email}>`,
       to: toEmail,
+      cc: ccEmails.length > 0 ? ccEmails.join(', ') : undefined,
       subject,
       html: finalBody,
       inReplyTo,
@@ -459,9 +482,10 @@ async function handleSendDraft(payload: any, parsed: any): Promise<{ status: num
       direction: 'outbound',
       senderEmail: account.email,
       recipientEmail: toEmail,
+      ccEmails: ccEmails.length > 0 ? ccEmails : null,
       bodyHtml: finalBody,
-      bodyText: draft,
-      snippet: draft.substring(0, 200),
+      bodyText: editedDraft,
+      snippet: editedDraft.substring(0, 200),
       sendStatus: 'sent',
       sentAt: new Date(),
     });
@@ -470,27 +494,28 @@ async function handleSendDraft(payload: any, parsed: any): Promise<{ status: num
       await storage.updateAiDraft(draftId, { status: 'used' });
     }
 
-    const responseBlocks: SlackBlock[] = [
-      {
-        type: "section",
-        text: { type: "mrkdwn", text: `✅ *발송 완료!* ${toEmail}로 답장이 발송되었습니다.` }
-      }
-    ];
+    if (workspace.slackBotToken && messageTs) {
+      const targetChannel = channelId || workspace.slackChannelId!;
+      const responseBlocks: SlackBlock[] = [
+        {
+          type: "section",
+          text: { type: "mrkdwn", text: `✅ *발송 완료!* ${toEmail}로 답장이 발송되었습니다.${ccEmails.length > 0 ? `\n_CC: ${ccEmails.join(', ')}_` : ''}` }
+        }
+      ];
 
-    if (workspace.slackBotToken && payload.message?.ts) {
       await updateSlackMessage(
         workspace.slackBotToken,
-        payload.channel?.id || workspace.slackChannelId!,
-        payload.message.ts,
-        [...(payload.message.blocks?.slice(0, 4) || []), ...responseBlocks],
+        targetChannel,
+        messageTs,
+        responseBlocks,
         '답장이 발송되었습니다.',
       );
     }
 
     return { status: 200, body: {} };
   } catch (err) {
-    console.error('[SlackBot] Send draft error:', err);
-    return { status: 200, body: { text: '발송 실패: ' + (err as Error).message } };
+    console.error('[SlackBot] Send edited draft error:', err);
+    return { status: 200, body: { response_action: 'errors', errors: { draft_body_block: '발송 실패: ' + (err as Error).message } } };
   }
 }
 
@@ -539,73 +564,112 @@ async function handleOpenRegenerateModal(payload: any, parsed: any): Promise<{ s
 }
 
 async function handleViewFullEmail(payload: any, parsed: any): Promise<{ status: number; body: any }> {
-  const { conversationId, workspaceId } = parsed;
-  const triggerId = payload.trigger_id;
-  if (!triggerId) return { status: 200, body: {} };
+  const { conversationId, workspaceId, mode } = parsed;
+  let workspace = workspaceId
+    ? (await storage.getWorkspaces()).find(w => w.id === workspaceId)
+    : await findWorkspaceFromPayload(payload);
+  if (!workspace) workspace = await findWorkspaceFromPayload(payload);
+  if (!workspace?.slackBotToken || !payload.message?.ts) return { status: 200, body: {} };
 
-  const workspace = (await storage.getWorkspaces()).find(w => w.id === workspaceId);
-  if (!workspace?.slackBotToken) return { status: 200, body: {} };
+  const blocks = [...(payload.message.blocks || [])];
+  const emailBlockIdx = blocks.findIndex((b: any) => b.accessory?.action_id === 'view_full_email');
 
-  const messages = await storage.getConversationMessages(conversationId);
-  const inboundMsgs = messages.filter(m => m.direction === 'inbound');
-  const lastInbound = inboundMsgs[inboundMsgs.length - 1];
+  if (mode === 'expand') {
+    const messages = await storage.getConversationMessages(conversationId);
+    const lastInbound = messages.filter(m => m.direction === 'inbound').pop();
+    const bodyText = truncateForSlack(lastInbound?.bodyText || lastInbound?.snippet || '(내용 없음)');
 
-  const fullBody = lastInbound?.bodyText || lastInbound?.snippet || '(내용 없음)';
-  const truncated = fullBody.length > 2900 ? fullBody.substring(0, 2900) + '...' : fullBody;
+    if (emailBlockIdx >= 0) {
+      blocks[emailBlockIdx] = {
+        type: "section",
+        text: { type: "mrkdwn", text: bodyText },
+        accessory: {
+          type: "button",
+          text: { type: "plain_text", text: "📄 접기", emoji: true },
+          action_id: "view_full_email",
+          value: JSON.stringify({ conversationId, workspaceId, mode: 'collapse', originalPreview: blocks[emailBlockIdx].text?.text }),
+        }
+      };
+    }
+  } else {
+    if (emailBlockIdx >= 0) {
+      const originalPreview = parsed.originalPreview || '(미리보기)';
+      blocks[emailBlockIdx] = {
+        type: "section",
+        text: { type: "mrkdwn", text: originalPreview },
+        accessory: {
+          type: "button",
+          text: { type: "plain_text", text: "📄 전체 보기", emoji: true },
+          action_id: "view_full_email",
+          value: JSON.stringify({ conversationId, workspaceId, mode: 'expand' }),
+        }
+      };
+    }
+  }
 
-  await openSlackModal(
+  await updateSlackMessage(
     workspace.slackBotToken,
-    triggerId,
-    "메일 원문",
-    [
-      {
-        type: "section",
-        text: { type: "mrkdwn", text: `*보낸 사람:* ${lastInbound?.senderEmail || 'N/A'}` }
-      },
-      { type: "divider" },
-      {
-        type: "section",
-        text: { type: "mrkdwn", text: truncated }
-      },
-    ],
+    payload.channel?.id || workspace.slackChannelId!,
+    payload.message.ts,
+    blocks,
+    mode === 'expand' ? '메일 전문 표시' : '메일 미리보기',
   );
 
   return { status: 200, body: {} };
 }
 
 async function handleViewFullDraft(payload: any, parsed: any): Promise<{ status: number; body: any }> {
-  const { conversationId, workspaceId, draftId } = parsed;
-  const triggerId = payload.trigger_id;
-  if (!triggerId) return { status: 200, body: {} };
+  const { conversationId, workspaceId, draftId, mode } = parsed;
+  let workspace = workspaceId
+    ? (await storage.getWorkspaces()).find(w => w.id === workspaceId)
+    : await findWorkspaceFromPayload(payload);
+  if (!workspace) workspace = await findWorkspaceFromPayload(payload);
+  if (!workspace?.slackBotToken || !payload.message?.ts) return { status: 200, body: {} };
 
-  const workspace = (await storage.getWorkspaces()).find(w => w.id === workspaceId);
-  if (!workspace?.slackBotToken) return { status: 200, body: {} };
+  const blocks = [...(payload.message.blocks || [])];
+  const draftBlockIdx = blocks.findIndex((b: any) => b.accessory?.action_id === 'view_full_draft');
 
-  let draft: any = null;
-  if (draftId) {
-    draft = await storage.getAiDraft(draftId);
+  if (mode === 'expand') {
+    let draft: any = null;
+    if (draftId) draft = await storage.getAiDraft(draftId);
+    if (!draft) draft = await storage.getLatestPendingDraft(conversationId);
+    const draftText = truncateForSlack(draft?.draft || '(초안 없음)');
+    const classLabel = `${draft?.classification || ''} ${draft?.classificationLabel || ''}`;
+
+    if (draftBlockIdx >= 0) {
+      blocks[draftBlockIdx] = {
+        type: "section",
+        text: { type: "mrkdwn", text: `✨ *AI 초안* \`${classLabel}\`\n${draftText}` },
+        accessory: {
+          type: "button",
+          text: { type: "plain_text", text: "📋 접기", emoji: true },
+          action_id: "view_full_draft",
+          value: JSON.stringify({ conversationId, workspaceId, draftId, mode: 'collapse', originalPreview: blocks[draftBlockIdx].text?.text }),
+        }
+      };
+    }
+  } else {
+    if (draftBlockIdx >= 0) {
+      const originalPreview = parsed.originalPreview || '(미리보기)';
+      blocks[draftBlockIdx] = {
+        type: "section",
+        text: { type: "mrkdwn", text: originalPreview },
+        accessory: {
+          type: "button",
+          text: { type: "plain_text", text: "📋 초안 전문", emoji: true },
+          action_id: "view_full_draft",
+          value: JSON.stringify({ conversationId, workspaceId, draftId, mode: 'expand' }),
+        }
+      };
+    }
   }
-  if (!draft) {
-    draft = await storage.getLatestPendingDraft(conversationId);
-  }
-  const draftText = draft?.draft || '(초안 없음)';
-  const truncated = draftText.length > 2900 ? draftText.substring(0, 2900) + '...' : draftText;
 
-  await openSlackModal(
+  await updateSlackMessage(
     workspace.slackBotToken,
-    triggerId,
-    "AI 초안 전문",
-    [
-      {
-        type: "section",
-        text: { type: "mrkdwn", text: `*분류:* \`${draft?.classification || ''} ${draft?.classificationLabel || ''}\`` }
-      },
-      { type: "divider" },
-      {
-        type: "section",
-        text: { type: "mrkdwn", text: truncated }
-      },
-    ],
+    payload.channel?.id || workspace.slackChannelId!,
+    payload.message.ts,
+    blocks,
+    mode === 'expand' ? '초안 전문 표시' : '초안 미리보기',
   );
 
   return { status: 200, body: {} };
@@ -754,7 +818,7 @@ async function regenerateInBackground(
           type: "button",
           text: { type: "plain_text", text: "📋 초안 전문", emoji: true },
           action_id: "view_full_draft",
-          value: JSON.stringify({ conversationId, workspaceId, draftId: newDraft.id }),
+          value: JSON.stringify({ conversationId, workspaceId, draftId: newDraft.id, mode: 'expand' }),
         }
       },
     ];
@@ -762,10 +826,10 @@ async function regenerateInBackground(
     const actionElements: any[] = [
       {
         type: "button",
-        text: { type: "plain_text", text: "📤 초안으로 발송", emoji: true },
+        text: { type: "plain_text", text: "✏️ 초안 사용하기", emoji: true },
         style: "primary",
         action_id: "send_draft",
-        value: JSON.stringify({ conversationId, draftId: newDraft.id, draft: result.draft }),
+        value: JSON.stringify({ conversationId, workspaceId, draftId: newDraft.id }),
       },
     ];
 

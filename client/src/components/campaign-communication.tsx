@@ -820,19 +820,17 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
               influencerEmail={selectedLineItem.influencer?.email}
               senderEmail={conversationDetail?.messages?.find((m: any) => m.direction === 'outbound')?.senderEmail || null}
               lastMessageCc={(() => {
-                const allCc = new Set<string>();
-                conversationDetail?.messages?.forEach((msg: any) => {
-                  if (msg.ccEmails && Array.isArray(msg.ccEmails)) {
-                    msg.ccEmails.forEach((e: string) => {
-                      if (e) allCc.add(e.toLowerCase().trim());
-                    });
-                  }
+                const firstOutbound = conversationDetail?.messages?.find((m: any) => m.direction === 'outbound');
+                if (!firstOutbound?.ccEmails || !Array.isArray(firstOutbound.ccEmails)) return null;
+                const ccSet = new Set<string>();
+                firstOutbound.ccEmails.forEach((e: string) => {
+                  if (e) ccSet.add(e.toLowerCase().trim());
                 });
-                const senderEmail = conversationDetail?.messages?.find((m: any) => m.direction === 'outbound')?.senderEmail;
+                const senderEmail = firstOutbound.senderEmail;
                 const infEmail = selectedLineItem.influencer?.email;
-                if (senderEmail) allCc.delete(senderEmail.toLowerCase().trim());
-                if (infEmail) allCc.delete(infEmail.toLowerCase().trim());
-                const result = Array.from(allCc);
+                if (senderEmail) ccSet.delete(senderEmail.toLowerCase().trim());
+                if (infEmail) ccSet.delete(infEmail.toLowerCase().trim());
+                const result = Array.from(ccSet);
                 return result.length > 0 ? result : null;
               })()}
               pendingDraftText={pendingDraftText}

@@ -401,12 +401,17 @@ async function syncImapAccountConversations(account: EmailAccount): Promise<numb
       const isOutbound = msgSender.includes(account.email.toLowerCase());
 
       try {
+        const ccEmails = msg.cc
+          ? msg.cc.split(',').map((e: string) => e.trim().toLowerCase()).filter(Boolean)
+          : null;
+
         const createdMsg = await storage.createConversationMessage({
           conversationId: convId,
           direction: isOutbound ? 'outbound' : 'inbound',
           senderEmail: msg.from || null,
           senderName: null,
           recipientEmail: msg.to || null,
+          ccEmails: ccEmails && ccEmails.length > 0 ? ccEmails : null,
           snippet: msg.snippet || null,
           bodyHtml: msg.bodyHtml || null,
           bodyText: msg.bodyText || null,

@@ -67,8 +67,9 @@ Preferred communication style: Simple, everyday language.
 - **Slack Bot for Email Notifications**:
     - **Service**: `server/slack-bot.ts` — real-time Slack notifications for inbound emails with AI draft actions.
     - **Channel Routing**: Client-specific channel mapping (`clients.slackChannelId`) with workspace-level fallback.
-    - **Compact Messages**: 150-char body/draft previews with "전체 보기" button opening Slack modals for full content.
-    - **AI Draft Actions**: Send draft (2-step confirmation), regenerate with feedback (modal), alternative classifications, dismiss. Progress indicator during generation.
+    - **Compact Messages**: 150-char body/draft previews with inline toggle (chat.update) for full content expand/collapse — no modal loading delay.
+    - **AI Draft Actions**: "✏️ 초안 사용하기" opens modal with editable text + To/CC display → "📤 발송하기" submits. Regenerate with feedback (modal), alternative classifications, dismiss. Progress indicator during generation.
+    - **CC Handling**: CC derived from first outbound (contact) message's `ccEmails`; included in Slack draft modal display and actual send.
     - **Settings UI**: Client Slack channel ID field in client edit dialog. Recent inbound messages table with resend test functionality.
     - **APIs**: `GET /api/workspaces/:workspaceId/recent-inbound-messages`, `POST /api/workspaces/:workspaceId/resend-slack-notification`.
 - **AI Auto-Reply Draft Generation**:
