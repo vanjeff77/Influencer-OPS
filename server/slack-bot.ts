@@ -227,16 +227,15 @@ function formatFee(fee: number): string {
 
 function buildStepperLine(status: string | null | undefined): string {
   const steps = [
-    { key: 'waiting', label: '대기' },
     { key: 'contacted', label: '컨택완료' },
     { key: 'confirmed', label: '확정완료' },
     { key: 'contracted', label: '계약완료' },
   ];
-  const currentIdx = steps.findIndex(s => s.key === (status || 'waiting'));
-  const resolvedIdx = currentIdx === -1 ? 0 : currentIdx;
+  const statusKey = status || 'waiting';
+  const currentIdx = statusKey === 'waiting' ? -1 : steps.findIndex(s => s.key === statusKey);
 
   const stepStr = steps.map((step, i) => {
-    const icon = i <= resolvedIdx ? ':white_check_mark:' : ':white_large_square:';
+    const icon = i <= currentIdx ? ':white_check_mark:' : ':white_large_square:';
     return `${icon} ${step.label}`;
   }).join(' → ');
   return `▶️진행 상태 :  ${stepStr}`;
