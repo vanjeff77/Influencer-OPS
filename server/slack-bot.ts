@@ -62,7 +62,7 @@ function getCacheEntry(key: string): string | null {
   return entry.data;
 }
 
-function buildNotificationBlocks(
+function buildThreadReplyBlocks(
   ctx: InboundEmailContext,
   aiDraft: AiDraftContext | null,
 ): SlackBlock[] {
@@ -72,12 +72,8 @@ function buildNotificationBlocks(
 
   const blocks: SlackBlock[] = [
     {
-      type: "header",
-      text: { type: "plain_text", text: `📨 새 메일 수신 — ${ctx.campaignName}`, emoji: true }
-    },
-    {
       type: "section",
-      text: { type: "mrkdwn", text: `*${ctx.influencerName}* (${ctx.senderEmail})` }
+      text: { type: "mrkdwn", text: `*📨 새 메일 수신*\n${ctx.senderEmail}` }
     },
     {
       type: "section",
@@ -130,7 +126,7 @@ function buildNotificationBlocks(
         type: "button",
         text: { type: "plain_text", text: "❌", emoji: true },
         action_id: "dismiss_draft",
-        value: JSON.stringify({ draftId: aiDraft.draftId }),
+        value: JSON.stringify({ draftId: aiDraft.draftId, conversationId: ctx.conversationId, workspaceId: ctx.workspaceId }),
       },
     ];
 
@@ -180,6 +176,92 @@ function buildNotificationBlocks(
   return blocks;
 }
 
+function formatRelativeTime(date: Date): string {
+  const diffMs = Date.now() - date.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return '방금 전';
+  if (diffMin < 60) return `${diffMin}분 전`;
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) return `${diffHours}시간 전`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays}일 전`;
+}
+
+async function buildParentMessageBlocks(
+  conversationId: number,
+  influencerName: string,
+  campaignName: string,
+  workspaceId: number,
+  hasPendingDraft: boolean,
+  latestDraftId?: number,
+): Promise<{ blocks: SlackBlock[]; text: string }> {
+  const messages = await storage.getConversationMessages(conversationId);
+  const inboundCount = messages.filter(m => m.direction === 'inbound').length;
+  const outboundCount = messages.filter(m => m.direction === 'outbound').length;
+
+  const lastInbound = [...messages].reverse().find(m => m.direction === 'inbound');
+  const lastReceivedStr = lastInbound?.receivedAt
+    ? formatRelativeTime(new Date(lastInbound.receivedAt))
+    : lastInbound?.createdAt
+    ? formatRelativeTime(new Date(lastInbound.createdAt))
+    : '알 수 없음';
+
+  const statusLine = hasPendingDraft
+    ? `🔔 미처리 AI 초안 1건`
+    : `✅ 처리 완료`;
+
+  const blocks: SlackBlock[] = [
+    {
+      type: "header",
+      text: { type: "plain_text", text: `📨 ${influencerName} — ${campaignName}`, emoji: true },
+    },
+    {
+      type: "section",
+      text: { type: "mrkdwn", text: `📬 수신: ${inboundCount}건  |  📤 발송: ${outboundCount}건\n⏰ 마지막 수신: ${lastReceivedStr}\n${statusLine}` },
+    },
+  ];
+
+  if (hasPendingDraft && latestDraftId) {
+    blocks.push({
+      type: "actions",
+      block_id: `parent_actions_${conversationId}_${Date.now()}`,
+      elements: [
+        {
+          type: "button",
+          text: { type: "plain_text", text: "✏️ 초안 사용하기", emoji: true },
+          style: "primary",
+          action_id: "send_draft",
+          value: JSON.stringify({ conversationId, workspaceId, draftId: latestDraftId }),
+        },
+      ],
+    });
+  }
+
+  const text = `📨 ${influencerName} — ${campaignName} | 수신 ${inboundCount}건 | ${statusLine}`;
+  return { blocks, text };
+}
+
+async function postSlackMessage(
+  botToken: string,
+  channelId: string,
+  text: string,
+  blocks: SlackBlock[],
+  threadTs?: string,
+): Promise<{ ok: boolean; ts?: string; channel?: string; error?: string }> {
+  const body: any = { channel: channelId, text, blocks };
+  if (threadTs) body.thread_ts = threadTs;
+
+  const response = await fetch('https://slack.com/api/chat.postMessage', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${botToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  return response.json();
+}
+
 export async function sendSlackNotification(
   ctx: InboundEmailContext,
   aiDraft: AiDraftContext | null,
@@ -188,46 +270,78 @@ export async function sendSlackNotification(
   if (!workspace.slackEnabled || !workspace.slackBotToken || !workspace.slackChannelId) return;
 
   const targetChannel = ctx.clientSlackChannelId || workspace.slackChannelId;
-  const blocks = buildNotificationBlocks(ctx, aiDraft);
+  const replyBlocks = buildThreadReplyBlocks(ctx, aiDraft);
+  const replyText = `📨 ${ctx.influencerName}님이 메일을 보냈습니다.`;
 
   try {
-    const response = await fetch('https://slack.com/api/chat.postMessage', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${workspace.slackBotToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        channel: targetChannel,
-        text: `📨 ${ctx.influencerName}님이 ${ctx.campaignName}에 메일을 보냈습니다.`,
-        blocks,
-      }),
+    const conv = await storage.getConversation(ctx.conversationId);
+    const existingThreadTs = conv?.slackThreadTs;
+    const existingChannelId = conv?.slackChannelId;
+
+    if (existingThreadTs && existingChannelId) {
+      const replyResult = await postSlackMessage(
+        workspace.slackBotToken,
+        existingChannelId,
+        replyText,
+        replyBlocks,
+        existingThreadTs,
+      );
+
+      if (replyResult.ok) {
+        const pendingDraft = await storage.getLatestPendingDraft(ctx.conversationId);
+        const { blocks: parentBlocks, text: parentText } = await buildParentMessageBlocks(
+          ctx.conversationId, ctx.influencerName, ctx.campaignName, ctx.workspaceId,
+          !!pendingDraft, pendingDraft?.id,
+        );
+        await updateSlackMessage(workspace.slackBotToken, existingChannelId, existingThreadTs, parentBlocks, parentText);
+        console.log(`[SlackBot] Thread reply sent for conversation ${ctx.conversationId}`);
+        return;
+      }
+
+      const threadDeleteErrors = ['thread_not_found', 'message_not_found', 'channel_not_found', 'is_inactive'];
+      if (!threadDeleteErrors.includes(replyResult.error || '')) {
+        console.error(`[SlackBot] Thread reply failed (non-recovery error: ${replyResult.error}), skipping for conversation ${ctx.conversationId}`);
+        return;
+      }
+
+      console.log(`[SlackBot] Thread parent missing (${replyResult.error}), creating new thread for conversation ${ctx.conversationId}`);
+    }
+
+    const { blocks: parentBlocks, text: parentText } = await buildParentMessageBlocks(
+      ctx.conversationId, ctx.influencerName, ctx.campaignName, ctx.workspaceId,
+      !!aiDraft, aiDraft?.draftId,
+    );
+
+    let parentResult = await postSlackMessage(workspace.slackBotToken, targetChannel, parentText, parentBlocks);
+
+    if (!parentResult.ok && ctx.clientSlackChannelId && targetChannel !== workspace.slackChannelId) {
+      console.log(`[SlackBot] Client channel failed (${parentResult.error}), retrying with workspace channel...`);
+      parentResult = await postSlackMessage(workspace.slackBotToken, workspace.slackChannelId, parentText, parentBlocks);
+    }
+
+    if (!parentResult.ok || !parentResult.ts) {
+      console.error('[SlackBot] Failed to create parent message:', parentResult.error);
+      return;
+    }
+
+    const actualChannel = parentResult.channel || targetChannel;
+    await storage.updateConversation(ctx.conversationId, {
+      slackThreadTs: parentResult.ts,
+      slackChannelId: actualChannel,
     });
 
-    const data = await response.json();
-    if (!data.ok) {
-      console.error('[SlackBot] Failed to send message:', data.error);
-      if (ctx.clientSlackChannelId && targetChannel !== workspace.slackChannelId) {
-        console.log('[SlackBot] Retrying with default workspace channel...');
-        const retryResponse = await fetch('https://slack.com/api/chat.postMessage', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${workspace.slackBotToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            channel: workspace.slackChannelId,
-            text: `📨 ${ctx.influencerName}님이 ${ctx.campaignName}에 메일을 보냈습니다.`,
-            blocks,
-          }),
-        });
-        const retryData = await retryResponse.json();
-        if (!retryData.ok) {
-          console.error('[SlackBot] Retry also failed:', retryData.error);
-        }
-      }
+    const threadReplyResult = await postSlackMessage(
+      workspace.slackBotToken,
+      actualChannel,
+      replyText,
+      replyBlocks,
+      parentResult.ts,
+    );
+
+    if (threadReplyResult.ok) {
+      console.log(`[SlackBot] New thread created for conversation ${ctx.conversationId} in channel ${actualChannel}`);
     } else {
-      console.log(`[SlackBot] Notification sent for conversation ${ctx.conversationId} to channel ${targetChannel}`);
+      console.error('[SlackBot] Failed to post thread reply:', threadReplyResult.error);
     }
   } catch (err) {
     console.error('[SlackBot] Error sending notification:', err);
@@ -563,6 +677,8 @@ async function handleSendEditedDraft(parsed: any, values: any): Promise<{ status
       );
     }
 
+    await updateParentAfterAction(conversationId, workspace);
+
     return { status: 200, body: {} };
   } catch (err) {
     console.error('[SlackBot] Send edited draft error:', err);
@@ -708,13 +824,38 @@ async function handleViewFullDraft(payload: any, parsed: any): Promise<{ status:
   return { status: 200, body: {} };
 }
 
+async function updateParentAfterAction(conversationId: number, workspace: Workspace): Promise<void> {
+  try {
+    if (!workspace.slackBotToken) return;
+    const conv = await storage.getConversation(conversationId);
+    if (!conv?.slackThreadTs || !conv?.slackChannelId) return;
+
+    const lineItem = await storage.getLineItemWithDetails(conv.campaignLineItemId);
+    const campaign = lineItem ? await storage.getCampaign(lineItem.campaignId) : null;
+    const influencerName = lineItem?.influencer?.name || 'Unknown';
+    const campaignName = campaign?.name || '';
+
+    const pendingDraft = await storage.getLatestPendingDraft(conversationId);
+    const { blocks, text } = await buildParentMessageBlocks(
+      conversationId, influencerName, campaignName, workspace.id,
+      !!pendingDraft, pendingDraft?.id,
+    );
+    await updateSlackMessage(workspace.slackBotToken, conv.slackChannelId, conv.slackThreadTs, blocks, text);
+  } catch (err) {
+    console.error('[SlackBot] updateParentAfterAction error:', err);
+  }
+}
+
 async function handleDismissDraft(payload: any, parsed: any): Promise<{ status: number; body: any }> {
-  const { draftId } = parsed;
+  const { draftId, conversationId, workspaceId } = parsed;
 
   try {
     await storage.updateAiDraft(draftId, { status: 'dismissed' });
 
-    const workspace = await findWorkspaceFromPayload(payload);
+    const workspace = workspaceId
+      ? (await storage.getWorkspaces()).find(w => w.id === workspaceId)
+      : await findWorkspaceFromPayload(payload);
+
     if (workspace?.slackBotToken && payload.message?.ts) {
       const updatedBlocks = (payload.message.blocks || []).slice(0, 4);
       updatedBlocks.push({
@@ -728,6 +869,11 @@ async function handleDismissDraft(payload: any, parsed: any): Promise<{ status: 
         updatedBlocks,
         'AI 초안이 닫혔습니다.',
       );
+    }
+
+    const resolvedConvId = conversationId || (await storage.getAiDraft(draftId))?.conversationId;
+    if (resolvedConvId && workspace) {
+      await updateParentAfterAction(resolvedConvId, workspace);
     }
   } catch (err) {
     console.error('[SlackBot] Dismiss draft error:', err);
@@ -880,7 +1026,7 @@ async function regenerateInBackground(
         type: "button",
         text: { type: "plain_text", text: "❌", emoji: true },
         action_id: "dismiss_draft",
-        value: JSON.stringify({ draftId: newDraft.id }),
+        value: JSON.stringify({ draftId: newDraft.id, conversationId, workspaceId }),
       },
     ];
 
@@ -917,6 +1063,8 @@ async function regenerateInBackground(
       'AI 초안이 재생성되었습니다.',
     );
   }
+
+  await updateParentAfterAction(conversationId, workspace);
 }
 
 async function findWorkspaceFromPayload(payload: any): Promise<Workspace | null> {

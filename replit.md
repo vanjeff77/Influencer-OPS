@@ -67,7 +67,9 @@ Preferred communication style: Simple, everyday language.
 - **Slack Bot for Email Notifications**:
     - **Service**: `server/slack-bot.ts` — real-time Slack notifications for inbound emails with AI draft actions.
     - **Channel Routing**: Client-specific channel mapping (`clients.slackChannelId`) with workspace-level fallback.
-    - **Compact Messages**: 150-char body/draft previews with inline toggle (chat.update) for full content expand/collapse — no modal loading delay.
+    - **Thread-Based Notifications**: Same conversation messages grouped into Slack threads. Parent message = dashboard summary (influencer, campaign, inbound/outbound counts, last received time, pending draft status). Thread replies = individual notifications with full detail. Parent auto-updates after send/dismiss/regenerate. Thread parent deletion auto-recovery (creates new thread on `thread_not_found`/`message_not_found` errors only).
+    - **Schema**: `slackThreadTs` and `slackChannelId` columns on `conversations` table for thread tracking.
+    - **Compact Messages**: 150-char body/draft previews with modal popup for full content viewing.
     - **AI Draft Actions**: "✏️ 초안 사용하기" opens modal with editable text + To/CC display → "📤 발송하기" submits. Regenerate with feedback (modal), alternative classifications, dismiss. Progress indicator during generation.
     - **CC Handling**: CC derived from first outbound (contact) message's `ccEmails`; included in Slack draft modal display and actual send.
     - **In-Memory Cache**: Email body and draft text cached at notification send time (TTL 10min) for faster modal loading. Cache keyed by draftId/conversationId with size cap (500 entries).

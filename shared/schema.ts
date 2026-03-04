@@ -311,6 +311,8 @@ export const conversations = pgTable("conversations", {
   lastReadAt: timestamp("last_read_at"),
   status: text("status").default("active"),
   lastSyncedAt: timestamp("last_synced_at"),
+  slackThreadTs: text("slack_thread_ts"),
+  slackChannelId: text("slack_channel_id"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
