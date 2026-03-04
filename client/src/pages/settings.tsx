@@ -241,7 +241,7 @@ export default function SettingsPage() {
   const { data: recentInbound = [], isLoading: loadingInbound, refetch: refetchInbound } = useQuery<any[]>({
     queryKey: ['/api/workspaces', workspaceId, 'recent-inbound-messages'],
     queryFn: () => apiRequest('GET', `/api/workspaces/${workspaceId}/recent-inbound-messages`).then(r => r.json()),
-    enabled: !!workspaceId && isOwner && (fullWorkspace?.slackEnabled || slackEnabled),
+    enabled: !!workspaceId && isOwner,
   });
 
   const resendNotificationMutation = useMutation({
@@ -836,15 +836,15 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
 
-            {(fullWorkspace?.slackEnabled || slackEnabled) && isOwner && (
+            {isOwner && (
               <Card className="mt-4">
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2">
                     <Mail className="h-5 w-5 text-blue-500" />
-                    최근 수신 메일 및 알림 테스트
+                    최근 수신 메일
                   </CardTitle>
                   <CardDescription>
-                    최근 수신된 인바운드 메일 목록입니다. 특정 메일의 Slack 알림을 재발송할 수 있습니다.
+                    최근 수신된 인바운드 메일 목록입니다.{(fullWorkspace?.slackEnabled || slackEnabled) ? ' 특정 메일의 Slack 알림을 재발송할 수 있습니다.' : ''}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -872,7 +872,7 @@ export default function SettingsPage() {
                             <th className="text-left py-2 px-2 font-medium">인플루언서</th>
                             <th className="text-left py-2 px-2 font-medium">내용</th>
                             <th className="text-left py-2 px-2 font-medium">AI초안</th>
-                            <th className="text-left py-2 px-2 font-medium"></th>
+                            {(fullWorkspace?.slackEnabled || slackEnabled) && <th className="text-left py-2 px-2 font-medium"></th>}
                           </tr>
                         </thead>
                         <tbody>
@@ -892,18 +892,20 @@ export default function SettingsPage() {
                                   <Badge variant="outline" className="text-muted-foreground text-xs">무</Badge>
                                 )}
                               </td>
-                              <td className="py-2 px-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => resendNotificationMutation.mutate({ conversationId: msg.conversationId, messageId: msg.messageId })}
-                                  disabled={resendNotificationMutation.isPending}
-                                  data-testid={`button-resend-${msg.messageId}`}
-                                >
-                                  <Bell className="h-3 w-3 mr-1" />
-                                  재발송
-                                </Button>
-                              </td>
+                              {(fullWorkspace?.slackEnabled || slackEnabled) && (
+                                <td className="py-2 px-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => resendNotificationMutation.mutate({ conversationId: msg.conversationId, messageId: msg.messageId })}
+                                    disabled={resendNotificationMutation.isPending}
+                                    data-testid={`button-resend-${msg.messageId}`}
+                                  >
+                                    <Bell className="h-3 w-3 mr-1" />
+                                    재발송
+                                  </Button>
+                                </td>
+                              )}
                             </tr>
                           ))}
                         </tbody>

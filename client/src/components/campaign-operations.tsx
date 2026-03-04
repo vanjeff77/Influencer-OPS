@@ -248,7 +248,7 @@ export function CampaignOperations({ campaignId, workspaceId = 1, lineItems }: C
                         </TableCell>
                         <TableCell className="text-xs">
                           {item.offerFee != null ? (
-                            <span className="font-medium">{Math.round(item.offerFee * 1.1).toLocaleString()}원</span>
+                            <span className="font-medium">{item.offerFee.toLocaleString()}원</span>
                           ) : (
                             <span className="text-muted-foreground">-</span>
                           )}

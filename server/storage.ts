@@ -1054,7 +1054,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(conversationMessages.createdAt);
   }
 
-  async getRecentInboundMessages(workspaceId: number, limit: number = 50): Promise<any[]> {
+  async getRecentInboundMessages(workspaceId: number, limit: number = 30): Promise<any[]> {
     const results = await db
       .select({
         messageId: conversationMessages.id,
@@ -1066,11 +1066,14 @@ export class DatabaseStorage implements IStorage {
         campaignName: campaigns.name,
         campaignId: campaigns.id,
         clientId: campaigns.clientId,
+        influencerName: influencers.name,
+        influencerId: influencers.id,
       })
       .from(conversationMessages)
       .innerJoin(conversations, eq(conversationMessages.conversationId, conversations.id))
       .innerJoin(campaignInfluencers, eq(conversations.campaignLineItemId, campaignInfluencers.id))
       .innerJoin(campaigns, eq(campaignInfluencers.campaignId, campaigns.id))
+      .innerJoin(influencers, eq(campaignInfluencers.influencerId, influencers.id))
       .where(
         and(
           eq(campaigns.workspaceId, workspaceId),
@@ -1080,25 +1083,19 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(conversationMessages.createdAt))
       .limit(limit);
 
+    const clientCache = new Map<number, string>();
     const enriched = [];
     for (const r of results) {
-      let influencerName = '';
       let clientName = '';
-      let hasDraft = false;
-
-      const convData = await this.getConversation(r.conversationId);
-      if (convData) {
-        const li = await this.getLineItemWithDetails(convData.campaignLineItemId);
-        if (li?.influencer) influencerName = li.influencer.name || '';
-      }
-
       if (r.clientId) {
-        const client = await this.getClient(r.clientId);
-        if (client) clientName = client.name;
+        if (clientCache.has(r.clientId)) {
+          clientName = clientCache.get(r.clientId)!;
+        } else {
+          const client = await this.getClient(r.clientId);
+          clientName = client?.name || '';
+          clientCache.set(r.clientId, clientName);
+        }
       }
-
-      const draft = await this.getLatestPendingDraft(r.conversationId);
-      hasDraft = !!draft;
 
       enriched.push({
         messageId: r.messageId,
@@ -1110,8 +1107,8 @@ export class DatabaseStorage implements IStorage {
         campaignName: r.campaignName,
         campaignId: r.campaignId,
         clientName,
-        influencerName,
-        hasDraft,
+        influencerName: r.influencerName || '',
+        hasDraft: false,
       });
     }
 

@@ -99,6 +99,12 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [focusedCell, setFocusedCell] = useState<{ row: number; col: number } | null>(null);
 
+  useEffect(() => {
+    if (open) {
+      setFocusedCell(null);
+    }
+  }, [open]);
+
   const handleCopyTemplate = async () => {
     if (isCopying) return;
     setIsCopying(true);
@@ -379,25 +385,31 @@ export function PasteImportDialog({ open, onOpenChange, workspaceId, onImportCom
       return;
     }
 
-    if (focusedCell && parsedData.length === 1 && parsedData[0].length > 1) {
+    if (focusedCell) {
       const newRows = [...rows];
-      const targetRow = focusedCell.row;
+      const startRow = focusedCell.row;
       const startCol = focusedCell.col;
-      const cells = parsedData[0];
-      if (targetRow < newRows.length) {
+
+      for (let ri = 0; ri < parsedData.length; ri++) {
+        const targetRow = startRow + ri;
+        while (targetRow >= newRows.length) {
+          newRows.push(createEmptyRow());
+        }
         const updatedRow = { ...newRows[targetRow] };
-        cells.forEach((val, i) => {
-          const colIdx = startCol + i;
+        const cells = parsedData[ri];
+        cells.forEach((val, ci) => {
+          const colIdx = startCol + ci;
           if (colIdx < columnKeys.length) {
             updatedRow[columnKeys[colIdx]] = val.trim();
           }
         });
         newRows[targetRow] = updatedRow;
-        setRows(newRows);
-        setIsValidated(false);
-        setErrors(new Map());
-        toast({ title: `데이터가 붙여넣기 되었습니다.` });
       }
+
+      setRows(newRows);
+      setIsValidated(false);
+      setErrors(new Map());
+      toast({ title: `${parsedData.length}개 행이 붙여넣기 되었습니다.` });
       return;
     }
 

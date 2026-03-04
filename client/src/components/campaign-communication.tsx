@@ -6,7 +6,6 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { CachedAvatar } from "@/components/cached-avatar";
@@ -874,12 +873,12 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
         )}
       </div>
       {/* Full Message Drawer */}
-      <Sheet open={!!showFullMessage} onOpenChange={(open) => !open && setShowFullMessage(null)}>
-        <SheetContent className="w-[500px] sm:max-w-[500px] flex flex-col h-full">
-          <SheetHeader className="shrink-0">
-            <SheetTitle>{KO.pages.communication.viewFullMessage}</SheetTitle>
-          </SheetHeader>
-          <ScrollArea className="flex-1 mt-4">
+      <Dialog open={!!showFullMessage} onOpenChange={(open) => !open && setShowFullMessage(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+          <DialogHeader className="shrink-0">
+            <DialogTitle>{KO.pages.communication.viewFullMessage}</DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="flex-1 mt-2">
             {showFullMessage && (
               <div 
                 className="prose prose-sm max-w-none dark:prose-invert pr-4" 
@@ -887,8 +886,8 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
               />
             )}
           </ScrollArea>
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
       {/* Bulk Email Dialog */}
       <BulkEmailDialog
         open={bulkEmailOpen}
