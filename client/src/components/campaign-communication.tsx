@@ -355,9 +355,9 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
 
   const HEADER_STEPS = [
     { key: 'waiting', label: '대기' },
-    { key: 'contacted', label: '컨택' },
-    { key: 'confirmed', label: '확정' },
-    { key: 'contracted', label: '계약' },
+    { key: 'contacted', label: '컨택완료' },
+    { key: 'confirmed', label: '확정완료' },
+    { key: 'contracted', label: '계약완료' },
   ] as const;
 
   const headerCurrentStatus = selectedLineItem?.status || 'waiting';
@@ -703,7 +703,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                     <div className="text-xs text-muted-foreground truncate">{selectedLineItem.influencer?.email || KO.pages.communication.noEmail}</div>
                   </div>
                   <div
-                    className="inline-flex items-center gap-0.5 rounded-md bg-muted dark:bg-muted/60 p-0.5 ml-2"
+                    className="flex items-center gap-0.5 rounded-md bg-muted dark:bg-muted/60 p-0.5 ml-2"
                     data-testid={`progress-bar-header-${selectedLineItem.id}`}
                   >
                     {HEADER_STEPS.map((step, idx) => {
@@ -715,7 +715,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                           variant={isCurrent ? "default" : "ghost"}
                           size="sm"
                           onClick={() => handleHeaderStepClick(step.key)}
-                          className={`gap-1 h-7 px-2 text-xs ${isCompleted ? 'text-primary font-medium' : ''}`}
+                          className={`flex-1 gap-1 h-7 px-2 text-xs ${isCompleted ? 'text-primary font-medium' : ''}`}
                           data-testid={`step-header-${step.key}-${selectedLineItem.id}`}
                         >
                           {isCompleted ? (
@@ -874,18 +874,18 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
       </div>
       {/* Full Message Drawer */}
       <Dialog open={!!showFullMessage} onOpenChange={(open) => !open && setShowFullMessage(null)}>
-        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
           <DialogHeader className="shrink-0">
             <DialogTitle>{KO.pages.communication.viewFullMessage}</DialogTitle>
           </DialogHeader>
-          <ScrollArea className="flex-1 mt-2">
+          <div className="flex-1 min-h-0 mt-2 overflow-y-auto pr-1">
             {showFullMessage && (
               <div 
-                className="prose prose-sm max-w-none dark:prose-invert pr-4" 
+                className="prose prose-sm max-w-none dark:prose-invert pr-3" 
                 dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(showFullMessage.bodyHtml || showFullMessage.bodyText || '') }} 
               />
             )}
-          </ScrollArea>
+          </div>
         </DialogContent>
       </Dialog>
       {/* Bulk Email Dialog */}
