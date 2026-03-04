@@ -4218,6 +4218,7 @@ export async function registerRoutes(
     logoUrl: z.string().optional().nullable(),
     memo: z.string().optional().nullable(),
     status: z.enum(['active', 'inactive']).optional(),
+    slackChannelId: z.string().optional().nullable(),
   });
 
   // Helper to check if user is OWNER
@@ -5269,6 +5270,47 @@ export async function registerRoutes(
     } catch (err) {
       console.error('[SlackRoute] Interaction error:', err);
       res.status(200).json({});
+    }
+  });
+
+  app.get('/api/workspaces/:workspaceId/recent-inbound-messages', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const user = req.user as any;
+      const workspaceId = parseInt(req.params.workspaceId);
+      const members = await storage.getWorkspaceMembers(workspaceId);
+      const member = members.find(m => m.userId === user.id);
+      if (!member || member.role !== 'WORKSPACE_OWNER') {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      const messages = await storage.getRecentInboundMessages(workspaceId, 50);
+      res.json(messages);
+    } catch (err) {
+      console.error('[API] recent-inbound-messages error:', err);
+      res.status(500).json({ error: 'Failed to fetch recent inbound messages' });
+    }
+  });
+
+  app.post('/api/workspaces/:workspaceId/resend-slack-notification', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const user = req.user as any;
+      const workspaceId = parseInt(req.params.workspaceId);
+      const members = await storage.getWorkspaceMembers(workspaceId);
+      const member = members.find(m => m.userId === user.id);
+      if (!member || member.role !== 'WORKSPACE_OWNER') {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      const { conversationId, messageId } = req.body;
+      if (!conversationId || !messageId) {
+        return res.status(400).json({ error: 'conversationId and messageId are required' });
+      }
+      const { notifyInboundEmail } = await import('./slack-bot');
+      await notifyInboundEmail(conversationId, messageId);
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[API] resend-slack-notification error:', err);
+      res.status(500).json({ error: 'Failed to resend notification' });
     }
   });
 

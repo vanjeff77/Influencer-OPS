@@ -64,6 +64,13 @@ Preferred communication style: Simple, everyday language.
 - **Contract Template Management**: CRUD operations for templates, rich text editor (TipTap), variable substitution, and dual DOCX/PDF export.
 - **Client Logo Management**: URL-based client logos with live preview and integration into campaign UI.
 - **User Onboarding System**: TourGuide component for step-by-step walkthroughs and FeatureHint for contextual hints.
+- **Slack Bot for Email Notifications**:
+    - **Service**: `server/slack-bot.ts` — real-time Slack notifications for inbound emails with AI draft actions.
+    - **Channel Routing**: Client-specific channel mapping (`clients.slackChannelId`) with workspace-level fallback.
+    - **Compact Messages**: 150-char body/draft previews with "전체 보기" button opening Slack modals for full content.
+    - **AI Draft Actions**: Send draft (2-step confirmation), regenerate with feedback (modal), alternative classifications, dismiss. Progress indicator during generation.
+    - **Settings UI**: Client Slack channel ID field in client edit dialog. Recent inbound messages table with resend test functionality.
+    - **APIs**: `GET /api/workspaces/:workspaceId/recent-inbound-messages`, `POST /api/workspaces/:workspaceId/resend-slack-notification`.
 - **AI Auto-Reply Draft Generation**:
     - **RAG-based**: Uses a customizable email response framework document and campaign-level AI instructions.
     - **LLM Provider Abstraction**: Supports Replit AI, OpenAI API, and Anthropic API.

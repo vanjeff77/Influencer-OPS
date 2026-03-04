@@ -66,6 +66,7 @@ export default function SettingsPage() {
   const [clientMemo, setClientMemo] = useState("");
   const [clientStatus, setClientStatus] = useState("active");
   const [clientLogoUrl, setClientLogoUrl] = useState<string | null>(null);
+  const [clientSlackChannelId, setClientSlackChannelId] = useState("");
 
   const [workspaceName, setWorkspaceName] = useState("");
   const [aiDraftEnabled, setAiDraftEnabled] = useState(false);
@@ -237,6 +238,23 @@ export default function SettingsPage() {
     enabled: !!workspaceId && aiDraftEnabled,
   });
 
+  const { data: recentInbound = [], isLoading: loadingInbound, refetch: refetchInbound } = useQuery<any[]>({
+    queryKey: ['/api/workspaces', workspaceId, 'recent-inbound-messages'],
+    queryFn: () => apiRequest('GET', `/api/workspaces/${workspaceId}/recent-inbound-messages`).then(r => r.json()),
+    enabled: !!workspaceId && isOwner && (fullWorkspace?.slackEnabled || slackEnabled),
+  });
+
+  const resendNotificationMutation = useMutation({
+    mutationFn: (data: { conversationId: number; messageId: number }) =>
+      apiRequest('POST', `/api/workspaces/${workspaceId}/resend-slack-notification`, data),
+    onSuccess: () => {
+      toast({ title: "Slack 알림이 재발송되었습니다" });
+    },
+    onError: (err: any) => {
+      toast({ title: "재발송 실패", description: err.message, variant: "destructive" });
+    },
+  });
+
   const [frameworkContent, setFrameworkContent] = useState("");
   const [frameworkEdited, setFrameworkEdited] = useState(false);
 
@@ -343,6 +361,7 @@ export default function SettingsPage() {
     setClientMemo("");
     setClientStatus("active");
     setClientLogoUrl(null);
+    setClientSlackChannelId("");
     setEditingClient(null);
   };
 
@@ -361,6 +380,7 @@ export default function SettingsPage() {
     setClientMemo(client.memo || "");
     setClientStatus(client.status || "active");
     setClientLogoUrl(client.logoUrl || null);
+    setClientSlackChannelId((client as any).slackChannelId || "");
     setClientDialogOpen(true);
   };
 
@@ -378,7 +398,7 @@ export default function SettingsPage() {
     if (editingClient) {
       updateClientMutation.mutate({
         id: editingClient.id,
-        data: { name: clientName, memo: clientMemo, status: clientStatus, logoUrl: clientLogoUrl },
+        data: { name: clientName, memo: clientMemo, status: clientStatus, logoUrl: clientLogoUrl, slackChannelId: clientSlackChannelId || null },
       });
     } else {
       createClientMutation.mutate({
@@ -387,6 +407,7 @@ export default function SettingsPage() {
         memo: clientMemo,
         status: clientStatus,
         logoUrl: clientLogoUrl,
+        slackChannelId: clientSlackChannelId || null,
       });
     }
   };
@@ -815,6 +836,84 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
 
+            {(fullWorkspace?.slackEnabled || slackEnabled) && isOwner && (
+              <Card className="mt-4">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Mail className="h-5 w-5 text-blue-500" />
+                    최근 수신 메일 및 알림 테스트
+                  </CardTitle>
+                  <CardDescription>
+                    최근 수신된 인바운드 메일 목록입니다. 특정 메일의 Slack 알림을 재발송할 수 있습니다.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex justify-end mb-2">
+                    <Button variant="outline" size="sm" onClick={() => refetchInbound()} disabled={loadingInbound} data-testid="button-refresh-inbound">
+                      <RotateCcw className="h-4 w-4 mr-1" />
+                      새로고침
+                    </Button>
+                  </div>
+                  {loadingInbound ? (
+                    <div className="flex items-center justify-center py-8 text-muted-foreground">
+                      <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                      로딩 중...
+                    </div>
+                  ) : recentInbound.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-4 text-center">최근 수신 메일이 없습니다.</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm" data-testid="table-recent-inbound">
+                        <thead>
+                          <tr className="border-b text-muted-foreground">
+                            <th className="text-left py-2 px-2 font-medium">수신시각</th>
+                            <th className="text-left py-2 px-2 font-medium">캠페인</th>
+                            <th className="text-left py-2 px-2 font-medium">클라이언트</th>
+                            <th className="text-left py-2 px-2 font-medium">인플루언서</th>
+                            <th className="text-left py-2 px-2 font-medium">내용</th>
+                            <th className="text-left py-2 px-2 font-medium">AI초안</th>
+                            <th className="text-left py-2 px-2 font-medium"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {recentInbound.slice(0, 30).map((msg: any) => (
+                            <tr key={msg.messageId} className="border-b hover:bg-muted/50" data-testid={`row-inbound-${msg.messageId}`}>
+                              <td className="py-2 px-2 whitespace-nowrap text-xs text-muted-foreground">
+                                {msg.receivedAt ? new Date(msg.receivedAt).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : msg.createdAt ? new Date(msg.createdAt).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}
+                              </td>
+                              <td className="py-2 px-2 max-w-[120px] truncate">{msg.campaignName || '-'}</td>
+                              <td className="py-2 px-2 max-w-[80px] truncate">{msg.clientName || '-'}</td>
+                              <td className="py-2 px-2 max-w-[100px] truncate">{msg.influencerName || msg.senderEmail || '-'}</td>
+                              <td className="py-2 px-2 max-w-[200px] truncate text-muted-foreground">{msg.snippet?.substring(0, 50) || '-'}</td>
+                              <td className="py-2 px-2">
+                                {msg.hasDraft ? (
+                                  <Badge variant="outline" className="text-green-600 border-green-300 text-xs">유</Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-muted-foreground text-xs">무</Badge>
+                                )}
+                              </td>
+                              <td className="py-2 px-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => resendNotificationMutation.mutate({ conversationId: msg.conversationId, messageId: msg.messageId })}
+                                  disabled={resendNotificationMutation.isPending}
+                                  data-testid={`button-resend-${msg.messageId}`}
+                                >
+                                  <Bell className="h-3 w-3 mr-1" />
+                                  재발송
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             {aiDraftEnabled && (
               <Card className="mt-4">
                 <CardHeader>
@@ -938,6 +1037,16 @@ export default function SettingsPage() {
                             onChange={(e) => setClientLogoUrl(e.target.value || null)}
                             data-testid="input-client-logo-url"
                           />
+                        </div>
+                        <div className="space-y-1">
+                          <Label>Slack 채널 ID</Label>
+                          <Input
+                            placeholder="C0123456789"
+                            value={clientSlackChannelId}
+                            onChange={(e) => setClientSlackChannelId(e.target.value)}
+                            data-testid="input-client-slack-channel"
+                          />
+                          <p className="text-xs text-muted-foreground">이 클라이언트의 캠페인 메일 알림을 받을 Slack 채널 ID (비어있으면 기본 채널로 전송)</p>
                         </div>
                       </div>
                       <div className="flex justify-end gap-2">
@@ -1256,6 +1365,16 @@ export default function SettingsPage() {
                     onChange={(e) => setClientLogoUrl(e.target.value || null)}
                     data-testid="input-edit-client-logo-url"
                   />
+                </div>
+                <div className="space-y-1">
+                  <Label>Slack 채널 ID</Label>
+                  <Input
+                    placeholder="C0123456789"
+                    value={clientSlackChannelId}
+                    onChange={(e) => setClientSlackChannelId(e.target.value)}
+                    data-testid="input-edit-client-slack-channel"
+                  />
+                  <p className="text-xs text-muted-foreground">이 클라이언트의 캠페인 메일 알림을 받을 Slack 채널 ID (비어있으면 기본 채널로 전송)</p>
                 </div>
               </div>
               <div className="flex justify-end gap-2">

@@ -20,6 +20,7 @@ interface InboundEmailContext {
   campaignId: number;
   emailBody: string;
   senderEmail: string;
+  clientSlackChannelId?: string | null;
 }
 
 interface AiDraftContext {
@@ -30,14 +31,11 @@ interface AiDraftContext {
   alternatives?: { classification: string; classificationLabel: string }[];
 }
 
-export async function sendSlackNotification(
+function buildNotificationBlocks(
   ctx: InboundEmailContext,
   aiDraft: AiDraftContext | null,
-  workspace: Workspace
-): Promise<void> {
-  if (!workspace.slackEnabled || !workspace.slackBotToken || !workspace.slackChannelId) return;
-
-  const bodyPreview = ctx.emailBody.length > 500 ? ctx.emailBody.substring(0, 500) + '...' : ctx.emailBody;
+): SlackBlock[] {
+  const bodyPreview = ctx.emailBody.length > 150 ? ctx.emailBody.substring(0, 150) + '...' : ctx.emailBody;
 
   const blocks: SlackBlock[] = [
     {
@@ -46,24 +44,33 @@ export async function sendSlackNotification(
     },
     {
       type: "section",
-      fields: [
-        { type: "mrkdwn", text: `*인플루언서:*\n${ctx.influencerName}` },
-        { type: "mrkdwn", text: `*보낸 사람:*\n${ctx.senderEmail}` },
-      ]
+      text: { type: "mrkdwn", text: `*${ctx.influencerName}* (${ctx.senderEmail})` }
     },
     {
       type: "section",
-      text: { type: "mrkdwn", text: `*메일 내용:*\n>${bodyPreview.replace(/\n/g, '\n>')}` }
+      text: { type: "mrkdwn", text: `>${bodyPreview.replace(/\n/g, '\n>')}` },
+      accessory: {
+        type: "button",
+        text: { type: "plain_text", text: "📄 전체 보기", emoji: true },
+        action_id: "view_full_email",
+        value: JSON.stringify({ conversationId: ctx.conversationId, workspaceId: ctx.workspaceId }),
+      }
     },
     { type: "divider" },
   ];
 
   if (aiDraft) {
-    const draftPreview = aiDraft.draft.length > 800 ? aiDraft.draft.substring(0, 800) + '...' : aiDraft.draft;
+    const draftPreview = aiDraft.draft.length > 150 ? aiDraft.draft.substring(0, 150) + '...' : aiDraft.draft;
 
     blocks.push({
       type: "section",
-      text: { type: "mrkdwn", text: `✨ *AI 초안* (${aiDraft.classification} ${aiDraft.classificationLabel})\n\`\`\`${draftPreview}\`\`\`` }
+      text: { type: "mrkdwn", text: `✨ *AI 초안* \`${aiDraft.classification} ${aiDraft.classificationLabel}\`\n${draftPreview}` },
+      accessory: {
+        type: "button",
+        text: { type: "plain_text", text: "📋 초안 전문", emoji: true },
+        action_id: "view_full_draft",
+        value: JSON.stringify({ conversationId: ctx.conversationId, workspaceId: ctx.workspaceId, draftId: aiDraft.draftId }),
+      }
     });
 
     const actionElements: any[] = [
@@ -92,26 +99,22 @@ export async function sendSlackNotification(
       }
     }
 
-    blocks.push({ type: "actions", block_id: `actions_${ctx.conversationId}`, elements: actionElements });
+    actionElements.push(
+      {
+        type: "button",
+        text: { type: "plain_text", text: "🔄 재생성", emoji: true },
+        action_id: "open_regenerate_modal",
+        value: JSON.stringify({ conversationId: ctx.conversationId, workspaceId: ctx.workspaceId }),
+      },
+      {
+        type: "button",
+        text: { type: "plain_text", text: "❌", emoji: true },
+        action_id: "dismiss_draft",
+        value: JSON.stringify({ draftId: aiDraft.draftId }),
+      },
+    );
 
-    blocks.push({
-      type: "actions",
-      block_id: `regen_${ctx.conversationId}`,
-      elements: [
-        {
-          type: "button",
-          text: { type: "plain_text", text: "🔄 다른 답변 요청하기", emoji: true },
-          action_id: "open_regenerate_modal",
-          value: JSON.stringify({ conversationId: ctx.conversationId, workspaceId: ctx.workspaceId }),
-        },
-        {
-          type: "button",
-          text: { type: "plain_text", text: "❌ 닫기", emoji: true },
-          action_id: "dismiss_draft",
-          value: JSON.stringify({ draftId: aiDraft.draftId }),
-        },
-      ]
-    });
+    blocks.push({ type: "actions", block_id: `actions_${ctx.conversationId}_${Date.now()}`, elements: actionElements });
   } else {
     blocks.push({
       type: "section",
@@ -131,6 +134,19 @@ export async function sendSlackNotification(
     });
   }
 
+  return blocks;
+}
+
+export async function sendSlackNotification(
+  ctx: InboundEmailContext,
+  aiDraft: AiDraftContext | null,
+  workspace: Workspace
+): Promise<void> {
+  if (!workspace.slackEnabled || !workspace.slackBotToken || !workspace.slackChannelId) return;
+
+  const targetChannel = ctx.clientSlackChannelId || workspace.slackChannelId;
+  const blocks = buildNotificationBlocks(ctx, aiDraft);
+
   try {
     const response = await fetch('https://slack.com/api/chat.postMessage', {
       method: 'POST',
@@ -139,7 +155,7 @@ export async function sendSlackNotification(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        channel: workspace.slackChannelId,
+        channel: targetChannel,
         text: `📨 ${ctx.influencerName}님이 ${ctx.campaignName}에 메일을 보냈습니다.`,
         blocks,
       }),
@@ -148,8 +164,27 @@ export async function sendSlackNotification(
     const data = await response.json();
     if (!data.ok) {
       console.error('[SlackBot] Failed to send message:', data.error);
+      if (ctx.clientSlackChannelId && targetChannel !== workspace.slackChannelId) {
+        console.log('[SlackBot] Retrying with default workspace channel...');
+        const retryResponse = await fetch('https://slack.com/api/chat.postMessage', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${workspace.slackBotToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            channel: workspace.slackChannelId,
+            text: `📨 ${ctx.influencerName}님이 ${ctx.campaignName}에 메일을 보냈습니다.`,
+            blocks,
+          }),
+        });
+        const retryData = await retryResponse.json();
+        if (!retryData.ok) {
+          console.error('[SlackBot] Retry also failed:', retryData.error);
+        }
+      }
     } else {
-      console.log(`[SlackBot] Notification sent for conversation ${ctx.conversationId}`);
+      console.log(`[SlackBot] Notification sent for conversation ${ctx.conversationId} to channel ${targetChannel}`);
     }
   } catch (err) {
     console.error('[SlackBot] Error sending notification:', err);
@@ -177,6 +212,38 @@ async function updateSlackMessage(
   }
 }
 
+async function openSlackModal(
+  botToken: string,
+  triggerId: string,
+  title: string,
+  blocks: SlackBlock[],
+  callbackId?: string,
+  privateMetadata?: string,
+  submit?: { type: string; text: string },
+): Promise<void> {
+  const view: any = {
+    type: "modal",
+    title: { type: "plain_text", text: title.substring(0, 25) },
+    blocks,
+  };
+  if (callbackId) view.callback_id = callbackId;
+  if (privateMetadata) view.private_metadata = privateMetadata;
+  if (submit) view.submit = submit;
+
+  try {
+    await fetch('https://slack.com/api/views.open', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${botToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ trigger_id: triggerId, view }),
+    });
+  } catch (err) {
+    console.error('[SlackBot] Open modal error:', err);
+  }
+}
+
 export async function handleSlackInteraction(payload: any): Promise<{ status: number; body: any }> {
   const actionId = payload.actions?.[0]?.action_id;
   const actionValue = payload.actions?.[0]?.value;
@@ -193,7 +260,11 @@ export async function handleSlackInteraction(payload: any): Promise<{ status: nu
   }
 
   if (actionId === 'send_draft') {
+    return handleSendDraftConfirm(payload, parsed);
+  } else if (actionId === 'confirm_send_draft') {
     return handleSendDraft(payload, parsed);
+  } else if (actionId === 'cancel_send_draft') {
+    return handleCancelSend(payload, parsed);
   } else if (actionId.startsWith('regenerate_alt_')) {
     return handleRegenerateAlt(payload, parsed);
   } else if (actionId === 'open_regenerate_modal') {
@@ -202,6 +273,10 @@ export async function handleSlackInteraction(payload: any): Promise<{ status: nu
     return handleDismissDraft(payload, parsed);
   } else if (actionId === 'generate_draft') {
     return handleGenerateNewDraft(payload, parsed);
+  } else if (actionId === 'view_full_email') {
+    return handleViewFullEmail(payload, parsed);
+  } else if (actionId === 'view_full_draft') {
+    return handleViewFullDraft(payload, parsed);
   }
 
   return { status: 200, body: {} };
@@ -225,6 +300,72 @@ export async function handleSlackModalSubmission(payload: any): Promise<{ status
   regenerateInBackground(parsed.conversationId, parsed.workspaceId, feedbackText, payload).catch(err => {
     console.error('[SlackBot] Background regenerate failed:', err);
   });
+
+  return { status: 200, body: {} };
+}
+
+async function handleSendDraftConfirm(payload: any, parsed: any): Promise<{ status: number; body: any }> {
+  const workspace = await findWorkspaceFromPayload(payload);
+  if (!workspace?.slackBotToken || !payload.message?.ts) {
+    return { status: 200, body: {} };
+  }
+
+  const existingBlocks = (payload.message.blocks || []).slice(0, 4);
+
+  const confirmBlocks: SlackBlock[] = [
+    ...existingBlocks,
+    {
+      type: "section",
+      text: { type: "mrkdwn", text: "⚠️ *정말 이 초안을 발송하시겠습니까?*" }
+    },
+    {
+      type: "actions",
+      block_id: `confirm_${Date.now()}`,
+      elements: [
+        {
+          type: "button",
+          text: { type: "plain_text", text: "✅ 확인 발송", emoji: true },
+          style: "danger",
+          action_id: "confirm_send_draft",
+          value: JSON.stringify(parsed),
+        },
+        {
+          type: "button",
+          text: { type: "plain_text", text: "↩️ 취소", emoji: true },
+          action_id: "cancel_send_draft",
+          value: JSON.stringify({ ...parsed, originalBlocks: payload.message.blocks }),
+        },
+      ]
+    },
+  ];
+
+  await updateSlackMessage(
+    workspace.slackBotToken,
+    payload.channel?.id || workspace.slackChannelId!,
+    payload.message.ts,
+    confirmBlocks,
+    '발송 확인 대기중...',
+  );
+
+  return { status: 200, body: {} };
+}
+
+async function handleCancelSend(payload: any, parsed: any): Promise<{ status: number; body: any }> {
+  const workspace = await findWorkspaceFromPayload(payload);
+  if (!workspace?.slackBotToken || !payload.message?.ts) {
+    return { status: 200, body: {} };
+  }
+
+  const originalBlocks = parsed.originalBlocks;
+  if (originalBlocks) {
+    await updateSlackMessage(
+      workspace.slackBotToken,
+      payload.channel?.id || workspace.slackChannelId!,
+      payload.message.ts,
+      originalBlocks,
+      '발송이 취소되었습니다.',
+    );
+  }
 
   return { status: 200, body: {} };
 }
@@ -372,40 +513,100 @@ async function handleOpenRegenerateModal(payload: any, parsed: any): Promise<{ s
   const workspace = (await storage.getWorkspaces()).find(w => w.id === workspaceId);
   if (!workspace?.slackBotToken) return { status: 200, body: {} };
 
-  try {
-    await fetch('https://slack.com/api/views.open', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${workspace.slackBotToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        trigger_id: triggerId,
-        view: {
-          type: "modal",
-          callback_id: "regenerate_with_feedback",
-          private_metadata: JSON.stringify({ conversationId, workspaceId }),
-          title: { type: "plain_text", text: "AI 초안 재생성" },
-          submit: { type: "plain_text", text: "재생성" },
-          blocks: [
-            {
-              type: "input",
-              block_id: "feedback_block",
-              element: {
-                type: "plain_text_input",
-                action_id: "feedback_input",
-                multiline: true,
-                placeholder: { type: "plain_text", text: "수정 요청사항을 입력하세요 (예: 좀 더 정중하게, 단가를 강조해주세요)" },
-              },
-              label: { type: "plain_text", text: "수정 요청사항" },
-            }
-          ],
+  await openSlackModal(
+    workspace.slackBotToken,
+    triggerId,
+    "AI 초안 재생성",
+    [
+      {
+        type: "input",
+        block_id: "feedback_block",
+        element: {
+          type: "plain_text_input",
+          action_id: "feedback_input",
+          multiline: true,
+          placeholder: { type: "plain_text", text: "수정 요청사항을 입력하세요 (예: 좀 더 정중하게, 단가를 강조해주세요)" },
         },
-      }),
-    });
-  } catch (err) {
-    console.error('[SlackBot] Open modal error:', err);
+        label: { type: "plain_text", text: "수정 요청사항" },
+      } as any,
+    ],
+    "regenerate_with_feedback",
+    JSON.stringify({ conversationId, workspaceId }),
+    { type: "plain_text", text: "재생성" },
+  );
+
+  return { status: 200, body: {} };
+}
+
+async function handleViewFullEmail(payload: any, parsed: any): Promise<{ status: number; body: any }> {
+  const { conversationId, workspaceId } = parsed;
+  const triggerId = payload.trigger_id;
+  if (!triggerId) return { status: 200, body: {} };
+
+  const workspace = (await storage.getWorkspaces()).find(w => w.id === workspaceId);
+  if (!workspace?.slackBotToken) return { status: 200, body: {} };
+
+  const messages = await storage.getConversationMessages(conversationId);
+  const inboundMsgs = messages.filter(m => m.direction === 'inbound');
+  const lastInbound = inboundMsgs[inboundMsgs.length - 1];
+
+  const fullBody = lastInbound?.bodyText || lastInbound?.snippet || '(내용 없음)';
+  const truncated = fullBody.length > 2900 ? fullBody.substring(0, 2900) + '...' : fullBody;
+
+  await openSlackModal(
+    workspace.slackBotToken,
+    triggerId,
+    "메일 원문",
+    [
+      {
+        type: "section",
+        text: { type: "mrkdwn", text: `*보낸 사람:* ${lastInbound?.senderEmail || 'N/A'}` }
+      },
+      { type: "divider" },
+      {
+        type: "section",
+        text: { type: "mrkdwn", text: truncated }
+      },
+    ],
+  );
+
+  return { status: 200, body: {} };
+}
+
+async function handleViewFullDraft(payload: any, parsed: any): Promise<{ status: number; body: any }> {
+  const { conversationId, workspaceId, draftId } = parsed;
+  const triggerId = payload.trigger_id;
+  if (!triggerId) return { status: 200, body: {} };
+
+  const workspace = (await storage.getWorkspaces()).find(w => w.id === workspaceId);
+  if (!workspace?.slackBotToken) return { status: 200, body: {} };
+
+  let draft: any = null;
+  if (draftId) {
+    draft = await storage.getAiDraft(draftId);
   }
+  if (!draft) {
+    draft = await storage.getLatestPendingDraft(conversationId);
+  }
+  const draftText = draft?.draft || '(초안 없음)';
+  const truncated = draftText.length > 2900 ? draftText.substring(0, 2900) + '...' : draftText;
+
+  await openSlackModal(
+    workspace.slackBotToken,
+    triggerId,
+    "AI 초안 전문",
+    [
+      {
+        type: "section",
+        text: { type: "mrkdwn", text: `*분류:* \`${draft?.classification || ''} ${draft?.classificationLabel || ''}\`` }
+      },
+      { type: "divider" },
+      {
+        type: "section",
+        text: { type: "mrkdwn", text: truncated }
+      },
+    ],
+  );
 
   return { status: 200, body: {} };
 }
@@ -468,20 +669,67 @@ async function regenerateInBackground(
   const workspace = (await storage.getWorkspaces()).find(w => w.id === workspaceId);
   if (!workspace) return;
 
+  if (workspace.slackBotToken && payload?.message?.ts) {
+    const loadingBlocks = (payload.message.blocks || []).slice(0, 4);
+    loadingBlocks.push({
+      type: "section",
+      text: { type: "mrkdwn", text: "⏳ *AI 초안 생성 중...* 잠시만 기다려 주세요." }
+    });
+    await updateSlackMessage(
+      workspace.slackBotToken,
+      payload.channel?.id || workspace.slackChannelId!,
+      payload.message.ts,
+      loadingBlocks,
+      'AI 초안 생성 중...',
+    );
+  }
+
   const messages = await storage.getConversationMessages(conversationId);
   if (messages.length === 0) return;
 
-  const { generateEmailDraft } = await import('./ai/draft-generator');
-  const result = await generateEmailDraft(
-    messages,
-    lineItem.influencer || {},
-    campaign,
-    workspace,
-    lineItem.offerFee,
-    userFeedback,
-    requestedClassification,
-    requestedClassificationLabel,
-  );
+  let result: any;
+  try {
+    const { generateEmailDraft } = await import('./ai/draft-generator');
+    result = await generateEmailDraft(
+      messages,
+      lineItem.influencer || {},
+      campaign,
+      workspace,
+      lineItem.offerFee,
+      userFeedback,
+      requestedClassification,
+      requestedClassificationLabel,
+    );
+  } catch (genErr) {
+    console.error('[SlackBot] Draft generation failed:', genErr);
+    if (workspace.slackBotToken && payload?.message?.ts) {
+      const errorBlocks = (payload.message.blocks || []).slice(0, 4);
+      errorBlocks.push({
+        type: "section",
+        text: { type: "mrkdwn", text: "❌ *AI 초안 생성 실패.* 다시 시도해 주세요." }
+      });
+      errorBlocks.push({
+        type: "actions",
+        block_id: `retry_${Date.now()}`,
+        elements: [
+          {
+            type: "button",
+            text: { type: "plain_text", text: "🔄 재시도", emoji: true },
+            action_id: "generate_draft",
+            value: JSON.stringify({ conversationId, workspaceId }),
+          },
+        ]
+      });
+      await updateSlackMessage(
+        workspace.slackBotToken,
+        payload.channel?.id || workspace.slackChannelId!,
+        payload.message.ts,
+        errorBlocks,
+        'AI 초안 생성 실패.',
+      );
+    }
+    return;
+  }
 
   const newDraft = await storage.createAiDraft({
     conversationId,
@@ -494,14 +742,20 @@ async function regenerateInBackground(
   });
 
   if (workspace.slackBotToken && payload?.message?.ts) {
-    const draftPreview = result.draft.length > 800 ? result.draft.substring(0, 800) + '...' : result.draft;
     const existingBlocks = (payload.message.blocks || []).slice(0, 4);
+    const draftPreview = result.draft.length > 150 ? result.draft.substring(0, 150) + '...' : result.draft;
 
     const newBlocks: SlackBlock[] = [
       ...existingBlocks,
       {
         type: "section",
-        text: { type: "mrkdwn", text: `✨ *AI 초안* (${result.classification} ${result.classificationLabel})\n\`\`\`${draftPreview}\`\`\`` }
+        text: { type: "mrkdwn", text: `✨ *AI 초안* \`${result.classification} ${result.classificationLabel}\`\n${draftPreview}` },
+        accessory: {
+          type: "button",
+          text: { type: "plain_text", text: "📋 초안 전문", emoji: true },
+          action_id: "view_full_draft",
+          value: JSON.stringify({ conversationId, workspaceId, draftId: newDraft.id }),
+        }
       },
     ];
 
@@ -531,25 +785,22 @@ async function regenerateInBackground(
       }
     }
 
+    actionElements.push(
+      {
+        type: "button",
+        text: { type: "plain_text", text: "🔄 재생성", emoji: true },
+        action_id: "open_regenerate_modal",
+        value: JSON.stringify({ conversationId, workspaceId }),
+      },
+      {
+        type: "button",
+        text: { type: "plain_text", text: "❌", emoji: true },
+        action_id: "dismiss_draft",
+        value: JSON.stringify({ draftId: newDraft.id }),
+      },
+    );
+
     newBlocks.push({ type: "actions", block_id: `actions_${conversationId}_${Date.now()}`, elements: actionElements });
-    newBlocks.push({
-      type: "actions",
-      block_id: `regen_${conversationId}_${Date.now()}`,
-      elements: [
-        {
-          type: "button",
-          text: { type: "plain_text", text: "🔄 다른 답변 요청하기", emoji: true },
-          action_id: "open_regenerate_modal",
-          value: JSON.stringify({ conversationId, workspaceId }),
-        },
-        {
-          type: "button",
-          text: { type: "plain_text", text: "❌ 닫기", emoji: true },
-          action_id: "dismiss_draft",
-          value: JSON.stringify({ draftId: newDraft.id }),
-        },
-      ]
-    });
 
     await updateSlackMessage(
       workspace.slackBotToken,
@@ -603,6 +854,14 @@ export async function notifyInboundEmail(
       }
     }
 
+    let clientSlackChannelId: string | null = null;
+    if (campaign.clientId) {
+      const client = await storage.getClient(campaign.clientId);
+      if (client?.slackChannelId) {
+        clientSlackChannelId = client.slackChannelId;
+      }
+    }
+
     const draft = await storage.getLatestPendingDraft(conversationId);
 
     let aiDraftCtx: AiDraftContext | null = null;
@@ -631,6 +890,7 @@ export async function notifyInboundEmail(
         campaignId: campaign.id,
         emailBody: msg.bodyText || msg.snippet || '',
         senderEmail: msg.senderEmail || '',
+        clientSlackChannelId,
       },
       aiDraftCtx,
       workspace,

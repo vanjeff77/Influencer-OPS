@@ -208,6 +208,7 @@ export interface IStorage {
   deleteContractTemplate(id: number): Promise<void>;
 
   // AI Draft Replies
+  getAiDraft(id: number): Promise<AiDraftReply | undefined>;
   getLatestPendingDraft(conversationId: number): Promise<AiDraftReply | undefined>;
   getDraftByTriggerMessage(triggerMessageId: number): Promise<AiDraftReply | undefined>;
   createAiDraft(draft: InsertAiDraftReply): Promise<AiDraftReply>;
@@ -1053,6 +1054,70 @@ export class DatabaseStorage implements IStorage {
       .orderBy(conversationMessages.createdAt);
   }
 
+  async getRecentInboundMessages(workspaceId: number, limit: number = 50): Promise<any[]> {
+    const results = await db
+      .select({
+        messageId: conversationMessages.id,
+        conversationId: conversationMessages.conversationId,
+        senderEmail: conversationMessages.senderEmail,
+        snippet: conversationMessages.snippet,
+        receivedAt: conversationMessages.receivedAt,
+        createdAt: conversationMessages.createdAt,
+        campaignName: campaigns.name,
+        campaignId: campaigns.id,
+        clientId: campaigns.clientId,
+      })
+      .from(conversationMessages)
+      .innerJoin(conversations, eq(conversationMessages.conversationId, conversations.id))
+      .innerJoin(campaignInfluencers, eq(conversations.campaignLineItemId, campaignInfluencers.id))
+      .innerJoin(campaigns, eq(campaignInfluencers.campaignId, campaigns.id))
+      .where(
+        and(
+          eq(campaigns.workspaceId, workspaceId),
+          eq(conversationMessages.direction, 'inbound'),
+        )
+      )
+      .orderBy(desc(conversationMessages.createdAt))
+      .limit(limit);
+
+    const enriched = [];
+    for (const r of results) {
+      let influencerName = '';
+      let clientName = '';
+      let hasDraft = false;
+
+      const convData = await this.getConversation(r.conversationId);
+      if (convData) {
+        const li = await this.getLineItemWithDetails(convData.campaignLineItemId);
+        if (li?.influencer) influencerName = li.influencer.name || '';
+      }
+
+      if (r.clientId) {
+        const client = await this.getClient(r.clientId);
+        if (client) clientName = client.name;
+      }
+
+      const draft = await this.getLatestPendingDraft(r.conversationId);
+      hasDraft = !!draft;
+
+      enriched.push({
+        messageId: r.messageId,
+        conversationId: r.conversationId,
+        senderEmail: r.senderEmail,
+        snippet: r.snippet,
+        receivedAt: r.receivedAt,
+        createdAt: r.createdAt,
+        campaignName: r.campaignName,
+        campaignId: r.campaignId,
+        clientName,
+        influencerName,
+        hasDraft,
+      });
+    }
+
+    return enriched;
+  }
+
   // === EMAIL TEMPLATES ===
   async getEmailTemplates(workspaceId: number): Promise<EmailTemplate[]> {
     return await db.select().from(emailTemplates).where(eq(emailTemplates.workspaceId, workspaceId));
@@ -1591,6 +1656,12 @@ export class DatabaseStorage implements IStorage {
     const lineItem = lineItems.find(li => li.influencerId === influencer.id);
     
     return lineItem ? { influencer, lineItem } : null;
+  }
+
+  async getAiDraft(id: number): Promise<AiDraftReply | undefined> {
+    const [draft] = await db.select().from(aiDraftReplies)
+      .where(eq(aiDraftReplies.id, id));
+    return draft;
   }
 
   async getLatestPendingDraft(conversationId: number): Promise<AiDraftReply | undefined> {
