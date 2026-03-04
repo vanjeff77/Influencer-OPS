@@ -317,32 +317,37 @@ export async function sendSlackNotification(
     const existingChannelId = conv?.slackChannelId;
 
     if (existingThreadTs && existingChannelId) {
-      const replyResult = await postSlackMessage(
-        workspace.slackBotToken,
-        existingChannelId,
-        replyText,
-        replyBlocks,
-        existingThreadTs,
-      );
+      const { blocks: parentBlocks, text: parentText } = await buildParentMessageBlocks({
+        conversationId: ctx.conversationId, influencerName: ctx.influencerName,
+        campaignName: ctx.campaignName, lineItemStatus: ctx.lineItemStatus,
+        offerFee: ctx.offerFee, uploadDueAt: ctx.uploadDueAt,
+      });
+      const updateResult = await updateSlackMessage(workspace.slackBotToken, existingChannelId, existingThreadTs, parentBlocks, parentText);
 
-      if (replyResult.ok) {
-        const { blocks: parentBlocks, text: parentText } = await buildParentMessageBlocks({
-          conversationId: ctx.conversationId, influencerName: ctx.influencerName,
-          campaignName: ctx.campaignName, lineItemStatus: ctx.lineItemStatus,
-          offerFee: ctx.offerFee, uploadDueAt: ctx.uploadDueAt,
-        });
-        await updateSlackMessage(workspace.slackBotToken, existingChannelId, existingThreadTs, parentBlocks, parentText);
-        console.log(`[SlackBot] Thread reply sent for conversation ${ctx.conversationId}`);
+      if (updateResult.ok) {
+        const replyResult = await postSlackMessage(
+          workspace.slackBotToken,
+          existingChannelId,
+          replyText,
+          replyBlocks,
+          existingThreadTs,
+        );
+
+        if (replyResult.ok) {
+          console.log(`[SlackBot] Thread reply sent for conversation ${ctx.conversationId}`);
+          return;
+        }
+        console.error(`[SlackBot] Thread reply failed (${replyResult.error}) for conversation ${ctx.conversationId}`);
         return;
       }
 
-      const threadDeleteErrors = ['thread_not_found', 'message_not_found', 'channel_not_found', 'is_inactive'];
-      if (!threadDeleteErrors.includes(replyResult.error || '')) {
-        console.error(`[SlackBot] Thread reply failed (non-recovery error: ${replyResult.error}), skipping for conversation ${ctx.conversationId}`);
+      const parentDeleteErrors = ['message_not_found', 'msg_not_found', 'channel_not_found', 'is_inactive'];
+      if (!parentDeleteErrors.includes(updateResult.error || '')) {
+        console.error(`[SlackBot] Parent update failed (non-recovery error: ${updateResult.error}), skipping for conversation ${ctx.conversationId}`);
         return;
       }
 
-      console.log(`[SlackBot] Thread parent missing (${replyResult.error}), creating new thread for conversation ${ctx.conversationId}`);
+      console.log(`[SlackBot] Parent message deleted (${updateResult.error}), creating new thread for conversation ${ctx.conversationId}`);
     }
 
     const { blocks: parentBlocks, text: parentText } = await buildParentMessageBlocks({
@@ -393,9 +398,9 @@ async function updateSlackMessage(
   ts: string,
   blocks: SlackBlock[],
   text: string,
-): Promise<void> {
+): Promise<{ ok: boolean; error?: string }> {
   try {
-    await fetch('https://slack.com/api/chat.update', {
+    const resp = await fetch('https://slack.com/api/chat.update', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${botToken}`,
@@ -403,8 +408,14 @@ async function updateSlackMessage(
       },
       body: JSON.stringify({ channel: channelId, ts, blocks, text }),
     });
+    const data = await resp.json() as any;
+    if (!data.ok) {
+      console.error(`[SlackBot] Error updating message: ${data.error}`);
+    }
+    return { ok: data.ok, error: data.error };
   } catch (err) {
     console.error('[SlackBot] Error updating message:', err);
+    return { ok: false, error: 'fetch_error' };
   }
 }
 
