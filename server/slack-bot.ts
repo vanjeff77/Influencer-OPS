@@ -259,7 +259,7 @@ async function buildParentMessageBlocks(
   const uploadStr = uploadDueAt ? formatDateWithDay(new Date(uploadDueAt)) : '미정';
   const stepperLine = buildStepperLine(lineItemStatus);
 
-  const summaryLine = `⏰ 최근 메일: ${lastReceivedStr}  |  💰 광고비(VAT+) ${feeStr}  |  📅 업로드 예정 ${uploadStr}`;
+  const summaryLine = `> ⏰ 최근 메일: ${lastReceivedStr}  |  💰 광고비(VAT+) ${feeStr}  |  📅 업로드 예정 ${uploadStr}\n> ${stepperLine}`;
 
   const blocks: SlackBlock[] = [
     {
@@ -270,10 +270,6 @@ async function buildParentMessageBlocks(
       type: "section",
       text: { type: "mrkdwn", text: summaryLine },
     },
-    {
-      type: "context",
-      elements: [{ type: "mrkdwn", text: stepperLine }],
-    } as any,
   ];
 
   const text = `📨 ${influencerName} — ${campaignName} | 최근 메일: ${lastReceivedStr}`;
