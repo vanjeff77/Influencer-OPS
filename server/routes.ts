@@ -1229,7 +1229,7 @@ export async function registerRoutes(
       }
     }
 
-    if ('status' in req.body || 'offerFee' in req.body || 'uploadDueAt' in req.body) {
+    if ('status' in req.body) {
       import('./slack-bot').then(({ refreshSlackParentForLineItem }) => {
         refreshSlackParentForLineItem(itemId).catch(err => console.error('[API] Slack parent refresh error:', err));
       });
@@ -3385,7 +3385,7 @@ export async function registerRoutes(
       
       const updated = await storage.updateCampaignItem(lineItemId, updates);
 
-      if ('status' in req.body || 'offerFee' in req.body || 'uploadDueAt' in req.body) {
+      if ('status' in req.body) {
         import('./slack-bot').then(({ refreshSlackParentForLineItem }) => {
           refreshSlackParentForLineItem(lineItemId).catch(err => console.error('[API] Slack parent refresh error:', err));
         });
