@@ -70,14 +70,16 @@ function buildThreadReplyBlocks(
 
   setCacheEntry(`email_${ctx.conversationId}`, ctx.emailBody);
 
+  const quotedBody = bodyPreview.split('\n').map(line => `> ${line}`).join('\n');
+
   const blocks: SlackBlock[] = [
     {
       type: "section",
-      text: { type: "mrkdwn", text: `*📨 새 메일 수신*\n${ctx.senderEmail}` }
+      text: { type: "mrkdwn", text: `📨 *인플루언서 메일*  |  ${ctx.senderEmail}` }
     },
     {
       type: "section",
-      text: { type: "mrkdwn", text: `>${bodyPreview.replace(/\n/g, '\n>')}` },
+      text: { type: "mrkdwn", text: quotedBody },
       accessory: {
         type: "button",
         text: { type: "plain_text", text: "📄 전체 보기", emoji: true },
@@ -97,9 +99,15 @@ function buildThreadReplyBlocks(
       classificationLabel: aiDraft.classificationLabel,
     }));
 
+    const quotedDraft = draftPreview.split('\n').map(line => `> ${line}`).join('\n');
+
     blocks.push({
       type: "section",
-      text: { type: "mrkdwn", text: `✨ *AI 초안* \`${aiDraft.classification} ${aiDraft.classificationLabel}\`\n${draftPreview}` },
+      text: { type: "mrkdwn", text: `✨ *AI 초안*  |  \`${aiDraft.classification} ${aiDraft.classificationLabel}\`` }
+    });
+    blocks.push({
+      type: "section",
+      text: { type: "mrkdwn", text: quotedDraft },
       accessory: {
         type: "button",
         text: { type: "plain_text", text: "📋 초안 전문", emoji: true },
@@ -176,15 +184,15 @@ function buildThreadReplyBlocks(
   return blocks;
 }
 
-function formatRelativeTime(date: Date): string {
-  const diffMs = Date.now() - date.getTime();
-  const diffMin = Math.floor(diffMs / 60000);
-  if (diffMin < 1) return '방금 전';
-  if (diffMin < 60) return `${diffMin}분 전`;
-  const diffHours = Math.floor(diffMin / 60);
-  if (diffHours < 24) return `${diffHours}시간 전`;
-  const diffDays = Math.floor(diffHours / 24);
-  return `${diffDays}일 전`;
+function formatAbsoluteTime(date: Date): string {
+  const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+  const month = kst.getUTCMonth() + 1;
+  const day = kst.getUTCDate();
+  const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+  const dayOfWeek = dayNames[kst.getUTCDay()];
+  const hours = kst.getUTCHours();
+  const minutes = kst.getUTCMinutes().toString().padStart(2, '0');
+  return `${month}/${day}(${dayOfWeek}) ${hours}시 ${minutes}분`;
 }
 
 async function buildParentMessageBlocks(
@@ -201,9 +209,9 @@ async function buildParentMessageBlocks(
 
   const lastInbound = [...messages].reverse().find(m => m.direction === 'inbound');
   const lastReceivedStr = lastInbound?.receivedAt
-    ? formatRelativeTime(new Date(lastInbound.receivedAt))
+    ? formatAbsoluteTime(new Date(lastInbound.receivedAt))
     : lastInbound?.createdAt
-    ? formatRelativeTime(new Date(lastInbound.createdAt))
+    ? formatAbsoluteTime(new Date(lastInbound.createdAt))
     : '알 수 없음';
 
   const statusLine = hasPendingDraft
@@ -857,7 +865,7 @@ async function handleDismissDraft(payload: any, parsed: any): Promise<{ status: 
       : await findWorkspaceFromPayload(payload);
 
     if (workspace?.slackBotToken && payload.message?.ts) {
-      const updatedBlocks = (payload.message.blocks || []).slice(0, 4);
+      const updatedBlocks = (payload.message.blocks || []).slice(0, 3);
       updatedBlocks.push({
         type: "section",
         text: { type: "mrkdwn", text: "_AI 초안이 닫혔습니다._" }
@@ -946,7 +954,7 @@ async function regenerateInBackground(
   } catch (genErr) {
     console.error('[SlackBot] Draft generation failed:', genErr);
     if (workspace.slackBotToken && payload?.message?.ts) {
-      const errorBlocks = (payload.message.blocks || []).slice(0, 4);
+      const errorBlocks = (payload.message.blocks || []).slice(0, 3);
       errorBlocks.push({
         type: "section",
         text: { type: "mrkdwn", text: "❌ *AI 초안 생성 실패.* 다시 시도해 주세요." }
@@ -991,14 +999,20 @@ async function regenerateInBackground(
   }));
 
   if (workspace.slackBotToken && payload?.message?.ts) {
-    const existingBlocks = (payload.message.blocks || []).slice(0, 4);
+    const existingBlocks = (payload.message.blocks || []).slice(0, 3);
     const draftPreview = result.draft.length > 150 ? result.draft.substring(0, 150) + '...' : result.draft;
+
+    const quotedDraftRegen = draftPreview.split('\n').map(line => `> ${line}`).join('\n');
 
     const newBlocks: SlackBlock[] = [
       ...existingBlocks,
       {
         type: "section",
-        text: { type: "mrkdwn", text: `✨ *AI 초안* \`${result.classification} ${result.classificationLabel}\`\n${draftPreview}` },
+        text: { type: "mrkdwn", text: `✨ *AI 초안*  |  \`${result.classification} ${result.classificationLabel}\`` }
+      },
+      {
+        type: "section",
+        text: { type: "mrkdwn", text: quotedDraftRegen },
         accessory: {
           type: "button",
           text: { type: "plain_text", text: "📋 초안 전문", emoji: true },
