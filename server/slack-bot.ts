@@ -596,7 +596,9 @@ export async function notifyInboundEmail(
     if (!msg) return;
 
     if (influencer.email && msg.senderEmail) {
-      if (!msg.senderEmail.toLowerCase().includes(influencer.email.toLowerCase())) {
+      const senderAddr = (msg.senderEmail.match(/<([^>]+)>/)?.[1] || msg.senderEmail).toLowerCase().trim();
+      const influencerEmails = influencer.email.toLowerCase().split(/[,\s]+/).map(e => e.trim()).filter(Boolean);
+      if (!influencerEmails.some(e => senderAddr === e)) {
         return;
       }
     }

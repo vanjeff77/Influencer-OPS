@@ -62,6 +62,9 @@ async function triggerAiDraftGeneration(conversationId: number, triggerMessageId
     });
   } catch (err) {
     console.error(`[AutoDraft] Failed to generate draft for conversation ${conversationId}:`, err);
+    notifyInboundEmail(conversationId, triggerMessageId).catch(slackErr => {
+      console.error('[AutoDraft] Slack notification failed (after AI error):', slackErr);
+    });
   }
 }
 
