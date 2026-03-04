@@ -615,6 +615,172 @@ export async function fetchThreadByMessageIds(
   return unique;
 }
 
+export async function fetchInboxReplies(
+  config: ImapConfig,
+  messageIds: string[],
+  timeoutMs: number = 30000
+): Promise<ThreadMessage[]> {
+  if (!messageIds.length) return [];
+
+  const knownIds = new Set(messageIds.map(id => id.toLowerCase()));
+
+  return new Promise(async (resolve) => {
+    let resolved = false;
+    const safeResolve = (val: ThreadMessage[]) => {
+      if (!resolved) { resolved = true; resolve(val); }
+    };
+
+    const timer = setTimeout(() => {
+      console.warn(`[IMAP-AutoSync] Timeout after ${timeoutMs}ms for ${config.user}`);
+      try { imap?.end(); } catch {}
+      safeResolve([]);
+    }, timeoutMs);
+
+    let imap: Imap;
+    try {
+      imap = await createImapConnection(config);
+    } catch (err) {
+      clearTimeout(timer);
+      safeResolve([]);
+      return;
+    }
+
+    imap.openBox('INBOX', true, async (err) => {
+      if (err) {
+        clearTimeout(timer);
+        imap.end();
+        safeResolve([]);
+        return;
+      }
+
+      try {
+        const sinceDate = new Date();
+        sinceDate.setDate(sinceDate.getDate() - 3);
+
+        const searchResults: number[] = await new Promise((res) => {
+          imap.search([['SINCE', sinceDate]], (err, results) => {
+            res(err || !results ? [] : results);
+          });
+        });
+
+        if (searchResults.length === 0) {
+          clearTimeout(timer);
+          imap.end();
+          safeResolve([]);
+          return;
+        }
+
+        const matchedUids: number[] = [];
+        const headerFetch = imap.fetch(searchResults, {
+          bodies: 'HEADER.FIELDS (MESSAGE-ID IN-REPLY-TO REFERENCES)',
+          struct: false
+        });
+
+        headerFetch.on('message', (msg, seqno) => {
+          let headerBuf = '';
+          let uid = 0;
+          msg.on('body', (stream) => {
+            stream.on('data', (chunk: Buffer) => {
+              headerBuf += chunk.toString('utf8');
+            });
+          });
+          msg.once('attributes', (attrs) => { uid = attrs.uid || seqno; });
+          msg.once('end', () => {
+            const inReplyTo = (headerBuf.match(/In-Reply-To:\s*(<[^>]+>)/i)?.[1] || '').toLowerCase();
+            const refsLine = headerBuf.match(/References:\s*([\s\S]*?)(?=\r?\n\S|$)/i)?.[1] || '';
+            const refs = (refsLine.match(/<[^>]+>/g) || []).map(r => r.toLowerCase());
+
+            const isMatch = (inReplyTo && knownIds.has(inReplyTo)) ||
+              refs.some(r => knownIds.has(r));
+
+            if (isMatch) matchedUids.push(uid);
+          });
+        });
+
+        headerFetch.once('error', () => {
+          clearTimeout(timer);
+          imap.end();
+          safeResolve([]);
+        });
+
+        headerFetch.once('end', () => {
+          if (matchedUids.length === 0) {
+            clearTimeout(timer);
+            imap.end();
+            safeResolve([]);
+            return;
+          }
+
+          const messages: ThreadMessage[] = [];
+          const bodyFetch = imap.fetch(matchedUids, { bodies: '', struct: true });
+
+          bodyFetch.on('message', (msg) => {
+            let buffer = '';
+            msg.on('body', (stream) => {
+              stream.on('data', (chunk: Buffer) => {
+                buffer += chunk.toString('utf8');
+              });
+            });
+
+            msg.once('attributes', (attrs) => {
+              msg.once('end', async () => {
+                try {
+                  const parsed = await simpleParser(buffer);
+                  const fromAddress = Array.isArray(parsed.from?.value)
+                    ? parsed.from.value[0]?.address || ''
+                    : '';
+                  const toAddress = Array.isArray(parsed.to)
+                    ? (parsed.to[0] as any)?.value?.[0]?.address || ''
+                    : (parsed.to as any)?.value?.[0]?.address || '';
+
+                  const inReplyTo = (parsed.inReplyTo as string) || '';
+                  const refs = parsed.references
+                    ? (Array.isArray(parsed.references) ? parsed.references : [parsed.references])
+                    : [];
+
+                  const textBody = parsed.text || '';
+                  const snippet = textBody.substring(0, 150).replace(/\n/g, ' ').trim();
+
+                  messages.push({
+                    messageId: parsed.messageId || '',
+                    inReplyTo: inReplyTo || null,
+                    references: refs as string[],
+                    subject: parsed.subject || '(제목 없음)',
+                    from: fromAddress,
+                    to: toAddress,
+                    cc: '',
+                    date: parsed.date || new Date(),
+                    snippet: snippet || '(내용 없음)',
+                    bodyHtml: parsed.html || parsed.text || '',
+                    bodyText: parsed.text || '',
+                    isRead: attrs.flags?.includes('\\Seen') || false,
+                  });
+                } catch {}
+              });
+            });
+          });
+
+          bodyFetch.once('error', () => {
+            clearTimeout(timer);
+            imap.end();
+            safeResolve([]);
+          });
+
+          bodyFetch.once('end', () => {
+            clearTimeout(timer);
+            imap.end();
+            setTimeout(() => safeResolve(messages), 300);
+          });
+        });
+      } catch {
+        clearTimeout(timer);
+        imap.end();
+        safeResolve([]);
+      }
+    });
+  });
+}
+
 export async function testImapConnection(config: ImapConfig): Promise<{ success: boolean; message: string; folders?: string[] }> {
   try {
     const imap = await createImapConnection(config);

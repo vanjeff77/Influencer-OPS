@@ -588,6 +588,53 @@ export class DatabaseStorage implements IStorage {
     return conv;
   }
 
+  async getAllImapAccounts(): Promise<EmailAccount[]> {
+    return await db.select().from(emailAccounts).where(eq(emailAccounts.provider, 'imap'));
+  }
+
+  async getActiveConversationsForImapSync(accountId: number, accountEmail: string): Promise<{ id: number; emailAccountId: number | null; campaignLineItemId: number }[]> {
+    const byAccount = await db
+      .select({
+        id: conversations.id,
+        emailAccountId: conversations.emailAccountId,
+        campaignLineItemId: conversations.campaignLineItemId,
+      })
+      .from(conversations)
+      .where(
+        and(
+          eq(conversations.emailAccountId, accountId),
+          or(eq(conversations.status, 'active'), eq(conversations.status, 'replied'))
+        )
+      );
+
+    const bySender = await db
+      .select({
+        id: conversations.id,
+        emailAccountId: conversations.emailAccountId,
+        campaignLineItemId: conversations.campaignLineItemId,
+      })
+      .from(conversations)
+      .innerJoin(conversationMessages, eq(conversationMessages.conversationId, conversations.id))
+      .where(
+        and(
+          sql`${conversations.emailAccountId} IS NULL`,
+          eq(conversationMessages.direction, 'outbound'),
+          eq(conversationMessages.senderEmail, accountEmail),
+          or(eq(conversations.status, 'active'), eq(conversations.status, 'replied'))
+        )
+      );
+
+    const seen = new Set(byAccount.map(c => c.id));
+    const combined = [...byAccount];
+    for (const c of bySender) {
+      if (!seen.has(c.id)) {
+        seen.add(c.id);
+        combined.push(c);
+      }
+    }
+    return combined;
+  }
+
   async getAllActiveConversationsWithGmailThread(): Promise<(Conversation & { emailAccount?: EmailAccount })[]> {
     const results = await db
       .select()

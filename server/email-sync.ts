@@ -6,7 +6,7 @@ import { notifyInboundEmail } from "./slack-bot";
 let isSyncing = false;
 let syncInterval: NodeJS.Timeout | null = null;
 
-const SYNC_INTERVAL_MS = 3 * 60 * 1000;
+const SYNC_INTERVAL_MS = 1 * 60 * 1000;
 
 async function triggerAiDraftGeneration(conversationId: number, triggerMessageId: number) {
   try {
@@ -299,6 +299,150 @@ async function syncGmailAccountIncremental(account: EmailAccount): Promise<{ syn
   return result;
 }
 
+async function syncImapAccountConversations(account: EmailAccount): Promise<number> {
+  let totalSynced = 0;
+
+  try {
+    const { getImapSmtpSettings } = await import('./smtp');
+    const { imapHost, imapPort: imapPortNum, imapPassword: encPwd } = getImapSmtpSettings(account);
+    if (!imapHost || !encPwd) return 0;
+
+    const imap = await import('./imap');
+    const password = imap.decryptPassword(encPwd);
+    const imapConfig = { user: account.email, password, host: imapHost, port: imapPortNum, tls: true };
+
+    const activeConvs = await storage.getActiveConversationsForImapSync(account.id, account.email);
+    if (activeConvs.length === 0) return 0;
+
+    const convDataMap = new Map<number, { conv: typeof activeConvs[0]; existingMessages: any[]; knownMsgIds: string[] }>();
+    const allKnownMsgIds: string[] = [];
+    const msgIdToConvId = new Map<string, number>();
+
+    for (const conv of activeConvs) {
+      if (conv.emailAccountId === null) {
+        await storage.updateConversation(conv.id, { emailAccountId: account.id });
+      }
+
+      const existingMessages = await storage.getConversationMessages(conv.id);
+      const knownMsgIds = existingMessages
+        .map(m => m.gmailMessageId)
+        .filter((id): id is string => !!id && id.startsWith('<'));
+
+      if (knownMsgIds.length === 0) continue;
+
+      convDataMap.set(conv.id, { conv, existingMessages, knownMsgIds });
+      for (const mid of knownMsgIds) {
+        allKnownMsgIds.push(mid);
+        msgIdToConvId.set(mid.toLowerCase(), conv.id);
+      }
+    }
+
+    if (allKnownMsgIds.length === 0) return 0;
+
+    console.log(`[AutoSync-IMAP] ${account.email}: checking ${allKnownMsgIds.length} message IDs across ${convDataMap.size} conversations`);
+
+    let allImapMessages: any[] = [];
+    try {
+      allImapMessages = await imap.fetchInboxReplies(imapConfig, allKnownMsgIds, 45000);
+    } catch (imapErr) {
+      console.warn(`[AutoSync-IMAP] IMAP fetch failed for ${account.email}:`, imapErr);
+      return 0;
+    }
+
+    if (allImapMessages.length === 0) return 0;
+
+    const msgToConv = new Map<any, number>();
+    for (const msg of allImapMessages) {
+      let convId: number | undefined;
+
+      if (msg.inReplyTo) {
+        convId = msgIdToConvId.get(msg.inReplyTo.toLowerCase());
+      }
+      if (!convId && msg.references?.length) {
+        for (const ref of msg.references) {
+          convId = msgIdToConvId.get(ref.toLowerCase());
+          if (convId) break;
+        }
+      }
+      if (!convId && msg.messageId) {
+        convId = msgIdToConvId.get(msg.messageId.toLowerCase());
+      }
+
+      if (convId) {
+        msgToConv.set(msg, convId);
+        if (msg.messageId) {
+          msgIdToConvId.set(msg.messageId.toLowerCase(), convId);
+        }
+      }
+    }
+
+    for (const [msg, convId] of msgToConv) {
+      const data = convDataMap.get(convId);
+      if (!data) continue;
+
+      const existingMsgIds = new Set(data.existingMessages.map(m => m.gmailMessageId).filter(Boolean));
+      if (msg.messageId && existingMsgIds.has(msg.messageId)) continue;
+
+      const existingFingerprints = new Set(
+        data.existingMessages.map(m => {
+          const sender = (m.senderEmail || '').toLowerCase().trim();
+          const date = m.receivedAt ? new Date(m.receivedAt).getTime() : (m.sentAt ? new Date(m.sentAt).getTime() : 0);
+          const snip = (m.snippet || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+          return `${sender}|${date}|${snip}`;
+        }).filter(f => f !== '|0|')
+      );
+
+      const msgSender = (msg.from || '').toLowerCase().trim();
+      const msgDate = msg.date ? msg.date.getTime() : 0;
+      const msgSnip = (msg.snippet || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+      const fingerprint = `${msgSender}|${msgDate}|${msgSnip}`;
+      if (existingFingerprints.has(fingerprint)) continue;
+
+      const isOutbound = msgSender.includes(account.email.toLowerCase());
+
+      try {
+        const createdMsg = await storage.createConversationMessage({
+          conversationId: convId,
+          direction: isOutbound ? 'outbound' : 'inbound',
+          senderEmail: msg.from || null,
+          senderName: null,
+          recipientEmail: msg.to || null,
+          snippet: msg.snippet || null,
+          bodyHtml: msg.bodyHtml || null,
+          bodyText: msg.bodyText || null,
+          gmailMessageId: msg.messageId || null,
+          gmailThreadId: null,
+          sendStatus: 'sent',
+          receivedAt: msg.date || new Date(),
+        });
+
+        data.existingMessages.push(createdMsg);
+        totalSynced++;
+
+        if (!isOutbound) {
+          await storage.updateConversation(convId, {
+            status: 'replied',
+            lastMessageAt: msg.date || new Date(),
+          });
+          if (createdMsg) {
+            triggerAiDraftGeneration(convId, createdMsg.id).catch(() => {});
+          }
+        }
+      } catch (saveErr) {
+        console.warn(`[AutoSync-IMAP] Error saving message for conversation ${convId}:`, saveErr);
+      }
+    }
+
+    if (totalSynced > 0) {
+      console.log(`[AutoSync-IMAP] ${account.email}: synced ${totalSynced} new messages across ${activeConvs.length} conversations`);
+    }
+  } catch (err) {
+    console.error(`[AutoSync-IMAP] Error syncing ${account.email}:`, err);
+  }
+
+  return totalSynced;
+}
+
 async function runSyncCycle() {
   if (isSyncing) {
     console.log('[AutoSync] Previous cycle still running, skipping...');
@@ -307,13 +451,18 @@ async function runSyncCycle() {
 
   isSyncing = true;
   try {
-    const accounts = await storage.getAllGmailAccounts();
-    if (accounts.length === 0) return;
-
     let totalSynced = 0;
-    for (const account of accounts) {
+
+    const gmailAccounts = await storage.getAllGmailAccounts();
+    for (const account of gmailAccounts) {
       const result = await syncGmailAccountIncremental(account);
       totalSynced += result.synced;
+    }
+
+    const imapAccounts = await storage.getAllImapAccounts();
+    for (const account of imapAccounts) {
+      const synced = await syncImapAccountConversations(account);
+      totalSynced += synced;
     }
 
     if (totalSynced > 0) {
