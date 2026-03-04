@@ -797,6 +797,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                   onViewFull={setShowFullMessage}
                   influencerName={selectedLineItem.influencer?.name}
                   influencerEmail={selectedLineItem.influencer?.email}
+                  influencerProfileImageUrl={selectedLineItem.influencer?.accounts?.[0]?.profileImageUrl}
                   aiDraft={aiEnabled && aiDraft && aiDraftDismissed !== aiDraft.id ? aiDraft : null}
                   aiEnabled={aiEnabled}
                   isLastInbound={conversationDetail?.messages && conversationDetail.messages.length > 0 && conversationDetail.messages[conversationDetail.messages.length - 1]?.direction === 'inbound'}
@@ -919,7 +920,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
   );
 }
 
-function MessageThread({ messages, onViewFull, influencerName, influencerEmail, aiDraft, aiEnabled, isLastInbound, onGenerateDraft, isGeneratingDraft, onUseDraft, onDismissDraft }: { messages: ConversationMessage[]; onViewFull: (msg: ConversationMessage) => void; influencerName?: string; influencerEmail?: string; aiDraft?: any; aiEnabled?: boolean; isLastInbound?: boolean; onGenerateDraft?: (userFeedback?: string, requestedClassification?: string, requestedClassificationLabel?: string) => void; isGeneratingDraft?: boolean; onUseDraft?: (id: number) => void; onDismissDraft?: (id: number) => void }) {
+function MessageThread({ messages, onViewFull, influencerName, influencerEmail, influencerProfileImageUrl, aiDraft, aiEnabled, isLastInbound, onGenerateDraft, isGeneratingDraft, onUseDraft, onDismissDraft }: { messages: ConversationMessage[]; onViewFull: (msg: ConversationMessage) => void; influencerName?: string; influencerEmail?: string | null; influencerProfileImageUrl?: string | null; aiDraft?: any; aiEnabled?: boolean; isLastInbound?: boolean; onGenerateDraft?: (userFeedback?: string, requestedClassification?: string, requestedClassificationLabel?: string) => void; isGeneratingDraft?: boolean; onUseDraft?: (id: number) => void; onDismissDraft?: (id: number) => void }) {
   const [showFeedbackInput, setShowFeedbackInput] = useState(false);
   const [feedbackText, setFeedbackText] = useState("");
   const threadEndRef = useRef<HTMLDivElement>(null);
@@ -1002,7 +1003,15 @@ function MessageThread({ messages, onViewFull, influencerName, influencerEmail, 
                 {timeStr}
               </span>
             )}
-            <div className="max-w-[75%]">
+            {isFromInfluencer && (
+              <CachedAvatar
+                className="w-7 h-7 shrink-0 mb-0.5"
+                src={influencerProfileImageUrl}
+                fallback={influencerName?.substring(0, 1) || '?'}
+                data-testid={`avatar-msg-${msg.id}`}
+              />
+            )}
+            <div className="max-w-[70%]">
               {senderName && isFromInfluencer && (
                 <p className="text-[11px] font-medium text-muted-foreground mb-0.5 ml-1">{senderName}</p>
               )}

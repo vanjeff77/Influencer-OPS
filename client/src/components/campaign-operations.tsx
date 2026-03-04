@@ -23,7 +23,7 @@ import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { 
   Filter, AlertCircle, Clock, FileText, Calendar, MessageSquare, 
-  CheckCircle2, Instagram, Youtube, Twitter, Check,
+  CheckCircle2, CircleDot, Circle, Instagram, Youtube, Twitter, Check,
   ExternalLink, Save, AlertTriangle, CalendarIcon, Send, Download, Mail, Loader2, ArrowLeft, Pencil, ClipboardList
 } from "lucide-react";
 import type { CampaignInfluencer, Influencer, InfluencerAccount, FeedbackNote, User } from "@shared/schema";
@@ -64,6 +64,13 @@ function getContractInfoCompleteness(item: LineItemWithDetails): { filled: numbe
   if (inf?.settlementType) filled++;
   return { filled, total };
 }
+
+const PROGRESS_STEPS = [
+  { key: 'waiting', label: '대기' },
+  { key: 'contacted', label: '컨택완료' },
+  { key: 'confirmed', label: '확정완료' },
+  { key: 'contracted', label: '계약완료' },
+] as const;
 
 const STAGES = ["선정완료", "오퍼확정", "계약진행", "일정확정", "초안수신", "피드백중", "완성본확정", "완료", "보류"] as const;
 const COMM_STATUSES = ["컨택전", "미응답", "협의중", "수락", "거절", "보류"] as const;
@@ -826,6 +833,44 @@ function ContractGenerateDialog({ item, campaignId, workspaceId, onClose }: Cont
               </DialogDescription>
             )}
           </DialogHeader>
+
+          {(() => {
+            const currentStatus = item.status || 'waiting';
+            const currentStepIndex = PROGRESS_STEPS.findIndex(s => s.key === currentStatus);
+            return (
+              <div
+                className="flex items-center gap-0.5 rounded-md bg-muted dark:bg-muted/60 p-0.5"
+                data-testid="progress-bar-operations"
+              >
+                {PROGRESS_STEPS.map((step, idx) => {
+                  const isCurrent = step.key === currentStatus;
+                  const isCompleted = idx < currentStepIndex;
+                  return (
+                    <Button
+                      key={step.key}
+                      variant={isCurrent ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => {
+                        apiRequest('PATCH', `/api/line-items/${item.id}/operations`, { status: step.key });
+                        queryClient.invalidateQueries({ queryKey: [api.campaigns.get.path, campaignId] });
+                      }}
+                      className={`flex-1 gap-1 h-7 px-2 text-xs ${isCompleted ? 'text-primary font-medium' : ''}`}
+                      data-testid={`step-ops-${step.key}`}
+                    >
+                      {isCompleted ? (
+                        <CheckCircle2 className="w-3 h-3 shrink-0" />
+                      ) : isCurrent ? (
+                        <CircleDot className="w-3 h-3 shrink-0" />
+                      ) : (
+                        <Circle className="w-3 h-3 shrink-0" />
+                      )}
+                      {step.label}
+                    </Button>
+                  );
+                })}
+              </div>
+            );
+          })()}
 
           {!isEditing ? (
             <div className="space-y-4 py-4">
