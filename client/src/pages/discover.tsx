@@ -55,7 +55,7 @@ export default function Discover() {
   const searchParams = useSearch();
 
   const { data: allCampaignItems } = useQuery<CampaignInfluencer[]>({
-    queryKey: ['/api/campaign-influencers', workspaceId],
+    queryKey: [`/api/campaign-influencers?workspaceId=${workspaceId}`],
     enabled: !!workspaceId
   });
 

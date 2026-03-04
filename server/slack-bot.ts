@@ -203,23 +203,6 @@ interface ParentMessageInfo {
   lineItemStatus?: string | null;
 }
 
-function formatDateWithDay(date: Date): string {
-  const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
-  const month = kst.getUTCMonth() + 1;
-  const day = kst.getUTCDate();
-  const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
-  const dayOfWeek = dayNames[kst.getUTCDay()];
-  return `${month}/${day}(${dayOfWeek})`;
-}
-
-function formatFee(fee: number): string {
-  if (fee >= 10000) {
-    const man = Math.floor(fee / 10000);
-    const remainder = fee % 10000;
-    return remainder > 0 ? `${man}만${remainder.toLocaleString()}원` : `${man}만원`;
-  }
-  return `${fee.toLocaleString()}원`;
-}
 
 function buildStepperLine(status: string | null | undefined): string {
   const steps = [
@@ -618,14 +601,21 @@ async function handleSendEditedDraft(parsed: any, values: any): Promise<{ status
     const workspace = (await storage.getWorkspaces()).find(w => w.id === campaign.workspaceId);
     if (!workspace) return { status: 200, body: { response_action: 'errors', errors: { draft_body_block: '워크스페이스를 찾을 수 없습니다.' } } };
 
-    const members = await storage.getWorkspaceMembers(workspace.id);
-    const ownerMember = members.find(m => m.role === 'WORKSPACE_OWNER') || members[0];
-    if (!ownerMember) return { status: 200, body: { response_action: 'errors', errors: { draft_body_block: '워크스페이스 멤버를 찾을 수 없습니다.' } } };
-
-    const userAccounts = await storage.getEmailAccounts(ownerMember.userId, workspace.id);
-    if (!userAccounts || userAccounts.length === 0) return { status: 200, body: { response_action: 'errors', errors: { draft_body_block: '이메일 계정이 없습니다.' } } };
-
-    const account = (conv.emailAccountId && userAccounts.find(a => a.id === conv.emailAccountId)) || userAccounts[0];
+    let account: any = null;
+    if (conv.emailAccountId) {
+      account = await storage.getEmailAccountById(conv.emailAccountId);
+    }
+    if (!account) {
+      const members = await storage.getWorkspaceMembers(workspace.id);
+      for (const member of members) {
+        const userAccounts = await storage.getEmailAccounts(member.userId, workspace.id);
+        if (userAccounts.length > 0) {
+          account = userAccounts[0];
+          break;
+        }
+      }
+    }
+    if (!account) return { status: 200, body: { response_action: 'errors', errors: { draft_body_block: '이메일 계정이 없습니다.' } } };
     const toEmail = lineItem.influencer?.email;
     if (!toEmail) return { status: 200, body: { response_action: 'errors', errors: { draft_body_block: '인플루언서 이메일이 없습니다.' } } };
 
