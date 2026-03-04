@@ -21,6 +21,9 @@ interface InboundEmailContext {
   emailBody: string;
   senderEmail: string;
   clientSlackChannelId?: string | null;
+  lineItemStatus?: string | null;
+  offerFee?: number | null;
+  uploadDueAt?: Date | string | null;
 }
 
 interface AiDraftContext {
@@ -195,18 +198,55 @@ function formatAbsoluteTime(date: Date): string {
   return `${month}/${day}(${dayOfWeek}) ${hours}시 ${minutes}분`;
 }
 
-async function buildParentMessageBlocks(
-  conversationId: number,
-  influencerName: string,
-  campaignName: string,
-  workspaceId: number,
-  hasPendingDraft: boolean,
-  latestDraftId?: number,
-): Promise<{ blocks: SlackBlock[]; text: string }> {
-  const messages = await storage.getConversationMessages(conversationId);
-  const inboundCount = messages.filter(m => m.direction === 'inbound').length;
-  const outboundCount = messages.filter(m => m.direction === 'outbound').length;
+interface ParentMessageInfo {
+  conversationId: number;
+  influencerName: string;
+  campaignName: string;
+  lineItemStatus?: string | null;
+  offerFee?: number | null;
+  uploadDueAt?: Date | string | null;
+}
 
+function formatDateWithDay(date: Date): string {
+  const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+  const month = kst.getUTCMonth() + 1;
+  const day = kst.getUTCDate();
+  const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+  const dayOfWeek = dayNames[kst.getUTCDay()];
+  return `${month}/${day}(${dayOfWeek})`;
+}
+
+function formatFee(fee: number): string {
+  if (fee >= 10000) {
+    const man = Math.floor(fee / 10000);
+    const remainder = fee % 10000;
+    return remainder > 0 ? `${man}만${remainder.toLocaleString()}원` : `${man}만원`;
+  }
+  return `${fee.toLocaleString()}원`;
+}
+
+function buildStepperLine(status: string | null | undefined): string {
+  const steps = [
+    { key: 'waiting', label: '대기' },
+    { key: 'contacted', label: '컨택완료' },
+    { key: 'confirmed', label: '확정완료' },
+    { key: 'contracted', label: '계약완료' },
+  ];
+  const currentIdx = steps.findIndex(s => s.key === (status || 'waiting'));
+  const resolvedIdx = currentIdx === -1 ? 0 : currentIdx;
+
+  return steps.map((step, i) => {
+    const icon = i <= resolvedIdx ? '✅' : '⬜';
+    return `${icon} ${step.label}`;
+  }).join(' → ');
+}
+
+async function buildParentMessageBlocks(
+  info: ParentMessageInfo,
+): Promise<{ blocks: SlackBlock[]; text: string }> {
+  const { conversationId, influencerName, campaignName, lineItemStatus, offerFee, uploadDueAt } = info;
+
+  const messages = await storage.getConversationMessages(conversationId);
   const lastInbound = [...messages].reverse().find(m => m.direction === 'inbound');
   const lastReceivedStr = lastInbound?.receivedAt
     ? formatAbsoluteTime(new Date(lastInbound.receivedAt))
@@ -214,9 +254,11 @@ async function buildParentMessageBlocks(
     ? formatAbsoluteTime(new Date(lastInbound.createdAt))
     : '알 수 없음';
 
-  const statusLine = hasPendingDraft
-    ? `🔔 미처리 AI 초안 1건`
-    : `✅ 처리 완료`;
+  const feeStr = offerFee != null ? formatFee(offerFee) : '미정';
+  const uploadStr = uploadDueAt ? formatDateWithDay(new Date(uploadDueAt)) : '미정';
+  const stepperLine = buildStepperLine(lineItemStatus);
+
+  const summaryLine = `⏰ 최근 메일: ${lastReceivedStr}  |  💰 광고비(VAT+) ${feeStr}  |  📅 업로드 예정 ${uploadStr}`;
 
   const blocks: SlackBlock[] = [
     {
@@ -225,27 +267,15 @@ async function buildParentMessageBlocks(
     },
     {
       type: "section",
-      text: { type: "mrkdwn", text: `📬 수신: ${inboundCount}건  |  📤 발송: ${outboundCount}건\n⏰ 마지막 수신: ${lastReceivedStr}\n${statusLine}` },
+      text: { type: "mrkdwn", text: summaryLine },
     },
+    {
+      type: "context",
+      elements: [{ type: "mrkdwn", text: stepperLine }],
+    } as any,
   ];
 
-  if (hasPendingDraft && latestDraftId) {
-    blocks.push({
-      type: "actions",
-      block_id: `parent_actions_${conversationId}_${Date.now()}`,
-      elements: [
-        {
-          type: "button",
-          text: { type: "plain_text", text: "✏️ 초안 사용하기", emoji: true },
-          style: "primary",
-          action_id: "send_draft",
-          value: JSON.stringify({ conversationId, workspaceId, draftId: latestDraftId }),
-        },
-      ],
-    });
-  }
-
-  const text = `📨 ${influencerName} — ${campaignName} | 수신 ${inboundCount}건 | ${statusLine}`;
+  const text = `📨 ${influencerName} — ${campaignName} | 최근 메일: ${lastReceivedStr}`;
   return { blocks, text };
 }
 
@@ -296,11 +326,11 @@ export async function sendSlackNotification(
       );
 
       if (replyResult.ok) {
-        const pendingDraft = await storage.getLatestPendingDraft(ctx.conversationId);
-        const { blocks: parentBlocks, text: parentText } = await buildParentMessageBlocks(
-          ctx.conversationId, ctx.influencerName, ctx.campaignName, ctx.workspaceId,
-          !!pendingDraft, pendingDraft?.id,
-        );
+        const { blocks: parentBlocks, text: parentText } = await buildParentMessageBlocks({
+          conversationId: ctx.conversationId, influencerName: ctx.influencerName,
+          campaignName: ctx.campaignName, lineItemStatus: ctx.lineItemStatus,
+          offerFee: ctx.offerFee, uploadDueAt: ctx.uploadDueAt,
+        });
         await updateSlackMessage(workspace.slackBotToken, existingChannelId, existingThreadTs, parentBlocks, parentText);
         console.log(`[SlackBot] Thread reply sent for conversation ${ctx.conversationId}`);
         return;
@@ -315,10 +345,11 @@ export async function sendSlackNotification(
       console.log(`[SlackBot] Thread parent missing (${replyResult.error}), creating new thread for conversation ${ctx.conversationId}`);
     }
 
-    const { blocks: parentBlocks, text: parentText } = await buildParentMessageBlocks(
-      ctx.conversationId, ctx.influencerName, ctx.campaignName, ctx.workspaceId,
-      !!aiDraft, aiDraft?.draftId,
-    );
+    const { blocks: parentBlocks, text: parentText } = await buildParentMessageBlocks({
+      conversationId: ctx.conversationId, influencerName: ctx.influencerName,
+      campaignName: ctx.campaignName, lineItemStatus: ctx.lineItemStatus,
+      offerFee: ctx.offerFee, uploadDueAt: ctx.uploadDueAt,
+    });
 
     let parentResult = await postSlackMessage(workspace.slackBotToken, targetChannel, parentText, parentBlocks);
 
@@ -843,11 +874,11 @@ async function updateParentAfterAction(conversationId: number, workspace: Worksp
     const influencerName = lineItem?.influencer?.name || 'Unknown';
     const campaignName = campaign?.name || '';
 
-    const pendingDraft = await storage.getLatestPendingDraft(conversationId);
-    const { blocks, text } = await buildParentMessageBlocks(
-      conversationId, influencerName, campaignName, workspace.id,
-      !!pendingDraft, pendingDraft?.id,
-    );
+    const { blocks, text } = await buildParentMessageBlocks({
+      conversationId, influencerName, campaignName,
+      lineItemStatus: lineItem?.status, offerFee: lineItem?.offerFee,
+      uploadDueAt: lineItem?.uploadDueAt,
+    });
     await updateSlackMessage(workspace.slackBotToken, conv.slackChannelId, conv.slackThreadTs, blocks, text);
   } catch (err) {
     console.error('[SlackBot] updateParentAfterAction error:', err);
@@ -1160,6 +1191,9 @@ export async function notifyInboundEmail(
         emailBody: msg.bodyText || msg.snippet || '',
         senderEmail: msg.senderEmail || '',
         clientSlackChannelId,
+        lineItemStatus: lineItem.status,
+        offerFee: lineItem.offerFee,
+        uploadDueAt: lineItem.uploadDueAt,
       },
       aiDraftCtx,
       workspace,
