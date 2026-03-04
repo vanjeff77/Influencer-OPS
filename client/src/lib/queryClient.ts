@@ -1,4 +1,5 @@
-import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { QueryClient, QueryFunction, QueryCache, MutationCache } from "@tanstack/react-query";
+import { toast } from "@/hooks/use-toast";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -12,7 +13,9 @@ async function throwIfResNotOk(res: Response) {
     } catch {
       // Not JSON, use raw text
     }
-    throw new Error(message);
+    const err = new Error(message);
+    (err as any).status = res.status;
+    throw err;
   }
 }
 
@@ -50,7 +53,26 @@ export const getQueryFn: <T>(options: {
     return await res.json();
   };
 
+function handleGlobalError(error: Error) {
+  const status = (error as any).status;
+  if (status === 401) return;
+
+  const message = error.message || "알 수 없는 오류가 발생했습니다";
+  const isHtml = message.startsWith("<!") || message.startsWith("<html");
+  toast({
+    variant: "destructive",
+    title: "요청 처리 중 오류가 발생했습니다",
+    description: isHtml ? `서버 오류 (${status || "unknown"})` : message,
+  });
+}
+
 export const queryClient = new QueryClient({
+  queryCache: new QueryCache({
+    onError: (error) => handleGlobalError(error as Error),
+  }),
+  mutationCache: new MutationCache({
+    onError: (error) => handleGlobalError(error as Error),
+  }),
   defaultOptions: {
     queries: {
       queryFn: getQueryFn({ on401: "throw" }),
