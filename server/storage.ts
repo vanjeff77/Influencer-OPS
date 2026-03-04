@@ -601,6 +601,26 @@ export class DatabaseStorage implements IStorage {
     return results as any;
   }
 
+  async getConversationsWithoutGmailThread(): Promise<{ id: number; emailAccountId: number | null; influencerEmail: string | null; campaignLineItemId: number }[]> {
+    const results = await db
+      .select({
+        id: conversations.id,
+        emailAccountId: conversations.emailAccountId,
+        influencerEmail: influencers.email,
+        campaignLineItemId: conversations.campaignLineItemId,
+      })
+      .from(conversations)
+      .innerJoin(campaignInfluencers, eq(conversations.campaignLineItemId, campaignInfluencers.id))
+      .innerJoin(influencers, eq(campaignInfluencers.influencerId, influencers.id))
+      .where(
+        and(
+          sql`${conversations.gmailThreadId} IS NULL`,
+          eq(conversations.status, 'active')
+        )
+      );
+    return results;
+  }
+
   async updateEmailAccountSignature(accountId: number, data: { signature?: string | null; useSignature?: boolean }): Promise<EmailAccount> {
     const [updated] = await db.update(emailAccounts)
       .set(data)

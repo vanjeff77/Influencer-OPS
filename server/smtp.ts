@@ -361,6 +361,28 @@ export async function startBulkEmailWorker(jobId: number): Promise<void> {
             sentAt: now,
           });
           console.log(`[BulkEmail] Created conversation for line item ${item.lineItemId}`);
+
+          if (!conversation.gmailThreadId && result.messageId) {
+            const convId = conversation.id;
+            const msgId = result.messageId;
+            setTimeout(async () => {
+              try {
+                const gmail = await import('./gmail');
+                const cleanMsgId = msgId.replace(/^<|>$/g, '');
+                const msgs = await gmail.listMessages(`rfc822msgid:${cleanMsgId}`, 1);
+                if (msgs.length > 0) {
+                  const fullMsg = await gmail.getMessage(msgs[0].id!);
+                  const threadId = fullMsg.threadId;
+                  if (threadId) {
+                    await storage.updateConversation(convId, { gmailThreadId: threadId });
+                    console.log(`[BulkEmail] Updated threadId for conversation ${convId}: ${threadId}`);
+                  }
+                }
+              } catch (err) {
+                console.warn(`[BulkEmail] Failed to fetch threadId for conversation ${convId}:`, err);
+              }
+            }, 5000);
+          }
         } catch (convErr) {
           console.error(`[BulkEmail] Failed to create conversation for line item ${item.lineItemId}:`, convErr);
         }

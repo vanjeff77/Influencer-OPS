@@ -169,10 +169,60 @@ async function syncGmailAccountIncremental(account: EmailAccount): Promise<{ syn
     const threadIds = [...new Set(messagesAdded.map(m => m.threadId))];
     console.log(`[AutoSync] ${account.email}: ${messagesAdded.length} new messages in ${threadIds.length} threads`);
 
+    let noThreadConvs: { id: number; emailAccountId: number | null; influencerEmail: string | null; campaignLineItemId: number }[] | null = null;
+
     for (const threadId of threadIds) {
       try {
-        const conv = await storage.getConversationByGmailThreadId(threadId);
-        if (!conv) continue;
+        let conv = await storage.getConversationByGmailThreadId(threadId);
+
+        if (!conv) {
+          if (!noThreadConvs) {
+            noThreadConvs = await storage.getConversationsWithoutGmailThread();
+          }
+          if (noThreadConvs.length > 0) {
+            try {
+              const firstMsgId = messagesAdded.find(m => m.threadId === threadId)?.id;
+              if (firstMsgId) {
+                const fullMsg = await gmail.getMessage(firstMsgId);
+                const headers = gmail.parseMessageHeaders(fullMsg);
+                const fromEmail = headers.from?.match(/<([^>]+)>/)?.[1]?.toLowerCase() || headers.from?.toLowerCase() || '';
+                const toEmail = headers.to?.match(/<([^>]+)>/)?.[1]?.toLowerCase() || headers.to?.toLowerCase() || '';
+
+                const extractEmail = (raw: string) => {
+                  const m = raw.match(/<([^>]+)>/);
+                  return m ? m[1].toLowerCase().trim() : raw.toLowerCase().trim();
+                };
+                const fromAddr = extractEmail(headers.from || '');
+                const toAddr = extractEmail(headers.to || '');
+
+                const matched = noThreadConvs.find(c => {
+                  if (!c.influencerEmail) return false;
+                  if (c.emailAccountId !== account.id) return false;
+                  const emails = c.influencerEmail.toLowerCase().split(/[,\s]+/).map(e => e.trim()).filter(Boolean);
+                  return emails.some(e => e === fromAddr || e === toAddr);
+                });
+
+                if (matched) {
+                  await storage.updateConversation(matched.id, { gmailThreadId: threadId });
+                  conv = await storage.getConversation(matched.id) as any;
+                  noThreadConvs = noThreadConvs.filter(c => c.id !== matched.id);
+                  console.log(`[AutoSync] Matched thread ${threadId} to conversation ${matched.id} via email ${fromEmail}`);
+
+                  if (headers.subject && conv) {
+                    const currentSubject = (conv as any).subjectPrefix || '';
+                    const inboundSubject = headers.subject.replace(/^Re:\s*/i, '').trim();
+                    if (inboundSubject && inboundSubject !== currentSubject) {
+                      await storage.updateConversation(matched.id, { subjectPrefix: inboundSubject });
+                    }
+                  }
+                }
+              }
+            } catch (matchErr) {
+              console.warn(`[AutoSync] Failed to match thread ${threadId} by email:`, matchErr);
+            }
+          }
+          if (!conv) continue;
+        }
 
         const newMsgIds = messagesAdded
           .filter(m => m.threadId === threadId)
@@ -214,10 +264,17 @@ async function syncGmailAccountIncremental(account: EmailAccount): Promise<{ syn
             result.synced++;
 
             if (!isOutbound) {
-              await storage.updateConversation(conv.id, {
+              const updateData: any = {
                 status: 'replied',
                 lastMessageAt: headers.date ? new Date(headers.date) : new Date(),
-              });
+              };
+              if (headers.subject) {
+                const cleanSubject = headers.subject.replace(/^Re:\s*/i, '').trim();
+                if (cleanSubject) {
+                  updateData.subjectPrefix = cleanSubject;
+                }
+              }
+              await storage.updateConversation(conv.id, updateData);
               if (createdMsg) {
                 triggerAiDraftGeneration(conv.id, createdMsg.id).catch(() => {});
               }

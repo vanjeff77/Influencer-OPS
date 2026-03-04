@@ -2437,9 +2437,37 @@ export async function registerRoutes(
       let sendStatus = 'sent';
       
       let finalSubject: string;
-      if (isReply && conv.subjectPrefix) {
-        const originalSubject = conv.subjectPrefix;
-        finalSubject = originalSubject.startsWith('Re:') ? originalSubject : `Re: ${originalSubject}`;
+      if (isReply) {
+        const lastInboundMsg = existingMsgs.filter(m => m.direction === 'inbound').pop();
+        let originalSubject = conv.subjectPrefix || '';
+
+        if (conv.gmailThreadId || lastInboundMsg?.gmailThreadId) {
+          try {
+            const targetThreadId = conv.gmailThreadId || lastInboundMsg?.gmailThreadId;
+            if (targetThreadId) {
+              const { getThread } = await import('./gmail');
+              const thread = await getThread(targetThreadId);
+              if (thread.messages && thread.messages.length > 0) {
+                const { parseMessageHeaders } = await import('./gmail');
+                const threadHeaders = parseMessageHeaders(thread.messages[0]);
+                if (threadHeaders.subject) {
+                  originalSubject = threadHeaders.subject.replace(/^Re:\s*/i, '').trim();
+                }
+              }
+            }
+          } catch {}
+        }
+
+        if (!originalSubject && existingMsgs.length > 0) {
+          const firstOutbound = existingMsgs.find(m => m.direction === 'outbound');
+          if (firstOutbound?.snippet) {
+            originalSubject = firstOutbound.snippet;
+          }
+        }
+
+        finalSubject = originalSubject
+          ? (originalSubject.startsWith('Re:') ? originalSubject : `Re: ${originalSubject}`)
+          : (subject || 'Re: (no subject)');
       } else if (conv.subjectPrefix) {
         finalSubject = subject ? `${conv.subjectPrefix} ${subject}`.trim() : conv.subjectPrefix;
       } else {
