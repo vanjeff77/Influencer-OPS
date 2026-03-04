@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -162,6 +162,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
   const [isFullSyncRunning, setIsFullSyncRunning] = useState(false);
   const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0 });
   const [aiDraftDismissed, setAiDraftDismissed] = useState<number | null>(null);
+  const [pendingDraftText, setPendingDraftText] = useState<string | null>(null);
   const [aiInstructionOpen, setAiInstructionOpen] = useState(false);
   const [aiInstructionText, setAiInstructionText] = useState("");
   const [aiInstructionEdited, setAiInstructionEdited] = useState(false);
@@ -797,6 +798,20 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                   onViewFull={setShowFullMessage}
                   influencerName={selectedLineItem.influencer?.name}
                   influencerEmail={selectedLineItem.influencer?.email}
+                  aiDraft={aiEnabled && aiDraft && aiDraftDismissed !== aiDraft.id ? aiDraft : null}
+                  aiEnabled={aiEnabled}
+                  isLastInbound={conversationDetail?.messages && conversationDetail.messages.length > 0 && conversationDetail.messages[conversationDetail.messages.length - 1]?.direction === 'inbound'}
+                  onGenerateDraft={(userFeedback?: string, requestedClassification?: string, requestedClassificationLabel?: string) => existingConv && generateAiDraft.mutate({ conversationId: existingConv.id, userFeedback, requestedClassification, requestedClassificationLabel })}
+                  isGeneratingDraft={generateAiDraft.isPending}
+                  onUseDraft={(draftId: number) => {
+                    const draftText = aiDraft?.draft || '';
+                    setPendingDraftText(draftText);
+                    updateAiDraft.mutate({ draftId, status: 'used' });
+                  }}
+                  onDismissDraft={(draftId: number) => {
+                    setAiDraftDismissed(draftId);
+                    updateAiDraft.mutate({ draftId, status: 'dismissed' });
+                  }}
                 />
               )}
             </ScrollArea>
@@ -820,16 +835,8 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                 const result = Array.from(allCc);
                 return result.length > 0 ? result : null;
               })()}
-              aiDraft={aiEnabled && aiDraft && aiDraftDismissed !== aiDraft.id ? aiDraft : null}
-              aiEnabled={aiEnabled}
-              isLastInbound={conversationDetail?.messages && conversationDetail.messages.length > 0 && conversationDetail.messages[conversationDetail.messages.length - 1]?.direction === 'inbound'}
-              onGenerateDraft={(userFeedback?: string, requestedClassification?: string, requestedClassificationLabel?: string) => existingConv && generateAiDraft.mutate({ conversationId: existingConv.id, userFeedback, requestedClassification, requestedClassificationLabel })}
-              isGeneratingDraft={generateAiDraft.isPending}
-              onUseDraft={(draftId: number) => updateAiDraft.mutate({ draftId, status: 'used' })}
-              onDismissDraft={(draftId: number) => {
-                setAiDraftDismissed(draftId);
-                updateAiDraft.mutate({ draftId, status: 'dismissed' });
-              }}
+              pendingDraftText={pendingDraftText}
+              onDraftTextConsumed={() => setPendingDraftText(null)}
               onSent={() => {
                 refetchConversation();
                 if (existingConv?.id) {
@@ -913,7 +920,16 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
   );
 }
 
-function MessageThread({ messages, onViewFull, influencerName, influencerEmail }: { messages: ConversationMessage[]; onViewFull: (msg: ConversationMessage) => void; influencerName?: string; influencerEmail?: string }) {
+function MessageThread({ messages, onViewFull, influencerName, influencerEmail, aiDraft, aiEnabled, isLastInbound, onGenerateDraft, isGeneratingDraft, onUseDraft, onDismissDraft }: { messages: ConversationMessage[]; onViewFull: (msg: ConversationMessage) => void; influencerName?: string; influencerEmail?: string; aiDraft?: any; aiEnabled?: boolean; isLastInbound?: boolean; onGenerateDraft?: (userFeedback?: string, requestedClassification?: string, requestedClassificationLabel?: string) => void; isGeneratingDraft?: boolean; onUseDraft?: (id: number) => void; onDismissDraft?: (id: number) => void }) {
+  const [showFeedbackInput, setShowFeedbackInput] = useState(false);
+  const [feedbackText, setFeedbackText] = useState("");
+  const threadEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => threadEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    return () => clearTimeout(timer);
+  }, [messages.length, aiDraft?.id]);
+
   if (messages.length === 0) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
@@ -1019,17 +1035,150 @@ function MessageThread({ messages, onViewFull, influencerName, influencerEmail }
           </div>
         );
       })}
+
+      {aiDraft && (
+        <div className="flex justify-end items-end gap-1.5">
+          <div className="max-w-[85%]">
+            <div className="rounded-lg p-3 border border-purple-300 bg-purple-50" data-testid="card-ai-draft">
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-purple-500" />
+                  <span className="text-xs font-medium text-purple-700">AI 초안</span>
+                  {aiDraft.classification && (
+                    <Badge variant="outline" className="text-[10px] bg-purple-100 text-purple-600 border-purple-200" data-testid="badge-ai-classification">
+                      {aiDraft.classification} {aiDraft.classificationLabel}
+                    </Badge>
+                  )}
+                </div>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                  onClick={() => onDismissDraft?.(aiDraft.id)}
+                  data-testid="button-dismiss-draft"
+                >
+                  <X className="w-3 h-3" />
+                </Button>
+              </div>
+              <div className="text-sm text-foreground whitespace-pre-wrap mb-2" data-testid="text-ai-draft-body">
+                {aiDraft.draft}
+              </div>
+              {aiDraft.alternativesParsed && aiDraft.alternativesParsed.length > 0 && (
+                <div className="mb-2 flex items-center gap-1.5 flex-wrap" data-testid="section-alternatives">
+                  <span className="text-[10px] text-muted-foreground">다른 옵션:</span>
+                  {aiDraft.alternativesParsed.map((alt: { classification: string; classificationLabel: string }, idx: number) => (
+                    <Button
+                      key={idx}
+                      size="sm"
+                      variant="outline"
+                      className="text-[10px] h-5 px-2 py-0 text-purple-600 border-purple-200 hover:bg-purple-50"
+                      onClick={() => onGenerateDraft?.(undefined, alt.classification, alt.classificationLabel)}
+                      disabled={isGeneratingDraft}
+                      data-testid={`button-alternative-${idx}`}
+                    >
+                      {alt.classification} {alt.classificationLabel}
+                    </Button>
+                  ))}
+                </div>
+              )}
+              {showFeedbackInput && (
+                <div className="mb-2 space-y-2" data-testid="section-feedback-input">
+                  <Textarea
+                    value={feedbackText}
+                    onChange={(e) => setFeedbackText(e.target.value)}
+                    placeholder="수정 요청사항을 입력하세요 (예: 좀 더 정중하게, 단가를 강조해주세요)"
+                    className="text-xs min-h-[60px] max-h-[80px] resize-none bg-white dark:bg-gray-900"
+                    data-testid="textarea-feedback"
+                  />
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      className="text-xs h-6 bg-purple-600 text-white"
+                      onClick={() => {
+                        onGenerateDraft?.(feedbackText || undefined);
+                        setShowFeedbackInput(false);
+                        setFeedbackText("");
+                      }}
+                      disabled={isGeneratingDraft}
+                      data-testid="button-submit-regenerate"
+                    >
+                      {isGeneratingDraft ? (
+                        <><Loader2 className="w-3 h-3 mr-1 animate-spin" />재생성 중...</>
+                      ) : (
+                        <><RefreshCw className="w-3 h-3 mr-1" />재생성</>
+                      )}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-xs h-6"
+                      onClick={() => { setShowFeedbackInput(false); setFeedbackText(""); }}
+                      data-testid="button-cancel-feedback"
+                    >
+                      취소
+                    </Button>
+                  </div>
+                </div>
+              )}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-[11px] h-6 bg-purple-100 hover:bg-purple-200 text-purple-700 border-purple-200"
+                  onClick={() => {
+                    if (aiDraft) onUseDraft?.(aiDraft.id);
+                  }}
+                  data-testid="button-use-draft"
+                >
+                  <Sparkles className="w-3 h-3 mr-1" />
+                  초안 사용
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-[11px] h-6 text-purple-600 border-purple-200 hover:bg-purple-50"
+                  onClick={() => setShowFeedbackInput(!showFeedbackInput)}
+                  disabled={isGeneratingDraft}
+                  data-testid="button-toggle-feedback"
+                >
+                  <MessageSquare className="w-3 h-3 mr-1" />
+                  다른 답변 요청
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!aiDraft && aiEnabled && isLastInbound && (
+        <div className="flex justify-end">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-xs text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+            onClick={() => onGenerateDraft?.()}
+            disabled={isGeneratingDraft}
+            data-testid="button-generate-draft"
+          >
+            {isGeneratingDraft ? (
+              <><Loader2 className="w-3 h-3 mr-1 animate-spin" />AI 초안 생성 중...</>
+            ) : (
+              <><Sparkles className="w-3 h-3 mr-1" />AI 초안 생성</>
+            )}
+          </Button>
+        </div>
+      )}
+
+      <div ref={threadEndRef} />
     </div>
   );
 }
 
-function MessageComposer({ conversationId, influencerEmail, senderEmail, lastMessageCc, aiDraft, aiEnabled, isLastInbound, onGenerateDraft, isGeneratingDraft, onUseDraft, onDismissDraft, onSent }: { conversationId?: number; influencerEmail?: string | null; senderEmail?: string | null; lastMessageCc?: string[] | null; aiDraft?: any; aiEnabled?: boolean; isLastInbound?: boolean; onGenerateDraft?: (userFeedback?: string, requestedClassification?: string, requestedClassificationLabel?: string) => void; isGeneratingDraft?: boolean; onUseDraft?: (id: number) => void; onDismissDraft?: (id: number) => void; onSent: () => void }) {
+function MessageComposer({ conversationId, influencerEmail, senderEmail, lastMessageCc, pendingDraftText, onDraftTextConsumed, onSent }: { conversationId?: number; influencerEmail?: string | null; senderEmail?: string | null; lastMessageCc?: string[] | null; pendingDraftText?: string | null; onDraftTextConsumed?: () => void; onSent: () => void }) {
   const { toast } = useToast();
   const [message, setMessage] = useState("");
   const [cc, setCc] = useState(lastMessageCc?.join(', ') || "");
   const [showCcEdit, setShowCcEdit] = useState(false);
-  const [showFeedbackInput, setShowFeedbackInput] = useState(false);
-  const [feedbackText, setFeedbackText] = useState("");
   const [expandDialogOpen, setExpandDialogOpen] = useState(false);
   const [expandMessage, setExpandMessage] = useState("");
   const [expandCc, setExpandCc] = useState("");
@@ -1039,6 +1188,13 @@ function MessageComposer({ conversationId, influencerEmail, senderEmail, lastMes
     const newCc = lastMessageCc?.join(', ') || "";
     setCc(newCc);
   }, [lastCcKey]);
+
+  useEffect(() => {
+    if (pendingDraftText) {
+      setMessage(pendingDraftText);
+      onDraftTextConsumed?.();
+    }
+  }, [pendingDraftText]);
 
   const ccList = cc.split(',').map(e => e.trim()).filter(Boolean);
 
@@ -1071,142 +1227,8 @@ function MessageComposer({ conversationId, influencerEmail, senderEmail, lastMes
     );
   }
 
-  const handleUseDraft = () => {
-    if (aiDraft) {
-      setMessage(aiDraft.draft);
-      onUseDraft?.(aiDraft.id);
-    }
-  };
-
   return (
     <div className="p-3 border-t bg-[#ffffff]">
-      {aiDraft && (
-        <div className="mb-3 rounded-lg border border-purple-200 bg-purple-50/50 p-3" data-testid="card-ai-draft">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-purple-500" />
-              <span className="text-sm font-medium text-purple-700">AI 초안</span>
-              {aiDraft.classification && (
-                <Badge variant="outline" className="text-[10px] bg-purple-100 text-purple-600 border-purple-200" data-testid="badge-ai-classification">
-                  {aiDraft.classification} {aiDraft.classificationLabel}
-                </Badge>
-              )}
-            </div>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-6 w-6 text-muted-foreground hover:text-foreground"
-              onClick={() => onDismissDraft?.(aiDraft.id)}
-              data-testid="button-dismiss-draft"
-            >
-              <X className="w-3.5 h-3.5" />
-            </Button>
-          </div>
-          <div className="text-sm text-foreground whitespace-pre-wrap mb-2 max-h-[120px] overflow-y-auto" data-testid="text-ai-draft-body">
-            {aiDraft.draft}
-          </div>
-          {aiDraft.alternativesParsed && aiDraft.alternativesParsed.length > 0 && (
-            <div className="mb-2 flex items-center gap-1.5 flex-wrap" data-testid="section-alternatives">
-              <span className="text-[10px] text-muted-foreground">다른 옵션:</span>
-              {aiDraft.alternativesParsed.map((alt: { classification: string; classificationLabel: string }, idx: number) => (
-                <Button
-                  key={idx}
-                  size="sm"
-                  variant="outline"
-                  className="text-[10px] h-6 px-2 py-0 text-purple-600 border-purple-200 hover:bg-purple-50"
-                  onClick={() => onGenerateDraft?.(undefined, alt.classification, alt.classificationLabel)}
-                  disabled={isGeneratingDraft}
-                  data-testid={`button-alternative-${idx}`}
-                >
-                  {alt.classification} {alt.classificationLabel}
-                </Button>
-              ))}
-            </div>
-          )}
-          {showFeedbackInput && (
-            <div className="mb-2 space-y-2" data-testid="section-feedback-input">
-              <Textarea
-                value={feedbackText}
-                onChange={(e) => setFeedbackText(e.target.value)}
-                placeholder="수정 요청사항을 입력하세요 (예: 좀 더 정중하게, 단가를 강조해주세요)"
-                className="text-xs min-h-[60px] max-h-[100px] resize-none bg-white dark:bg-gray-900"
-                data-testid="textarea-feedback"
-              />
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  className="text-xs bg-purple-600 text-white"
-                  onClick={() => {
-                    onGenerateDraft?.(feedbackText || undefined);
-                    setShowFeedbackInput(false);
-                    setFeedbackText("");
-                  }}
-                  disabled={isGeneratingDraft}
-                  data-testid="button-submit-regenerate"
-                >
-                  {isGeneratingDraft ? (
-                    <><Loader2 className="w-3 h-3 mr-1 animate-spin" />재생성 중...</>
-                  ) : (
-                    <><RefreshCw className="w-3 h-3 mr-1" />재생성</>
-                  )}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="text-xs"
-                  onClick={() => { setShowFeedbackInput(false); setFeedbackText(""); }}
-                  data-testid="button-cancel-feedback"
-                >
-                  취소
-                </Button>
-              </div>
-            </div>
-          )}
-          <div className="flex items-center gap-2 flex-wrap">
-            <Button
-              size="sm"
-              variant="outline"
-              className="text-xs bg-purple-100 hover:bg-purple-200 text-purple-700 border-purple-200"
-              onClick={handleUseDraft}
-              data-testid="button-use-draft"
-            >
-              <Sparkles className="w-3 h-3 mr-1" />
-              초안 사용
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="text-xs text-purple-600 border-purple-200 hover:bg-purple-50"
-              onClick={() => setShowFeedbackInput(!showFeedbackInput)}
-              disabled={isGeneratingDraft}
-              data-testid="button-toggle-feedback"
-            >
-              <MessageSquare className="w-3 h-3 mr-1" />
-              다른 답변 요청하기
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {!aiDraft && aiEnabled && isLastInbound && conversationId && (
-        <div className="mb-2">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="text-xs text-purple-600 hover:text-purple-700 hover:bg-purple-50"
-            onClick={() => onGenerateDraft?.()}
-            disabled={isGeneratingDraft}
-            data-testid="button-generate-draft"
-          >
-            {isGeneratingDraft ? (
-              <><Loader2 className="w-3 h-3 mr-1 animate-spin" />AI 초안 생성 중...</>
-            ) : (
-              <><Sparkles className="w-3 h-3 mr-1" />AI 초안 생성</>
-            )}
-          </Button>
-        </div>
-      )}
-
       <div className="flex items-center gap-1.5 mb-2 flex-wrap">
         {senderEmail && (
           <Tooltip>
