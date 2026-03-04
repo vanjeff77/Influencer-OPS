@@ -70,6 +70,8 @@ Preferred communication style: Simple, everyday language.
     - **Compact Messages**: 150-char body/draft previews with inline toggle (chat.update) for full content expand/collapse — no modal loading delay.
     - **AI Draft Actions**: "✏️ 초안 사용하기" opens modal with editable text + To/CC display → "📤 발송하기" submits. Regenerate with feedback (modal), alternative classifications, dismiss. Progress indicator during generation.
     - **CC Handling**: CC derived from first outbound (contact) message's `ccEmails`; included in Slack draft modal display and actual send.
+    - **In-Memory Cache**: Email body and draft text cached at notification send time (TTL 10min) for faster modal loading. Cache keyed by draftId/conversationId with size cap (500 entries).
+    - **UI Labels**: Primary actions (초안 사용하기, 다른 답변 요청, ❌) in one row; alternative classifications under "💡 다른 답변 선택하기" context label in separate row.
     - **Settings UI**: Client Slack channel ID field in client edit dialog. Recent inbound messages table with resend test functionality.
     - **APIs**: `GET /api/workspaces/:workspaceId/recent-inbound-messages`, `POST /api/workspaces/:workspaceId/resend-slack-notification`.
 - **AI Auto-Reply Draft Generation**:

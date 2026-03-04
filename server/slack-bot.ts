@@ -35,11 +35,40 @@ function truncateForSlack(text: string, maxLen = 2900): string {
   return text.length > maxLen ? text.substring(0, maxLen) + '...' : text;
 }
 
+const contentCache = new Map<string, { data: string; expiry: number }>();
+const CACHE_TTL_MS = 10 * 60 * 1000;
+
+function setCacheEntry(key: string, data: string): void {
+  if (contentCache.size > 500) {
+    const now = Date.now();
+    for (const [k, v] of contentCache) {
+      if (now > v.expiry) contentCache.delete(k);
+    }
+    if (contentCache.size > 500) {
+      const oldest = contentCache.keys().next().value;
+      if (oldest) contentCache.delete(oldest);
+    }
+  }
+  contentCache.set(key, { data, expiry: Date.now() + CACHE_TTL_MS });
+}
+
+function getCacheEntry(key: string): string | null {
+  const entry = contentCache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiry) {
+    contentCache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
+
 function buildNotificationBlocks(
   ctx: InboundEmailContext,
   aiDraft: AiDraftContext | null,
 ): SlackBlock[] {
   const bodyPreview = ctx.emailBody.length > 150 ? ctx.emailBody.substring(0, 150) + '...' : ctx.emailBody;
+
+  setCacheEntry(`email_${ctx.conversationId}`, ctx.emailBody);
 
   const blocks: SlackBlock[] = [
     {
@@ -57,7 +86,7 @@ function buildNotificationBlocks(
         type: "button",
         text: { type: "plain_text", text: "📄 전체 보기", emoji: true },
         action_id: "view_full_email",
-        value: JSON.stringify({ conversationId: ctx.conversationId, workspaceId: ctx.workspaceId, mode: 'expand' }),
+        value: JSON.stringify({ conversationId: ctx.conversationId, workspaceId: ctx.workspaceId }),
       }
     },
     { type: "divider" },
@@ -66,6 +95,12 @@ function buildNotificationBlocks(
   if (aiDraft) {
     const draftPreview = aiDraft.draft.length > 150 ? aiDraft.draft.substring(0, 150) + '...' : aiDraft.draft;
 
+    setCacheEntry(`draft_${aiDraft.draftId}`, JSON.stringify({
+      draft: aiDraft.draft,
+      classification: aiDraft.classification,
+      classificationLabel: aiDraft.classificationLabel,
+    }));
+
     blocks.push({
       type: "section",
       text: { type: "mrkdwn", text: `✨ *AI 초안* \`${aiDraft.classification} ${aiDraft.classificationLabel}\`\n${draftPreview}` },
@@ -73,11 +108,11 @@ function buildNotificationBlocks(
         type: "button",
         text: { type: "plain_text", text: "📋 초안 전문", emoji: true },
         action_id: "view_full_draft",
-        value: JSON.stringify({ conversationId: ctx.conversationId, workspaceId: ctx.workspaceId, draftId: aiDraft.draftId, mode: 'expand' }),
+        value: JSON.stringify({ conversationId: ctx.conversationId, workspaceId: ctx.workspaceId, draftId: aiDraft.draftId }),
       }
     });
 
-    const actionElements: any[] = [
+    const primaryActions: any[] = [
       {
         type: "button",
         text: { type: "plain_text", text: "✏️ 초안 사용하기", emoji: true },
@@ -85,11 +120,31 @@ function buildNotificationBlocks(
         action_id: "send_draft",
         value: JSON.stringify({ conversationId: ctx.conversationId, workspaceId: ctx.workspaceId, draftId: aiDraft.draftId }),
       },
+      {
+        type: "button",
+        text: { type: "plain_text", text: "🔄 다른 답변 요청", emoji: true },
+        action_id: "open_regenerate_modal",
+        value: JSON.stringify({ conversationId: ctx.conversationId, workspaceId: ctx.workspaceId }),
+      },
+      {
+        type: "button",
+        text: { type: "plain_text", text: "❌", emoji: true },
+        action_id: "dismiss_draft",
+        value: JSON.stringify({ draftId: aiDraft.draftId }),
+      },
     ];
 
+    blocks.push({ type: "actions", block_id: `actions_${ctx.conversationId}_${Date.now()}`, elements: primaryActions });
+
     if (aiDraft.alternatives && aiDraft.alternatives.length > 0) {
+      blocks.push({
+        type: "context",
+        elements: [{ type: "mrkdwn", text: "💡 *다른 답변 선택하기*" }],
+      } as any);
+
+      const altElements: any[] = [];
       for (const alt of aiDraft.alternatives) {
-        actionElements.push({
+        altElements.push({
           type: "button",
           text: { type: "plain_text", text: `${alt.classification} ${alt.classificationLabel}`, emoji: true },
           action_id: `regenerate_alt_${alt.classification}`,
@@ -101,24 +156,8 @@ function buildNotificationBlocks(
           }),
         });
       }
+      blocks.push({ type: "actions", block_id: `alts_${ctx.conversationId}_${Date.now()}`, elements: altElements });
     }
-
-    actionElements.push(
-      {
-        type: "button",
-        text: { type: "plain_text", text: "🔄 재생성", emoji: true },
-        action_id: "open_regenerate_modal",
-        value: JSON.stringify({ conversationId: ctx.conversationId, workspaceId: ctx.workspaceId }),
-      },
-      {
-        type: "button",
-        text: { type: "plain_text", text: "❌", emoji: true },
-        action_id: "dismiss_draft",
-        value: JSON.stringify({ draftId: aiDraft.draftId }),
-      },
-    );
-
-    blocks.push({ type: "actions", block_id: `actions_${ctx.conversationId}_${Date.now()}`, elements: actionElements });
   } else {
     blocks.push({
       type: "section",
@@ -357,18 +396,27 @@ async function handleOpenSendDraftModal(payload: any, parsed: any): Promise<{ st
   }
 
   const ccEmails = await getConversationCcEmails(conversationId, accountEmail, toEmail);
-  const ccDisplay = ccEmails.length > 0 ? ccEmails.join(', ') : '(없음)';
+  const ccDefault = ccEmails.length > 0 ? ccEmails.join(', ') : '';
 
   const modalBlocks: SlackBlock[] = [
     {
-      type: "section",
-      text: { type: "mrkdwn", text: `*수신:* ${toEmail}` }
-    },
+      type: "context",
+      elements: [
+        { type: "mrkdwn", text: `📤 *발신:* ${accountEmail || '(계정 없음)'}  |  📥 *수신:* ${toEmail}` },
+      ],
+    } as any,
     {
-      type: "section",
-      text: { type: "mrkdwn", text: `*참조 (CC):* ${ccDisplay}` }
-    },
-    { type: "divider" },
+      type: "input",
+      block_id: "cc_block",
+      element: {
+        type: "plain_text_input",
+        action_id: "cc_input",
+        initial_value: ccDefault,
+        placeholder: { type: "plain_text", text: "쉼표로 구분 (예: a@email.com, b@email.com)" },
+      },
+      label: { type: "plain_text", text: "참조 (CC)" },
+      optional: true,
+    } as any,
     {
       type: "input",
       block_id: "draft_body_block",
@@ -406,6 +454,7 @@ async function handleOpenSendDraftModal(payload: any, parsed: any): Promise<{ st
 async function handleSendEditedDraft(parsed: any, values: any): Promise<{ status: number; body: any }> {
   const { conversationId, workspaceId, draftId, messageTs, channelId } = parsed;
   const editedDraft = values?.draft_body_block?.draft_body_input?.value || '';
+  const ccInput = values?.cc_block?.cc_input?.value || '';
 
   try {
     const conv = await storage.getConversation(conversationId);
@@ -431,7 +480,9 @@ async function handleSendEditedDraft(parsed: any, values: any): Promise<{ status
     const toEmail = lineItem.influencer?.email;
     if (!toEmail) return { status: 200, body: { response_action: 'errors', errors: { draft_body_block: '인플루언서 이메일이 없습니다.' } } };
 
-    const ccEmails = await getConversationCcEmails(conversationId, account.email, toEmail);
+    const ccEmails = ccInput
+      ? ccInput.split(',').map((e: string) => e.trim().toLowerCase()).filter((e: string) => e && e !== account.email.toLowerCase() && e !== toEmail.toLowerCase())
+      : [];
 
     const { convertToGmailCompatibleHtml } = await import('./smtp');
     const isPlainText = !/<[a-z][\s\S]*>/i.test(editedDraft);
@@ -541,7 +592,7 @@ async function handleOpenRegenerateModal(payload: any, parsed: any): Promise<{ s
   await openSlackModal(
     workspace.slackBotToken,
     triggerId,
-    "AI 초안 재생성",
+    "다른 답변 요청",
     [
       {
         type: "input",
@@ -550,126 +601,108 @@ async function handleOpenRegenerateModal(payload: any, parsed: any): Promise<{ s
           type: "plain_text_input",
           action_id: "feedback_input",
           multiline: true,
-          placeholder: { type: "plain_text", text: "수정 요청사항을 입력하세요 (예: 좀 더 정중하게, 단가를 강조해주세요)" },
+          placeholder: { type: "plain_text", text: "요청사항을 입력하세요 (예: 좀 더 정중하게, 단가를 강조해주세요)" },
         },
-        label: { type: "plain_text", text: "수정 요청사항" },
+        label: { type: "plain_text", text: "요청사항" },
       } as any,
     ],
     "regenerate_with_feedback",
     JSON.stringify({ conversationId, workspaceId }),
-    { type: "plain_text", text: "재생성" },
+    { type: "plain_text", text: "답변 생성" },
   );
 
   return { status: 200, body: {} };
 }
 
 async function handleViewFullEmail(payload: any, parsed: any): Promise<{ status: number; body: any }> {
-  const { conversationId, workspaceId, mode } = parsed;
-  let workspace = workspaceId
-    ? (await storage.getWorkspaces()).find(w => w.id === workspaceId)
-    : await findWorkspaceFromPayload(payload);
-  if (!workspace) workspace = await findWorkspaceFromPayload(payload);
-  if (!workspace?.slackBotToken || !payload.message?.ts) return { status: 200, body: {} };
+  const { conversationId, workspaceId } = parsed;
+  const triggerId = payload.trigger_id;
+  if (!triggerId) return { status: 200, body: {} };
 
-  const blocks = [...(payload.message.blocks || [])];
-  const emailBlockIdx = blocks.findIndex((b: any) => b.accessory?.action_id === 'view_full_email');
+  let bodyText = getCacheEntry(`email_${conversationId}`);
 
-  if (mode === 'expand') {
-    const messages = await storage.getConversationMessages(conversationId);
-    const lastInbound = messages.filter(m => m.direction === 'inbound').pop();
-    const bodyText = truncateForSlack(lastInbound?.bodyText || lastInbound?.snippet || '(내용 없음)');
+  const [workspace] = await Promise.all([
+    workspaceId
+      ? (storage.getWorkspaces().then(ws => ws.find(w => w.id === workspaceId)))
+      : findWorkspaceFromPayload(payload),
+    ...(bodyText ? [] : [
+      storage.getConversationMessages(conversationId).then(msgs => {
+        const lastInbound = msgs.filter(m => m.direction === 'inbound').pop();
+        bodyText = lastInbound?.bodyText || lastInbound?.snippet || '(내용 없음)';
+      }),
+    ]),
+  ]);
 
-    if (emailBlockIdx >= 0) {
-      blocks[emailBlockIdx] = {
-        type: "section",
-        text: { type: "mrkdwn", text: bodyText },
-        accessory: {
-          type: "button",
-          text: { type: "plain_text", text: "📄 접기", emoji: true },
-          action_id: "view_full_email",
-          value: JSON.stringify({ conversationId, workspaceId, mode: 'collapse', originalPreview: blocks[emailBlockIdx].text?.text }),
-        }
-      };
-    }
-  } else {
-    if (emailBlockIdx >= 0) {
-      const originalPreview = parsed.originalPreview || '(미리보기)';
-      blocks[emailBlockIdx] = {
-        type: "section",
-        text: { type: "mrkdwn", text: originalPreview },
-        accessory: {
-          type: "button",
-          text: { type: "plain_text", text: "📄 전체 보기", emoji: true },
-          action_id: "view_full_email",
-          value: JSON.stringify({ conversationId, workspaceId, mode: 'expand' }),
-        }
-      };
-    }
-  }
+  if (!workspace?.slackBotToken) return { status: 200, body: {} };
 
-  await updateSlackMessage(
+  const truncated = truncateForSlack(bodyText || '(내용 없음)');
+
+  await openSlackModal(
     workspace.slackBotToken,
-    payload.channel?.id || workspace.slackChannelId!,
-    payload.message.ts,
-    blocks,
-    mode === 'expand' ? '메일 전문 표시' : '메일 미리보기',
+    triggerId,
+    "메일 원문",
+    [
+      {
+        type: "section",
+        text: { type: "mrkdwn", text: truncated }
+      },
+    ],
   );
 
   return { status: 200, body: {} };
 }
 
 async function handleViewFullDraft(payload: any, parsed: any): Promise<{ status: number; body: any }> {
-  const { conversationId, workspaceId, draftId, mode } = parsed;
-  let workspace = workspaceId
-    ? (await storage.getWorkspaces()).find(w => w.id === workspaceId)
-    : await findWorkspaceFromPayload(payload);
-  if (!workspace) workspace = await findWorkspaceFromPayload(payload);
-  if (!workspace?.slackBotToken || !payload.message?.ts) return { status: 200, body: {} };
+  const { conversationId, workspaceId, draftId } = parsed;
+  const triggerId = payload.trigger_id;
+  if (!triggerId) return { status: 200, body: {} };
 
-  const blocks = [...(payload.message.blocks || [])];
-  const draftBlockIdx = blocks.findIndex((b: any) => b.accessory?.action_id === 'view_full_draft');
+  let cachedDraft = draftId ? getCacheEntry(`draft_${draftId}`) : null;
+  let draftText = '';
+  let classLabel = '';
 
-  if (mode === 'expand') {
-    let draft: any = null;
-    if (draftId) draft = await storage.getAiDraft(draftId);
-    if (!draft) draft = await storage.getLatestPendingDraft(conversationId);
-    const draftText = truncateForSlack(draft?.draft || '(초안 없음)');
-    const classLabel = `${draft?.classification || ''} ${draft?.classificationLabel || ''}`;
-
-    if (draftBlockIdx >= 0) {
-      blocks[draftBlockIdx] = {
-        type: "section",
-        text: { type: "mrkdwn", text: `✨ *AI 초안* \`${classLabel}\`\n${draftText}` },
-        accessory: {
-          type: "button",
-          text: { type: "plain_text", text: "📋 접기", emoji: true },
-          action_id: "view_full_draft",
-          value: JSON.stringify({ conversationId, workspaceId, draftId, mode: 'collapse', originalPreview: blocks[draftBlockIdx].text?.text }),
-        }
-      };
-    }
-  } else {
-    if (draftBlockIdx >= 0) {
-      const originalPreview = parsed.originalPreview || '(미리보기)';
-      blocks[draftBlockIdx] = {
-        type: "section",
-        text: { type: "mrkdwn", text: originalPreview },
-        accessory: {
-          type: "button",
-          text: { type: "plain_text", text: "📋 초안 전문", emoji: true },
-          action_id: "view_full_draft",
-          value: JSON.stringify({ conversationId, workspaceId, draftId, mode: 'expand' }),
-        }
-      };
-    }
+  if (cachedDraft) {
+    try {
+      const parsed = JSON.parse(cachedDraft);
+      draftText = parsed.draft || '';
+      classLabel = `${parsed.classification || ''} ${parsed.classificationLabel || ''}`;
+    } catch { cachedDraft = null; }
   }
 
-  await updateSlackMessage(
+  const [workspace] = await Promise.all([
+    workspaceId
+      ? (storage.getWorkspaces().then(ws => ws.find(w => w.id === workspaceId)))
+      : findWorkspaceFromPayload(payload),
+    ...(!draftText ? [
+      (async () => {
+        let draft: any = null;
+        if (draftId) draft = await storage.getAiDraft(draftId);
+        if (!draft) draft = await storage.getLatestPendingDraft(conversationId);
+        draftText = draft?.draft || '(초안 없음)';
+        classLabel = `${draft?.classification || ''} ${draft?.classificationLabel || ''}`;
+      })(),
+    ] : []),
+  ]);
+
+  if (!workspace?.slackBotToken) return { status: 200, body: {} };
+
+  const truncated = truncateForSlack(draftText);
+
+  await openSlackModal(
     workspace.slackBotToken,
-    payload.channel?.id || workspace.slackChannelId!,
-    payload.message.ts,
-    blocks,
-    mode === 'expand' ? '초안 전문 표시' : '초안 미리보기',
+    triggerId,
+    "AI 초안 전문",
+    [
+      {
+        type: "section",
+        text: { type: "mrkdwn", text: `*분류:* \`${classLabel}\`` }
+      },
+      { type: "divider" },
+      {
+        type: "section",
+        text: { type: "mrkdwn", text: truncated }
+      },
+    ],
   );
 
   return { status: 200, body: {} };
@@ -805,6 +838,12 @@ async function regenerateInBackground(
     status: 'pending',
   });
 
+  setCacheEntry(`draft_${newDraft.id}`, JSON.stringify({
+    draft: result.draft,
+    classification: result.classification,
+    classificationLabel: result.classificationLabel,
+  }));
+
   if (workspace.slackBotToken && payload?.message?.ts) {
     const existingBlocks = (payload.message.blocks || []).slice(0, 4);
     const draftPreview = result.draft.length > 150 ? result.draft.substring(0, 150) + '...' : result.draft;
@@ -818,12 +857,12 @@ async function regenerateInBackground(
           type: "button",
           text: { type: "plain_text", text: "📋 초안 전문", emoji: true },
           action_id: "view_full_draft",
-          value: JSON.stringify({ conversationId, workspaceId, draftId: newDraft.id, mode: 'expand' }),
+          value: JSON.stringify({ conversationId, workspaceId, draftId: newDraft.id }),
         }
       },
     ];
 
-    const actionElements: any[] = [
+    const primaryActions: any[] = [
       {
         type: "button",
         text: { type: "plain_text", text: "✏️ 초안 사용하기", emoji: true },
@@ -831,11 +870,31 @@ async function regenerateInBackground(
         action_id: "send_draft",
         value: JSON.stringify({ conversationId, workspaceId, draftId: newDraft.id }),
       },
+      {
+        type: "button",
+        text: { type: "plain_text", text: "🔄 다른 답변 요청", emoji: true },
+        action_id: "open_regenerate_modal",
+        value: JSON.stringify({ conversationId, workspaceId }),
+      },
+      {
+        type: "button",
+        text: { type: "plain_text", text: "❌", emoji: true },
+        action_id: "dismiss_draft",
+        value: JSON.stringify({ draftId: newDraft.id }),
+      },
     ];
 
+    newBlocks.push({ type: "actions", block_id: `actions_${conversationId}_${Date.now()}`, elements: primaryActions });
+
     if (result.alternatives && result.alternatives.length > 0) {
+      newBlocks.push({
+        type: "context",
+        elements: [{ type: "mrkdwn", text: "💡 *다른 답변 선택하기*" }],
+      } as any);
+
+      const altElements: any[] = [];
       for (const alt of result.alternatives) {
-        actionElements.push({
+        altElements.push({
           type: "button",
           text: { type: "plain_text", text: `${alt.classification} ${alt.classificationLabel}`, emoji: true },
           action_id: `regenerate_alt_${alt.classification}`,
@@ -847,24 +906,8 @@ async function regenerateInBackground(
           }),
         });
       }
+      newBlocks.push({ type: "actions", block_id: `alts_${conversationId}_${Date.now()}`, elements: altElements });
     }
-
-    actionElements.push(
-      {
-        type: "button",
-        text: { type: "plain_text", text: "🔄 재생성", emoji: true },
-        action_id: "open_regenerate_modal",
-        value: JSON.stringify({ conversationId, workspaceId }),
-      },
-      {
-        type: "button",
-        text: { type: "plain_text", text: "❌", emoji: true },
-        action_id: "dismiss_draft",
-        value: JSON.stringify({ draftId: newDraft.id }),
-      },
-    );
-
-    newBlocks.push({ type: "actions", block_id: `actions_${conversationId}_${Date.now()}`, elements: actionElements });
 
     await updateSlackMessage(
       workspace.slackBotToken,
