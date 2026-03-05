@@ -400,6 +400,16 @@ async function syncImapAccountConversations(account: EmailAccount): Promise<numb
 
       const isOutbound = msgSender.includes(account.email.toLowerCase());
 
+      if (isOutbound) {
+        const TIME_TOLERANCE = 10000;
+        const hasSimilarOutbound = data.existingMessages.some(m => {
+          if (m.direction !== 'outbound') return false;
+          const existDate = m.sentAt ? new Date(m.sentAt).getTime() : (m.receivedAt ? new Date(m.receivedAt).getTime() : 0);
+          return existDate > 0 && msgDate > 0 && Math.abs(existDate - msgDate) < TIME_TOLERANCE;
+        });
+        if (hasSimilarOutbound) continue;
+      }
+
       try {
         const ccEmails = msg.cc
           ? msg.cc.split(',').map((e: string) => e.trim().toLowerCase()).filter(Boolean)

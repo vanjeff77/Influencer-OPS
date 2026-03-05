@@ -690,7 +690,7 @@ async function handleSendEditedDraft(parsed: any, values: any): Promise<{ status
       password,
     });
 
-    await transporter.sendMail({
+    const sendResult = await transporter.sendMail({
       from: `"${account.senderName || account.email}" <${account.email}>`,
       to: toEmail,
       cc: ccEmails.length > 0 ? ccEmails.join(', ') : undefined,
@@ -709,6 +709,7 @@ async function handleSendEditedDraft(parsed: any, values: any): Promise<{ status
       bodyHtml: finalBody,
       bodyText: editedDraft,
       snippet: editedDraft.substring(0, 200),
+      gmailMessageId: sendResult.messageId || null,
       sendStatus: 'sent',
       sentAt: new Date(),
     });

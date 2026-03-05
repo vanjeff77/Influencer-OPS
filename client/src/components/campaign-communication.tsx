@@ -937,7 +937,18 @@ function MessageThread({ messages, onViewFull, influencerName, influencerEmail, 
     return () => clearTimeout(timer);
   }, [messages.length, aiDraft?.id]);
 
-  if (messages.length === 0) {
+  const dedupedMessages = useMemo(() => {
+    const seen = new Set<string>();
+    return messages.filter(msg => {
+      if (msg.gmailMessageId) {
+        if (seen.has(msg.gmailMessageId)) return false;
+        seen.add(msg.gmailMessageId);
+      }
+      return true;
+    });
+  }, [messages]);
+
+  if (dedupedMessages.length === 0) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
         {KO.pages.communication.noConversations}
@@ -997,7 +1008,7 @@ function MessageThread({ messages, onViewFull, influencerName, influencerEmail, 
 
   return (
     <div className="space-y-3">
-      {messages.map(msg => {
+      {dedupedMessages.map(msg => {
         const isFromInfluencer = influencerEmail && msg.senderEmail?.toLowerCase() === influencerEmail.toLowerCase();
         const isOutbound = !isFromInfluencer;
         const senderName = getSenderDisplayName(msg);
