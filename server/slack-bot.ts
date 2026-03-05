@@ -22,6 +22,7 @@ interface InboundEmailContext {
   senderEmail: string;
   clientSlackChannelId?: string | null;
   lineItemStatus?: string | null;
+  slackMentionUserIds?: string | null;
 }
 
 interface AiDraftContext {
@@ -272,7 +273,15 @@ export async function sendSlackNotification(
 
   const targetChannel = ctx.clientSlackChannelId || workspace.slackChannelId;
   const replyBlocks = buildThreadReplyBlocks(ctx, aiDraft);
-  const replyText = `📨 ${ctx.influencerName}님이 메일을 보냈습니다.`;
+
+  let mentionPrefix = '';
+  if (ctx.slackMentionUserIds) {
+    const userIds = ctx.slackMentionUserIds.split(',').map(id => id.trim()).filter(Boolean);
+    if (userIds.length > 0) {
+      mentionPrefix = userIds.map(id => `<@${id}>`).join(' ') + ' ';
+    }
+  }
+  const replyText = `${mentionPrefix}📨 ${ctx.influencerName}님이 메일을 보냈습니다.`;
 
   try {
     const conv = await storage.getConversation(ctx.conversationId);
@@ -1271,6 +1280,7 @@ export async function notifyInboundEmail(
         senderEmail: msg.senderEmail || '',
         clientSlackChannelId,
         lineItemStatus: lineItem.status,
+        slackMentionUserIds: campaign.slackMentionUserIds,
       },
       aiDraftCtx,
       workspace,

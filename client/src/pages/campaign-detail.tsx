@@ -342,6 +342,7 @@ export default function CampaignDetail() {
   const [isDeleteCampaignOpen, setIsDeleteCampaignOpen] = useState(false);
   const [editingCampaignName, setEditingCampaignName] = useState("");
   const [editingBudget, setEditingBudget] = useState<string | null>(null);
+  const [editingSlackMentions, setEditingSlackMentions] = useState<string | null>(null);
   const [isDeleteInfluencerOpen, setIsDeleteInfluencerOpen] = useState(false);
   const [selectedInfluencerIds, setSelectedInfluencerIds] = useState<
     Set<number>
@@ -1474,6 +1475,68 @@ export default function CampaignDetail() {
                           parseInt(editingBudget) === campaign.budget
                         }
                         data-testid="button-save-campaign-budget"
+                      >
+                        <Save className="w-3 h-3 mr-1" />
+                        저장
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">
+                      Slack 알림 멘션 사용자
+                    </label>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      인바운드 메일 수신 시 Slack에서 멘션할 사용자 ID를 쉼표로 구분하여 입력하세요. (예: U01ABC123, U02DEF456)
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={
+                          editingSlackMentions !== null
+                            ? editingSlackMentions
+                            : campaign.slackMentionUserIds || ""
+                        }
+                        onChange={(e) => setEditingSlackMentions(e.target.value)}
+                        onFocus={() => {
+                          if (editingSlackMentions === null) {
+                            setEditingSlackMentions(campaign.slackMentionUserIds || "");
+                          }
+                        }}
+                        placeholder="U01ABC123, U02DEF456"
+                        className="max-w-md"
+                        data-testid="input-slack-mention-users"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          const val = editingSlackMentions?.trim() || '';
+                          updateCampaign.mutate(
+                            {
+                              id,
+                              data: { slackMentionUserIds: val || null },
+                            },
+                            {
+                              onSuccess: () => {
+                                toast({
+                                  title: "Slack 멘션 사용자가 저장되었습니다.",
+                                });
+                                setEditingSlackMentions(null);
+                              },
+                              onError: () => {
+                                toast({
+                                  variant: "destructive",
+                                  title: "저장 실패",
+                                });
+                              },
+                            },
+                          );
+                        }}
+                        disabled={
+                          updateCampaign.isPending ||
+                          editingSlackMentions === null ||
+                          editingSlackMentions === (campaign.slackMentionUserIds || "")
+                        }
+                        data-testid="button-save-slack-mentions"
                       >
                         <Save className="w-3 h-3 mr-1" />
                         저장

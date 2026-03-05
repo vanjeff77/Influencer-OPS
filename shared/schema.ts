@@ -192,6 +192,7 @@ export const campaigns = pgTable("campaigns", {
   status: text("status").default("대기중"), // 대기중, 진행중, 완료
   aiInstruction: text("ai_instruction"),
   ccEmails: text("cc_emails"),
+  slackMentionUserIds: text("slack_mention_user_ids"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
