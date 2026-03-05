@@ -292,6 +292,15 @@ export async function startBulkEmailWorker(jobId: number): Promise<void> {
     
     const transporter = createSmtpTransporter(smtpConfig);
     
+    if (job.cc) {
+      try {
+        await storage.updateCampaign(job.campaignId, { ccEmails: job.cc });
+        console.log(`[BulkEmail] Saved CC to campaign ${job.campaignId}: ${job.cc}`);
+      } catch (e) {
+        console.error(`[BulkEmail] Failed to save CC to campaign:`, e);
+      }
+    }
+    
     let sentCount = job.sentCount || 0;
     let failedCount = job.failedCount || 0;
     

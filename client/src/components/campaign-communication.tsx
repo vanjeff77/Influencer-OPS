@@ -123,6 +123,7 @@ interface CampaignCommunicationProps {
   campaignName?: string;
   workspaceId: number;
   lineItems: CampaignLineItem[];
+  campaignCcEmails?: string | null;
 }
 
 function formatConversationDate(dateStr: string | null): string {
@@ -150,7 +151,7 @@ function formatConversationDate(dateStr: string | null): string {
   return `${y}.${m}.${d}`;
 }
 
-export function CampaignCommunication({ campaignId, campaignName, workspaceId, lineItems }: CampaignCommunicationProps) {
+export function CampaignCommunication({ campaignId, campaignName, workspaceId, lineItems, campaignCcEmails }: CampaignCommunicationProps) {
   const { toast } = useToast();
   const [selectedLineItemId, setSelectedLineItemId] = useState<number | null>(null);
   const [showFullMessage, setShowFullMessage] = useState<ConversationMessage | null>(null);
@@ -820,16 +821,24 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
               influencerEmail={selectedLineItem.influencer?.email}
               senderEmail={conversationDetail?.messages?.find((m: any) => m.direction === 'outbound')?.senderEmail || null}
               lastMessageCc={(() => {
+                const senderEmail = conversationDetail?.messages?.find((m: any) => m.direction === 'outbound')?.senderEmail;
+                const infEmail = selectedLineItem.influencer?.email;
+                const excludeSet = new Set<string>();
+                if (senderEmail) excludeSet.add(senderEmail.toLowerCase().trim());
+                if (infEmail) excludeSet.add(infEmail.toLowerCase().trim());
+
+                if (campaignCcEmails) {
+                  const ccList = campaignCcEmails.split(',').map(e => e.trim().toLowerCase()).filter(e => e && !excludeSet.has(e));
+                  return ccList.length > 0 ? ccList : null;
+                }
+
                 const firstOutbound = conversationDetail?.messages?.find((m: any) => m.direction === 'outbound');
                 if (!firstOutbound?.ccEmails || !Array.isArray(firstOutbound.ccEmails)) return null;
                 const ccSet = new Set<string>();
                 firstOutbound.ccEmails.forEach((e: string) => {
                   if (e) ccSet.add(e.toLowerCase().trim());
                 });
-                const senderEmail = firstOutbound.senderEmail;
-                const infEmail = selectedLineItem.influencer?.email;
-                if (senderEmail) ccSet.delete(senderEmail.toLowerCase().trim());
-                if (infEmail) ccSet.delete(infEmail.toLowerCase().trim());
+                for (const e of excludeSet) ccSet.delete(e);
                 const result = Array.from(ccSet);
                 return result.length > 0 ? result : null;
               })()}

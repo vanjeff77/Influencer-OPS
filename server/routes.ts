@@ -2416,23 +2416,30 @@ export async function registerRoutes(
       const existingMsgs = await storage.getConversationMessages(conversationId);
       const isReply = existingMsgs.length > 0;
       
-      const previousCcSet = new Set<string>();
-      for (const msg of existingMsgs) {
-        if (msg.ccEmails && Array.isArray(msg.ccEmails)) {
-          for (const email of msg.ccEmails) {
-            if (email) previousCcSet.add(email.toLowerCase().trim());
-          }
-        }
-      }
-      
       const excludeEmails = new Set<string>();
       excludeEmails.add(account.email.toLowerCase().trim());
       excludeEmails.add(toEmail.toLowerCase().trim());
       
       const mergedCcSet = new Set<string>();
-      for (const e of previousCcSet) {
-        if (!excludeEmails.has(e)) mergedCcSet.add(e);
+      
+      if (campaign.ccEmails) {
+        for (const e of campaign.ccEmails.split(',')) {
+          const trimmed = e.trim().toLowerCase();
+          if (trimmed && !excludeEmails.has(trimmed)) mergedCcSet.add(trimmed);
+        }
+      } else {
+        for (const msg of existingMsgs) {
+          if (msg.ccEmails && Array.isArray(msg.ccEmails)) {
+            for (const email of msg.ccEmails) {
+              if (email) {
+                const trimmed = email.toLowerCase().trim();
+                if (!excludeEmails.has(trimmed)) mergedCcSet.add(trimmed);
+              }
+            }
+          }
+        }
       }
+      
       for (const e of userCcEmails) {
         if (!excludeEmails.has(e.toLowerCase().trim())) mergedCcSet.add(e.toLowerCase().trim());
       }
@@ -5330,8 +5337,8 @@ export async function registerRoutes(
   // SEED DATA
   seedDatabase();
 
-  // Backfill lastMessageAt for conversations where it's missing or stale
   backfillLastMessageAt();
+  backfillCampaignCcEmails();
 
   return httpServer;
 }
@@ -5353,6 +5360,26 @@ async function backfillLastMessageAt() {
     console.log('Backfill lastMessageAt completed');
   } catch (err) {
     console.error('Backfill lastMessageAt error:', err);
+  }
+}
+
+async function backfillCampaignCcEmails() {
+  try {
+    const result = await db.execute(sql`
+      UPDATE campaigns c
+      SET cc_emails = b.cc
+      FROM (
+        SELECT DISTINCT ON (campaign_id) campaign_id, cc
+        FROM bulk_email_jobs
+        WHERE cc IS NOT NULL AND cc != ''
+        ORDER BY campaign_id, created_at DESC
+      ) b
+      WHERE c.id = b.campaign_id
+        AND c.cc_emails IS NULL
+    `);
+    console.log('Backfill campaign ccEmails completed');
+  } catch (err) {
+    console.error('Backfill campaign ccEmails error:', err);
   }
 }
 

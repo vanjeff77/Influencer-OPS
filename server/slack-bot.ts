@@ -474,6 +474,24 @@ export async function handleSlackModalSubmission(payload: any): Promise<{ status
 }
 
 async function getConversationCcEmails(conversationId: number, accountEmail: string, toEmail: string): Promise<string[]> {
+  const conv = await storage.getConversation(conversationId);
+  if (!conv) return [];
+
+  const lineItem = await storage.getLineItemWithDetails(conv.campaignLineItemId);
+  if (lineItem?.campaignId) {
+    const campaign = await storage.getCampaign(lineItem.campaignId);
+    if (campaign?.ccEmails) {
+      const ccSet = new Set<string>();
+      for (const e of campaign.ccEmails.split(',')) {
+        const trimmed = e.trim().toLowerCase();
+        if (trimmed) ccSet.add(trimmed);
+      }
+      ccSet.delete(accountEmail.toLowerCase().trim());
+      ccSet.delete(toEmail.toLowerCase().trim());
+      return Array.from(ccSet);
+    }
+  }
+
   const existingMsgs = await storage.getConversationMessages(conversationId);
   const firstOutbound = existingMsgs.find(m => m.direction === 'outbound');
   const ccSet = new Set<string>();

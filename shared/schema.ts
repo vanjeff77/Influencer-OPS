@@ -191,6 +191,7 @@ export const campaigns = pgTable("campaigns", {
   endDate: timestamp("end_date"),
   status: text("status").default("대기중"), // 대기중, 진행중, 완료
   aiInstruction: text("ai_instruction"),
+  ccEmails: text("cc_emails"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
