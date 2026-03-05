@@ -638,16 +638,17 @@ async function handleSendEditedDraft(parsed: any, values: any): Promise<{ status
 
     let subject = conv.subjectPrefix || `[${campaign.name}]`;
     let inReplyTo: string | undefined;
-    let references: string | undefined;
+    let references: string | string[] | undefined;
 
     if (isReply) {
-      const lastMsg = existingMsgs[existingMsgs.length - 1];
-      if (lastMsg.gmailMessageId) {
-        const formattedMsgId = lastMsg.gmailMessageId.includes('@')
-          ? `<${lastMsg.gmailMessageId}>`
-          : lastMsg.gmailMessageId;
-        inReplyTo = formattedMsgId;
-        references = formattedMsgId;
+      const lastInbound = existingMsgs.filter((m: any) => m.direction === 'inbound').pop();
+      const lastMessageId = lastInbound?.gmailMessageId || existingMsgs[existingMsgs.length - 1]?.gmailMessageId;
+      if (lastMessageId) {
+        inReplyTo = lastMessageId;
+        const allRefs = existingMsgs
+          .map((m: any) => m.gmailMessageId)
+          .filter((id: string | null): id is string => !!id && id.startsWith('<'));
+        references = allRefs.length > 0 ? allRefs : lastMessageId;
       }
       if (!subject.toLowerCase().startsWith('re:')) {
         subject = `Re: ${subject}`;
