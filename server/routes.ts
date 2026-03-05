@@ -2454,6 +2454,8 @@ export async function registerRoutes(
         const lastInboundMsg = existingMsgs.filter(m => m.direction === 'inbound').pop();
         let originalSubject = conv.subjectPrefix || '';
 
+        const isCampaignNameOnly = originalSubject === `[${campaign.name}]`;
+
         if (conv.gmailThreadId || lastInboundMsg?.gmailThreadId) {
           try {
             const targetThreadId = conv.gmailThreadId || lastInboundMsg?.gmailThreadId;
@@ -2471,7 +2473,7 @@ export async function registerRoutes(
           } catch {}
         }
 
-        if (!originalSubject && existingMsgs.length > 0) {
+        if ((!originalSubject || isCampaignNameOnly) && existingMsgs.length > 0) {
           const firstOutbound = existingMsgs.find(m => m.direction === 'outbound');
           if (firstOutbound?.snippet) {
             originalSubject = firstOutbound.snippet;
@@ -5340,6 +5342,7 @@ export async function registerRoutes(
   backfillLastMessageAt();
   backfillCampaignCcEmails();
   fixNixonEmailTypo();
+  backfillConversationSubjectPrefix();
 
   return httpServer;
 }
@@ -5399,6 +5402,31 @@ async function fixNixonEmailTypo() {
     console.log('Fix nixon email typo completed');
   } catch (err) {
     console.error('Fix nixon email typo error:', err);
+  }
+}
+
+async function backfillConversationSubjectPrefix() {
+  try {
+    await db.execute(sql`
+      UPDATE conversations
+      SET subject_prefix = sub.snippet
+      FROM (
+        SELECT DISTINCT ON (cm.conversation_id) cm.conversation_id, cm.snippet
+        FROM conversation_messages cm
+        WHERE cm.direction = 'outbound' AND cm.snippet IS NOT NULL AND cm.snippet != ''
+        ORDER BY cm.conversation_id, cm.id ASC
+      ) sub,
+      campaign_influencers ci,
+      campaigns camp
+      WHERE conversations.id = sub.conversation_id
+        AND ci.id = conversations.campaign_line_item_id
+        AND camp.id = ci.campaign_id
+        AND conversations.subject_prefix = '[' || camp.name || ']'
+        AND sub.snippet != conversations.subject_prefix
+    `);
+    console.log('Backfill conversation subjectPrefix completed');
+  } catch (err) {
+    console.error('Backfill conversation subjectPrefix error:', err);
   }
 }
 

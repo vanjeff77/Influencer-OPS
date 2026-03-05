@@ -250,10 +250,7 @@ async function postSlackMessage(
   threadTs?: string,
 ): Promise<{ ok: boolean; ts?: string; channel?: string; error?: string }> {
   const body: any = { channel: channelId, text, blocks };
-  if (threadTs) {
-    body.thread_ts = threadTs;
-    body.reply_broadcast = true;
-  }
+  if (threadTs) body.thread_ts = threadTs;
 
   const response = await fetch('https://slack.com/api/chat.postMessage', {
     method: 'POST',
@@ -657,7 +654,20 @@ async function handleSendEditedDraft(parsed: any, values: any): Promise<{ status
     const existingMsgs = await storage.getConversationMessages(conversationId);
     const isReply = existingMsgs.length > 0;
 
-    let subject = conv.subjectPrefix || `[${campaign.name}]`;
+    let originalSubject = conv.subjectPrefix || '';
+
+    if (!originalSubject || originalSubject === `[${campaign.name}]`) {
+      const firstOutbound = existingMsgs.find((m: any) => m.direction === 'outbound');
+      if (firstOutbound?.snippet) {
+        originalSubject = firstOutbound.snippet;
+      }
+    }
+
+    if (!originalSubject) {
+      originalSubject = `[${campaign.name}]`;
+    }
+
+    let subject = originalSubject;
     let inReplyTo: string | undefined;
     let references: string | string[] | undefined;
 
@@ -723,18 +733,39 @@ async function handleSendEditedDraft(parsed: any, values: any): Promise<{ status
 
     if (workspace.slackBotToken && messageTs) {
       const targetChannel = channelId || workspace.slackChannelId!;
-      const responseBlocks: SlackBlock[] = [
+
+      const existingMsgsForReply = await storage.getConversationMessages(conversationId);
+      const lastInboundMsg = existingMsgsForReply.filter(m => m.direction === 'inbound').pop();
+
+      const inboundBlocks: SlackBlock[] = [];
+      if (lastInboundMsg) {
+        const inboundBody = lastInboundMsg.bodyText || lastInboundMsg.snippet || '';
+        const inboundPreview = inboundBody.length > 150 ? inboundBody.substring(0, 150) + '...' : inboundBody;
+        inboundBlocks.push(
+          { type: "section", text: { type: "mrkdwn", text: `📨 *인플루언서 메일*  |  ${lastInboundMsg.senderEmail || ''}` } },
+          { type: "section", text: { type: "mrkdwn", text: `\`\`\`\n${inboundPreview}\n\`\`\`` } },
+          { type: "divider" },
+        );
+      }
+
+      const replyPreview = editedDraft.length > 150 ? editedDraft.substring(0, 150) + '...' : editedDraft;
+      const updatedBlocks: SlackBlock[] = [
+        ...inboundBlocks,
         {
           type: "section",
-          text: { type: "mrkdwn", text: `✅ *발송 완료!* ${toEmail}로 답장이 발송되었습니다.${ccEmails.length > 0 ? `\n_CC: ${ccEmails.join(', ')}_` : ''}` }
-        }
+          text: { type: "mrkdwn", text: `✅ *회신 완료*  |  → ${toEmail}${ccEmails.length > 0 ? `\n_CC: ${ccEmails.join(', ')}_` : ''}` }
+        },
+        {
+          type: "section",
+          text: { type: "mrkdwn", text: `\`\`\`\n${replyPreview}\n\`\`\`` }
+        },
       ];
 
       await updateSlackMessage(
         workspace.slackBotToken,
         targetChannel,
         messageTs,
-        responseBlocks,
+        updatedBlocks,
         '답장이 발송되었습니다.',
       );
     }
