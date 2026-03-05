@@ -654,8 +654,22 @@ async function handleSendEditedDraft(parsed: any, values: any): Promise<{ status
       }
     }
 
-    const { getTransporter } = await import('./smtp');
-    const transporter = await getTransporter(account);
+    const { createSmtpTransporter, getImapSmtpSettings } = await import('./smtp');
+    const { decryptPassword } = await import('./imap');
+
+    const smtpSettings = getImapSmtpSettings(account);
+    if (!smtpSettings.smtpHost || !smtpSettings.imapPassword) {
+      return { status: 200, body: { response_action: 'errors', errors: { draft_body_block: 'SMTP 설정이 완료되지 않았습니다.' } } };
+    }
+
+    const password = decryptPassword(smtpSettings.imapPassword);
+    const transporter = createSmtpTransporter({
+      host: smtpSettings.smtpHost,
+      port: smtpSettings.smtpPort,
+      secure: smtpSettings.smtpPort === 465,
+      user: account.email,
+      password,
+    });
 
     await transporter.sendMail({
       from: `"${account.senderName || account.email}" <${account.email}>`,
