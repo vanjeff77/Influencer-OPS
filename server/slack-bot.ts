@@ -250,7 +250,10 @@ async function postSlackMessage(
   threadTs?: string,
 ): Promise<{ ok: boolean; ts?: string; channel?: string; error?: string }> {
   const body: any = { channel: channelId, text, blocks };
-  if (threadTs) body.thread_ts = threadTs;
+  if (threadTs) {
+    body.thread_ts = threadTs;
+    body.reply_broadcast = true;
+  }
 
   const response = await fetch('https://slack.com/api/chat.postMessage', {
     method: 'POST',
@@ -272,7 +275,7 @@ export async function sendSlackNotification(
 
   const targetChannel = ctx.clientSlackChannelId || workspace.slackChannelId;
   const replyBlocks = buildThreadReplyBlocks(ctx, aiDraft);
-  const replyText = `📨 ${ctx.influencerName}님이 메일을 보냈습니다.`;
+  const replyText = `<!channel> 📨 ${ctx.influencerName}님이 메일을 보냈습니다.`;
 
   try {
     const conv = await storage.getConversation(ctx.conversationId);
