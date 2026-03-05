@@ -275,7 +275,7 @@ export async function sendSlackNotification(
 
   const targetChannel = ctx.clientSlackChannelId || workspace.slackChannelId;
   const replyBlocks = buildThreadReplyBlocks(ctx, aiDraft);
-  const replyText = `<!channel> 📨 ${ctx.influencerName}님이 메일을 보냈습니다.`;
+  const replyText = `📨 ${ctx.influencerName}님이 메일을 보냈습니다.`;
 
   try {
     const conv = await storage.getConversation(ctx.conversationId);
