@@ -251,7 +251,10 @@ async function postSlackMessage(
   threadTs?: string,
 ): Promise<{ ok: boolean; ts?: string; channel?: string; error?: string }> {
   const body: any = { channel: channelId, text, blocks };
-  if (threadTs) body.thread_ts = threadTs;
+  if (threadTs) {
+    body.thread_ts = threadTs;
+    body.reply_broadcast = true;
+  }
 
   const response = await fetch('https://slack.com/api/chat.postMessage', {
     method: 'POST',
