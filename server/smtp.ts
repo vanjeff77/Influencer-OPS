@@ -346,6 +346,11 @@ export async function startBulkEmailWorker(jobId: number): Promise<void> {
               lastMessageAt: now,
               status: 'active',
             });
+          } else if (item.renderedSubject) {
+            await storage.updateConversation(conversation.id, {
+              subjectPrefix: item.renderedSubject,
+              emailAccountId: emailAccount.id,
+            });
           }
           
           await storage.createConversationMessage({

@@ -46,7 +46,7 @@ Preferred communication style: Simple, everyday language.
     - **Attach Existing Email Thread**: Wizard for linking external email threads via IMAP search.
     - **Bulk Email Sending**: Queue-based 1:1 delivery with throttling, WYSIWYG editor, variable substitution.
     - **Integrated Messenger**: 3-pane layout for campaign communication, Gmail syncing, influencer detail editing, and content sanitization.
-    - **Auto Email Sync**: Gmail History API-based incremental sync with background worker and frontend auto-refresh. IMAP auto-sync via `fetchInboxReplies` (two-phase: headers-first matching, then full body fetch for matches only). 60-second sync interval with 45-second IMAP timeout. Supports both Gmail OAuth and IMAP provider accounts.
+    - **Auto Email Sync**: Gmail History API-based incremental sync with background worker and frontend auto-refresh. IMAP auto-sync via `fetchInboxReplies` (two-phase: headers-first matching, then full body fetch for matches only). 60-second sync interval with 45-second IMAP timeout. Supports both Gmail OAuth and IMAP provider accounts. Both Gmail and IMAP sync paths update `subjectPrefix` from inbound message subject (stripping `Re:` prefix) for accurate reply threading.
 - **Mobile Optimization**: Fully responsive UI.
 - **Influencer Campaign History**: Displays past campaigns and allows navigation to details.
 - **Content Submission History**: Tracks influencer content submissions, supports multiple uploads, and integrates with review tracking.

@@ -425,10 +425,17 @@ async function syncImapAccountConversations(account: EmailAccount): Promise<numb
         totalSynced++;
 
         if (!isOutbound) {
-          await storage.updateConversation(convId, {
+          const imapUpdateData: any = {
             status: 'replied',
             lastMessageAt: msg.date || new Date(),
-          });
+          };
+          if (msg.subject) {
+            const cleanSubject = msg.subject.replace(/^Re:\s*/i, '').trim();
+            if (cleanSubject) {
+              imapUpdateData.subjectPrefix = cleanSubject;
+            }
+          }
+          await storage.updateConversation(convId, imapUpdateData);
           if (createdMsg) {
             triggerAiDraftGeneration(convId, createdMsg.id).catch(() => {});
           }
