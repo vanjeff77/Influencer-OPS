@@ -5339,6 +5339,7 @@ export async function registerRoutes(
 
   backfillLastMessageAt();
   backfillCampaignCcEmails();
+  fixNixonEmailTypo();
 
   return httpServer;
 }
@@ -5380,6 +5381,24 @@ async function backfillCampaignCcEmails() {
     console.log('Backfill campaign ccEmails completed');
   } catch (err) {
     console.error('Backfill campaign ccEmails error:', err);
+  }
+}
+
+async function fixNixonEmailTypo() {
+  try {
+    await db.execute(sql`
+      UPDATE campaigns
+      SET cc_emails = REPLACE(cc_emails, 'nixon@vaned.kr', 'nixon@vanced.kr')
+      WHERE cc_emails LIKE '%nixon@vaned.kr%'
+    `);
+    await db.execute(sql`
+      UPDATE conversation_messages
+      SET cc_emails = array_replace(cc_emails, 'nixon@vaned.kr', 'nixon@vanced.kr')
+      WHERE 'nixon@vaned.kr' = ANY(cc_emails)
+    `);
+    console.log('Fix nixon email typo completed');
+  } catch (err) {
+    console.error('Fix nixon email typo error:', err);
   }
 }
 
