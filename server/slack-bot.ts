@@ -37,6 +37,70 @@ function truncateForSlack(text: string, maxLen = 2900): string {
   return text.length > maxLen ? text.substring(0, maxLen) + '...' : text;
 }
 
+function textToRichTextBlock(text: string): any {
+  const lines = text.split('\n');
+  const elements: any[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (i > 0) elements.push({ type: "text", text: "\n" });
+    elements.push({ type: "text", text: lines[i] || "" });
+  }
+  if (elements.length === 0) {
+    elements.push({ type: "text", text: "" });
+  }
+  return {
+    type: "rich_text",
+    elements: [{ type: "rich_text_section", elements }],
+  };
+}
+
+function richTextBlockToHtml(richText: any): string {
+  if (!richText?.elements) return '';
+  const parts: string[] = [];
+  for (const block of richText.elements) {
+    if (block.type === 'rich_text_section') {
+      parts.push(richTextSectionToHtml(block.elements || []));
+    } else if (block.type === 'rich_text_list') {
+      const tag = block.style === 'ordered' ? 'ol' : 'ul';
+      const items = (block.elements || []).map((item: any) => {
+        return `<li>${richTextSectionToHtml(item.elements || [])}</li>`;
+      }).join('');
+      parts.push(`<${tag}>${items}</${tag}>`);
+    } else if (block.type === 'rich_text_preformatted') {
+      parts.push(`<pre>${richTextSectionToHtml(block.elements || [])}</pre>`);
+    } else if (block.type === 'rich_text_quote') {
+      parts.push(`<blockquote>${richTextSectionToHtml(block.elements || [])}</blockquote>`);
+    }
+  }
+  return parts.join('');
+}
+
+function richTextSectionToHtml(elements: any[]): string {
+  return elements.map((el: any) => {
+    if (el.type === 'text') {
+      let html = (el.text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+      if (el.style?.bold) html = `<b>${html}</b>`;
+      if (el.style?.italic) html = `<i>${html}</i>`;
+      if (el.style?.strike) html = `<s>${html}</s>`;
+      if (el.style?.code) html = `<code>${html}</code>`;
+      return html;
+    } else if (el.type === 'link') {
+      const linkText = el.text || el.url || '';
+      return `<a href="${el.url}">${linkText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</a>`;
+    } else if (el.type === 'emoji') {
+      return el.unicode ? String.fromCodePoint(...el.unicode.split('-').map((h: string) => parseInt(h, 16))) : `:${el.name}:`;
+    }
+    return '';
+  }).join('');
+}
+
+function richTextBlockToPlainText(richText: any): string {
+  if (!richText?.elements) return '';
+  return richText.elements.map((block: any) => {
+    const els = block.elements || [];
+    return els.map((el: any) => el.text || el.url || '').join('');
+  }).join('\n');
+}
+
 const contentCache = new Map<string, { data: string; expiry: number }>();
 const CACHE_TTL_MS = 10 * 60 * 1000;
 
@@ -604,10 +668,9 @@ async function handleOpenSendDraftModal(payload: any, parsed: any): Promise<{ st
       type: "input",
       block_id: "draft_body_block",
       element: {
-        type: "plain_text_input",
+        type: "rich_text_input",
         action_id: "draft_body_input",
-        multiline: true,
-        initial_value: draftText,
+        initial_value: textToRichTextBlock(draftText),
       },
       label: { type: "plain_text", text: "메일 본문" },
     } as any,
@@ -636,7 +699,9 @@ async function handleOpenSendDraftModal(payload: any, parsed: any): Promise<{ st
 
 async function handleSendEditedDraft(parsed: any, values: any): Promise<{ status: number; body: any }> {
   const { conversationId, workspaceId, draftId, messageTs, channelId } = parsed;
-  const editedDraft = values?.draft_body_block?.draft_body_input?.value || '';
+  const richTextValue = values?.draft_body_block?.draft_body_input?.rich_text_value;
+  const editedDraft = richTextValue ? richTextBlockToPlainText(richTextValue) : (values?.draft_body_block?.draft_body_input?.value || '');
+  const editedDraftHtml = richTextValue ? richTextBlockToHtml(richTextValue) : '';
   const ccInput = values?.cc_block?.cc_input?.value || '';
 
   try {
@@ -675,10 +740,15 @@ async function handleSendEditedDraft(parsed: any, values: any): Promise<{ status
       : [];
 
     const { convertToGmailCompatibleHtml } = await import('./smtp');
-    const isPlainText = !/<[a-z][\s\S]*>/i.test(editedDraft);
-    const htmlBody = isPlainText
-      ? editedDraft.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')
-      : editedDraft;
+    let htmlBody: string;
+    if (editedDraftHtml) {
+      htmlBody = editedDraftHtml;
+    } else {
+      const isPlainText = !/<[a-z][\s\S]*>/i.test(editedDraft);
+      htmlBody = isPlainText
+        ? editedDraft.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')
+        : editedDraft;
+    }
     let finalBody = convertToGmailCompatibleHtml(htmlBody);
     if (account.useSignature && account.signature) {
       finalBody += `<br><br>--<br>${account.signature}`;
