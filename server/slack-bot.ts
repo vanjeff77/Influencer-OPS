@@ -560,7 +560,28 @@ async function handleOpenSendDraftModal(payload: any, parsed: any): Promise<{ st
   const ccEmails = await getConversationCcEmails(conversationId, accountEmail, toEmail);
   const ccDefault = ccEmails.length > 0 ? ccEmails.join(', ') : '';
 
-  const modalBlocks: SlackBlock[] = [
+  const existingMsgs = await storage.getConversationMessages(conversationId);
+  const lastInbound = existingMsgs.filter((m: any) => m.direction === 'inbound').pop();
+
+  const modalBlocks: SlackBlock[] = [];
+
+  if (lastInbound) {
+    const inboundBody = lastInbound.bodyText || lastInbound.snippet || '';
+    const inboundPreview = inboundBody.length > 300 ? inboundBody.substring(0, 300) + '...' : inboundBody;
+    modalBlocks.push(
+      {
+        type: "section",
+        text: { type: "mrkdwn", text: `📨 *수신 메일*  |  ${lastInbound.senderEmail || ''}` },
+      },
+      {
+        type: "section",
+        text: { type: "mrkdwn", text: `\`\`\`\n${inboundPreview}\n\`\`\`` },
+      },
+      { type: "divider" },
+    );
+  }
+
+  modalBlocks.push(
     {
       type: "context",
       elements: [
@@ -590,7 +611,7 @@ async function handleOpenSendDraftModal(payload: any, parsed: any): Promise<{ st
       },
       label: { type: "plain_text", text: "메일 본문" },
     } as any,
-  ];
+  );
 
   const metadata = JSON.stringify({
     conversationId,
