@@ -5336,6 +5336,43 @@ export async function registerRoutes(
     }
   });
 
+  app.get('/api/workspaces/:workspaceId/email-sync-logs', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const workspaceId = parseInt(req.params.workspaceId);
+      const membership = await storage.getWorkspaceMemberships(req.user!.id);
+      const member = membership.find(m => m.workspaceId === workspaceId);
+      if (!member || member.role !== 'WORKSPACE_OWNER') {
+        return res.status(403).json({ error: 'Owner access required' });
+      }
+      const limit = parseInt(req.query.limit as string) || 50;
+      const offset = parseInt(req.query.offset as string) || 0;
+      const result = await storage.getEmailSyncLogs(workspaceId, limit, offset);
+      res.json(result);
+    } catch (err) {
+      console.error('[API] email-sync-logs error:', err);
+      res.status(500).json({ error: 'Failed to fetch sync logs' });
+    }
+  });
+
+  app.get('/api/workspaces/:workspaceId/email-sync-logs/:logId', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const workspaceId = parseInt(req.params.workspaceId);
+      const membership = await storage.getWorkspaceMemberships(req.user!.id);
+      const member = membership.find(m => m.workspaceId === workspaceId);
+      if (!member || member.role !== 'WORKSPACE_OWNER') {
+        return res.status(403).json({ error: 'Owner access required' });
+      }
+      const log = await storage.getEmailSyncLog(parseInt(req.params.logId));
+      if (!log || log.workspaceId !== workspaceId) return res.status(404).json({ error: 'Log not found' });
+      res.json(log);
+    } catch (err) {
+      console.error('[API] email-sync-log detail error:', err);
+      res.status(500).json({ error: 'Failed to fetch sync log' });
+    }
+  });
+
   // SEED DATA
   seedDatabase();
 

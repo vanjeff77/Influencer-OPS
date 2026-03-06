@@ -8,6 +8,16 @@ let syncInterval: NodeJS.Timeout | null = null;
 
 const SYNC_INTERVAL_MS = 1 * 60 * 1000;
 
+interface SyncedMessageInfo {
+  conversationId: number;
+  direction: string;
+  senderEmail: string | null;
+  recipientEmail: string | null;
+  snippet: string | null;
+  subject: string | null;
+  receivedAt: string;
+}
+
 async function triggerAiDraftGeneration(conversationId: number, triggerMessageId: number) {
   try {
     const existing = await storage.getDraftByTriggerMessage(triggerMessageId);
@@ -120,8 +130,8 @@ async function syncThreadToConversation(conversationId: number, gmailThreadId: s
   return synced;
 }
 
-async function syncGmailAccountIncremental(account: EmailAccount): Promise<{ synced: number; accountEmail: string }> {
-  const result = { synced: 0, accountEmail: account.email };
+async function syncGmailAccountIncremental(account: EmailAccount): Promise<{ synced: number; accountEmail: string; syncedMessages: SyncedMessageInfo[] }> {
+  const result = { synced: 0, accountEmail: account.email, syncedMessages: [] as SyncedMessageInfo[] };
 
   try {
     if (!account.lastHistoryId) {
@@ -265,6 +275,15 @@ async function syncGmailAccountIncremental(account: EmailAccount): Promise<{ syn
 
             existingGmailIds.add(gmailMsgId || msgId);
             result.synced++;
+            result.syncedMessages.push({
+              conversationId: conv.id,
+              direction: isOutbound ? 'outbound' : 'inbound',
+              senderEmail: headers.from || null,
+              recipientEmail: headers.to || null,
+              snippet: gmail.generateSnippet(body.text || body.html)?.slice(0, 200) || null,
+              subject: headers.subject || null,
+              receivedAt: (headers.date ? new Date(headers.date) : new Date()).toISOString(),
+            });
 
             if (!isOutbound) {
               const updateData: any = {
@@ -299,20 +318,21 @@ async function syncGmailAccountIncremental(account: EmailAccount): Promise<{ syn
   return result;
 }
 
-async function syncImapAccountConversations(account: EmailAccount): Promise<number> {
+async function syncImapAccountConversations(account: EmailAccount): Promise<{ synced: number; syncedMessages: SyncedMessageInfo[] }> {
   let totalSynced = 0;
+  const syncedMessages: SyncedMessageInfo[] = [];
 
   try {
     const { getImapSmtpSettings } = await import('./smtp');
     const { imapHost, imapPort: imapPortNum, imapPassword: encPwd } = getImapSmtpSettings(account);
-    if (!imapHost || !encPwd) return 0;
+    if (!imapHost || !encPwd) return { synced: 0, syncedMessages: [] };
 
     const imap = await import('./imap');
     const password = imap.decryptPassword(encPwd);
     const imapConfig = { user: account.email, password, host: imapHost, port: imapPortNum, tls: true };
 
     const activeConvs = await storage.getActiveConversationsForImapSync(account.id, account.email);
-    if (activeConvs.length === 0) return 0;
+    if (activeConvs.length === 0) return { synced: 0, syncedMessages: [] };
 
     const convDataMap = new Map<number, { conv: typeof activeConvs[0]; existingMessages: any[]; knownMsgIds: string[] }>();
     const allKnownMsgIds: string[] = [];
@@ -337,7 +357,7 @@ async function syncImapAccountConversations(account: EmailAccount): Promise<numb
       }
     }
 
-    if (allKnownMsgIds.length === 0) return 0;
+    if (allKnownMsgIds.length === 0) return { synced: 0, syncedMessages: [] };
 
     console.log(`[AutoSync-IMAP] ${account.email}: checking ${allKnownMsgIds.length} message IDs across ${convDataMap.size} conversations`);
 
@@ -346,10 +366,10 @@ async function syncImapAccountConversations(account: EmailAccount): Promise<numb
       allImapMessages = await imap.fetchInboxReplies(imapConfig, allKnownMsgIds, 45000);
     } catch (imapErr) {
       console.warn(`[AutoSync-IMAP] IMAP fetch failed for ${account.email}:`, imapErr);
-      return 0;
+      return { synced: 0, syncedMessages: [] };
     }
 
-    if (allImapMessages.length === 0) return 0;
+    if (allImapMessages.length === 0) return { synced: 0, syncedMessages: [] };
 
     const msgToConv = new Map<any, number>();
     for (const msg of allImapMessages) {
@@ -433,6 +453,15 @@ async function syncImapAccountConversations(account: EmailAccount): Promise<numb
 
         data.existingMessages.push(createdMsg);
         totalSynced++;
+        syncedMessages.push({
+          conversationId: convId,
+          direction: isOutbound ? 'outbound' : 'inbound',
+          senderEmail: msg.from || null,
+          recipientEmail: msg.to || null,
+          snippet: (msg.snippet || '').slice(0, 200) || null,
+          subject: msg.subject || null,
+          receivedAt: (msg.date || new Date()).toISOString(),
+        });
 
         if (!isOutbound) {
           const imapUpdateData: any = {
@@ -462,7 +491,7 @@ async function syncImapAccountConversations(account: EmailAccount): Promise<numb
     console.error(`[AutoSync-IMAP] Error syncing ${account.email}:`, err);
   }
 
-  return totalSynced;
+  return { synced: totalSynced, syncedMessages };
 }
 
 async function runSyncCycle() {
@@ -477,14 +506,74 @@ async function runSyncCycle() {
 
     const gmailAccounts = await storage.getAllGmailAccounts();
     for (const account of gmailAccounts) {
-      const result = await syncGmailAccountIncremental(account);
-      totalSynced += result.synced;
+      const startedAt = new Date();
+      let logId: number | null = null;
+      try {
+        const log = await storage.createEmailSyncLog({
+          workspaceId: account.workspaceId,
+          emailAccountId: account.id,
+          accountEmail: account.email,
+          provider: 'gmail',
+          status: 'running',
+          startedAt,
+        });
+        logId = log.id;
+        const result = await syncGmailAccountIncremental(account);
+        totalSynced += result.synced;
+        if (logId) {
+          await storage.updateEmailSyncLog(logId, {
+            status: result.synced > 0 ? 'success' : 'no_new',
+            totalSynced: result.synced,
+            syncedMessages: result.syncedMessages as any,
+            completedAt: new Date(),
+          });
+        }
+      } catch (accErr: any) {
+        console.error(`[AutoSync] Error logging sync for ${account.email}:`, accErr?.message || accErr);
+        if (logId) {
+          await storage.updateEmailSyncLog(logId, {
+            status: 'error',
+            errorMessage: accErr?.message || String(accErr),
+            completedAt: new Date(),
+          }).catch(() => {});
+        }
+      }
     }
 
     const imapAccounts = await storage.getAllImapAccounts();
     for (const account of imapAccounts) {
-      const synced = await syncImapAccountConversations(account);
-      totalSynced += synced;
+      const startedAt = new Date();
+      let logId: number | null = null;
+      try {
+        const log = await storage.createEmailSyncLog({
+          workspaceId: account.workspaceId,
+          emailAccountId: account.id,
+          accountEmail: account.email,
+          provider: 'imap',
+          status: 'running',
+          startedAt,
+        });
+        logId = log.id;
+        const result = await syncImapAccountConversations(account);
+        totalSynced += result.synced;
+        if (logId) {
+          await storage.updateEmailSyncLog(logId, {
+            status: result.synced > 0 ? 'success' : 'no_new',
+            totalSynced: result.synced,
+            syncedMessages: result.syncedMessages as any,
+            completedAt: new Date(),
+          });
+        }
+      } catch (accErr: any) {
+        console.error(`[AutoSync] Error logging sync for ${account.email}:`, accErr?.message || accErr);
+        if (logId) {
+          await storage.updateEmailSyncLog(logId, {
+            status: 'error',
+            errorMessage: accErr?.message || String(accErr),
+            completedAt: new Date(),
+          }).catch(() => {});
+        }
+      }
     }
 
     if (totalSynced > 0) {

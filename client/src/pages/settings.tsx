@@ -462,7 +462,7 @@ export default function SettingsPage() {
       )}
 
       <Tabs defaultValue={isOwner ? "workspace" : (canManageMembers ? "users" : "clients")}>
-        <TabsList className={`grid w-full ${isOwner ? 'grid-cols-4' : (canManageMembers ? 'grid-cols-3' : 'grid-cols-2')} md:w-auto md:inline-flex`}>
+        <TabsList className="w-full md:w-auto md:inline-flex flex-wrap">
           {isOwner && (
             <TabsTrigger value="workspace" className="gap-2" data-testid="tab-workspace">
               <Settings className="w-4 h-4" />
@@ -483,6 +483,12 @@ export default function SettingsPage() {
             <FileText className="w-4 h-4" />
             {KO.settings.templatesTab}
           </TabsTrigger>
+          {isOwner && (
+            <TabsTrigger value="sync-logs" className="gap-2" data-testid="tab-sync-logs">
+              <RotateCcw className="w-4 h-4" />
+              동기화 로그
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {isOwner && (
@@ -1307,6 +1313,12 @@ export default function SettingsPage() {
           <EmailTemplatesSection workspaceId={workspaceId} />
           <ContractTemplatesSection workspaceId={workspaceId} />
         </TabsContent>
+
+        {isOwner && (
+          <TabsContent value="sync-logs" className="mt-6">
+            <SyncLogsSection workspaceId={workspaceId} />
+          </TabsContent>
+        )}
       </Tabs>
 
       {editingClient && (
@@ -1968,6 +1980,229 @@ function ContractTemplatesSection({ workspaceId }: { workspaceId: number }) {
           </DialogContent>
         </Dialog>
       )}
+    </Card>
+  );
+}
+
+interface SyncLogEntry {
+  id: number;
+  workspaceId: number;
+  emailAccountId: number | null;
+  accountEmail: string | null;
+  provider: string;
+  status: string;
+  totalSynced: number | null;
+  syncedMessages: SyncedMessageDetail[] | null;
+  errorMessage: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+}
+
+interface SyncedMessageDetail {
+  conversationId: number;
+  direction: string;
+  senderEmail: string | null;
+  recipientEmail: string | null;
+  snippet: string | null;
+  subject: string | null;
+  receivedAt: string;
+}
+
+function SyncLogsSection({ workspaceId }: { workspaceId: number }) {
+  const [page, setPage] = useState(0);
+  const [expandedLogId, setExpandedLogId] = useState<number | null>(null);
+  const pageSize = 30;
+
+  const { data, isLoading } = useQuery<{ logs: SyncLogEntry[]; total: number }>({
+    queryKey: ['/api/workspaces', workspaceId, 'email-sync-logs', page],
+    queryFn: async () => {
+      const res = await fetch(`/api/workspaces/${workspaceId}/email-sync-logs?limit=${pageSize}&offset=${page * pageSize}`);
+      if (!res.ok) throw new Error('Failed to fetch');
+      return res.json();
+    },
+    refetchInterval: 30000,
+  });
+
+  const logs = data?.logs || [];
+  const total = data?.total || 0;
+  const totalPages = Math.ceil(total / pageSize);
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'success':
+        return <Badge className="bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"><CheckCircle className="w-3 h-3 mr-1" />새 메일</Badge>;
+      case 'no_new':
+        return <Badge variant="secondary"><Mail className="w-3 h-3 mr-1" />변화없음</Badge>;
+      case 'error':
+        return <Badge variant="destructive"><AlertCircle className="w-3 h-3 mr-1" />오류</Badge>;
+      case 'running':
+        return <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"><Loader2 className="w-3 h-3 mr-1 animate-spin" />진행중</Badge>;
+      default:
+        return <Badge variant="outline">{status}</Badge>;
+    }
+  };
+
+  const formatTime = (dateStr: string | null) => {
+    if (!dateStr) return '-';
+    const d = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1) return '방금 전';
+    if (diffMin < 60) return `${diffMin}분 전`;
+    const diffHour = Math.floor(diffMin / 60);
+    if (diffHour < 24) return `${diffHour}시간 전`;
+    return d.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
+
+  const formatDuration = (start: string | null, end: string | null) => {
+    if (!start || !end) return '-';
+    const ms = new Date(end).getTime() - new Date(start).getTime();
+    if (ms < 1000) return `${ms}ms`;
+    return `${(ms / 1000).toFixed(1)}s`;
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg flex items-center gap-2">
+          <RotateCcw className="w-5 h-5" />
+          메일 동기화 로그
+        </CardTitle>
+        <CardDescription>자동 이메일 동기화 실행 기록을 확인합니다. 각 행을 클릭하면 동기화된 메일 상세 내역을 볼 수 있습니다.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : logs.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">
+            동기화 로그가 아직 없습니다. 자동 동기화가 실행되면 여기에 기록됩니다.
+          </div>
+        ) : (
+          <>
+            <div className="space-y-1">
+              {logs.map((log) => (
+                <div key={log.id}>
+                  <button
+                    className={`w-full text-left px-4 py-3 rounded-lg border transition-colors hover:bg-accent/50 ${
+                      expandedLogId === log.id ? 'bg-accent border-primary/30' : 'bg-card border-border'
+                    } ${log.totalSynced && log.totalSynced > 0 ? 'border-l-4 border-l-green-500' : ''}`}
+                    onClick={() => setExpandedLogId(expandedLogId === log.id ? null : log.id)}
+                    data-testid={`sync-log-row-${log.id}`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        {getStatusBadge(log.status)}
+                        <span className="text-sm font-medium truncate">{log.accountEmail || '-'}</span>
+                        <Badge variant="outline" className="text-xs uppercase">{log.provider}</Badge>
+                      </div>
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        {log.totalSynced && log.totalSynced > 0 ? (
+                          <span className="text-sm font-semibold text-green-600 dark:text-green-400">+{log.totalSynced}건</span>
+                        ) : null}
+                        <span className="text-xs text-muted-foreground">{formatDuration(log.startedAt, log.completedAt)}</span>
+                        <span className="text-xs text-muted-foreground w-20 text-right">{formatTime(log.startedAt)}</span>
+                      </div>
+                    </div>
+                    {log.errorMessage && (
+                      <div className="mt-2 text-xs text-destructive bg-destructive/10 rounded px-2 py-1 truncate">
+                        {log.errorMessage}
+                      </div>
+                    )}
+                  </button>
+
+                  {expandedLogId === log.id && (
+                    <div className="ml-4 mt-1 mb-2 border-l-2 border-primary/20 pl-4">
+                      {log.syncedMessages && log.syncedMessages.length > 0 ? (
+                        <div className="space-y-2 py-2">
+                          <div className="text-xs font-medium text-muted-foreground mb-2">
+                            동기화된 메일 {log.syncedMessages.length}건
+                          </div>
+                          {log.syncedMessages.map((msg, idx) => (
+                            <div
+                              key={idx}
+                              className="bg-muted/50 rounded-lg px-3 py-2 text-sm space-y-1"
+                              data-testid={`synced-message-${log.id}-${idx}`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <Badge
+                                  variant={msg.direction === 'inbound' ? 'default' : 'outline'}
+                                  className={`text-xs ${msg.direction === 'inbound' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : ''}`}
+                                >
+                                  {msg.direction === 'inbound' ? '수신' : '발신'}
+                                </Badge>
+                                <span className="text-xs text-muted-foreground">
+                                  대화 #{msg.conversationId}
+                                </span>
+                                <span className="text-xs text-muted-foreground ml-auto">
+                                  {new Date(msg.receivedAt).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </div>
+                              {msg.subject && (
+                                <div className="text-xs font-medium truncate">
+                                  {msg.subject}
+                                </div>
+                              )}
+                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                <span>{msg.direction === 'inbound' ? '보낸 사람' : '받는 사람'}:</span>
+                                <span className="font-mono truncate">
+                                  {msg.direction === 'inbound' ? msg.senderEmail : msg.recipientEmail}
+                                </span>
+                              </div>
+                              {msg.snippet && (
+                                <div className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                                  {msg.snippet}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="py-3 text-sm text-muted-foreground">
+                          {log.status === 'no_new' ? '새로 동기화된 메일이 없습니다.' : 
+                           log.status === 'error' ? '오류로 인해 동기화가 실패했습니다.' :
+                           log.status === 'running' ? '동기화가 진행 중입니다...' :
+                           '동기화된 메일 상세 정보가 없습니다.'}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                <span className="text-sm text-muted-foreground">
+                  총 {total}건 중 {page * pageSize + 1}-{Math.min((page + 1) * pageSize, total)}
+                </span>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage(p => Math.max(0, p - 1))}
+                    disabled={page === 0}
+                    data-testid="sync-logs-prev"
+                  >
+                    이전
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage(p => p + 1)}
+                    disabled={page >= totalPages - 1}
+                    data-testid="sync-logs-next"
+                  >
+                    다음
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </CardContent>
     </Card>
   );
 }

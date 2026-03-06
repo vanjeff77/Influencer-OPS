@@ -77,6 +77,11 @@ Preferred communication style: Simple, everyday language.
     - **UI Labels**: Primary actions (초안 사용하기, 다른 답변 요청, ❌) in one row; alternative classifications under "💡 다른 답변 선택하기" context label in separate row.
     - **Settings UI**: Client Slack channel ID field in client edit dialog. Recent inbound messages table with resend test functionality.
     - **APIs**: `GET /api/workspaces/:workspaceId/recent-inbound-messages`, `POST /api/workspaces/:workspaceId/resend-slack-notification`.
+- **Email Sync Logging**:
+    - **Schema**: `email_sync_logs` table — tracks each auto-sync cycle per account with status, synced message details, timing, and errors.
+    - **Data Captured**: Per-account log entries with provider, status (running/success/no_new/error), totalSynced count, and detailed `syncedMessages` JSON array (conversationId, direction, sender, recipient, snippet, subject, receivedAt).
+    - **Settings UI**: "동기화 로그" tab in Settings (owner-only). Shows sync log timeline with expandable rows revealing synced message details.
+    - **APIs**: `GET /api/workspaces/:workspaceId/email-sync-logs`, `GET /api/workspaces/:workspaceId/email-sync-logs/:logId`.
 - **AI Auto-Reply Draft Generation**:
     - **RAG-based**: Uses a customizable email response framework document and campaign-level AI instructions.
     - **LLM Provider Abstraction**: Supports Replit AI, OpenAI API, and Anthropic API.

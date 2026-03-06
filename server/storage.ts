@@ -3,8 +3,9 @@ import {
   users, workspaces, workspaceMembers, influencers, influencerAccounts, groups, groupInfluencers, campaigns, campaignInfluencers,
   emailAccounts, emailThreads, trackingJobs, trackingMetrics, contents, timelineEvents, auditLogs, notifications,
   conversations, conversationMessages, emailTemplates, bulkEmailJobs, bulkEmailQueueItems, campaignContents, feedbackNotes,
-  clients, clientUserAssignments, contractTemplates, contentSubmissions, aiDraftReplies,
+  clients, clientUserAssignments, contractTemplates, contentSubmissions, aiDraftReplies, emailSyncLogs,
   type User, type InsertUser, type Workspace, type InsertWorkspace,
+  type EmailSyncLog,
   type Client, type InsertClient, type ClientUserAssignment, type InsertClientUserAssignment,
   type Influencer, type CreateInfluencerWithAccounts, type InfluencerAccount,
   type Group, type GroupInfluencer, type Campaign, type CampaignInfluencer, type Content,
@@ -215,6 +216,12 @@ export interface IStorage {
   createAiDraft(draft: InsertAiDraftReply): Promise<AiDraftReply>;
   updateAiDraft(id: number, data: Partial<AiDraftReply>): Promise<AiDraftReply>;
   getPendingDraftConversationIds(conversationIds: number[]): Promise<number[]>;
+
+  // Email Sync Logs
+  createEmailSyncLog(data: Partial<EmailSyncLog>): Promise<EmailSyncLog>;
+  updateEmailSyncLog(id: number, data: Partial<EmailSyncLog>): Promise<EmailSyncLog>;
+  getEmailSyncLogs(workspaceId: number, limit?: number, offset?: number): Promise<{ logs: EmailSyncLog[]; total: number }>;
+  getEmailSyncLog(id: number): Promise<EmailSyncLog | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1727,6 +1734,32 @@ export class DatabaseStorage implements IStorage {
         eq(aiDraftReplies.status, "pending")
       ));
     return [...new Set(results.map(r => r.conversationId))];
+  }
+
+  async createEmailSyncLog(data: Partial<EmailSyncLog>): Promise<EmailSyncLog> {
+    const [log] = await db.insert(emailSyncLogs).values(data as any).returning();
+    return log;
+  }
+
+  async updateEmailSyncLog(id: number, data: Partial<EmailSyncLog>): Promise<EmailSyncLog> {
+    const [log] = await db.update(emailSyncLogs).set(data as any).where(eq(emailSyncLogs.id, id)).returning();
+    return log;
+  }
+
+  async getEmailSyncLogs(workspaceId: number, limit = 50, offset = 0): Promise<{ logs: EmailSyncLog[]; total: number }> {
+    const [countResult] = await db.select({ count: sql<number>`count(*)` }).from(emailSyncLogs).where(eq(emailSyncLogs.workspaceId, workspaceId));
+    const total = Number(countResult?.count || 0);
+    const logs = await db.select().from(emailSyncLogs)
+      .where(eq(emailSyncLogs.workspaceId, workspaceId))
+      .orderBy(desc(emailSyncLogs.startedAt))
+      .limit(limit)
+      .offset(offset);
+    return { logs, total };
+  }
+
+  async getEmailSyncLog(id: number): Promise<EmailSyncLog | undefined> {
+    const [log] = await db.select().from(emailSyncLogs).where(eq(emailSyncLogs.id, id));
+    return log;
   }
 }
 

@@ -728,3 +728,19 @@ export const contentSubmissions = pgTable("content_submissions", {
 export const insertContentSubmissionSchema = createInsertSchema(contentSubmissions).omit({ id: true, submittedAt: true });
 export type InsertContentSubmission = z.infer<typeof insertContentSubmissionSchema>;
 export type ContentSubmission = typeof contentSubmissions.$inferSelect;
+
+export const emailSyncLogs = pgTable("email_sync_logs", {
+  id: serial("id").primaryKey(),
+  workspaceId: integer("workspace_id").notNull(),
+  emailAccountId: integer("email_account_id"),
+  accountEmail: text("account_email"),
+  provider: text("provider").notNull(),
+  status: text("status").notNull().default("success"),
+  totalSynced: integer("total_synced").default(0),
+  syncedMessages: jsonb("synced_messages"),
+  errorMessage: text("error_message"),
+  startedAt: timestamp("started_at").defaultNow(),
+  completedAt: timestamp("completed_at"),
+});
+
+export type EmailSyncLog = typeof emailSyncLogs.$inferSelect;
