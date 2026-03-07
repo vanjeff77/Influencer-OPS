@@ -10,6 +10,10 @@ packages = ["glib", "nss", "nspr", "atk", "cups", "dbus", "expat", "xorg.libxcb"
 localPort = 5000
 externalPort = 80
 
+[[ports]]
+localPort = 5904
+externalPort = 3003
+
 [env]
 PORT = "5000"
 
