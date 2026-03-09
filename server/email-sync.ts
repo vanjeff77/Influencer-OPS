@@ -3,6 +3,38 @@ import * as gmail from "./gmail";
 import type { EmailAccount } from "@shared/schema";
 import { notifyInboundEmail } from "./slack-bot";
 
+function usePerAccountGmail(account: EmailAccount): boolean {
+  return !!(account.provider === 'gmail' && account.refreshToken && account.useGmailApi);
+}
+
+async function getHistoryIdFor(account: EmailAccount): Promise<string> {
+  if (usePerAccountGmail(account)) {
+    return gmail.getHistoryIdForAccount(account.refreshToken!);
+  }
+  return gmail.getHistoryId();
+}
+
+async function getHistoryFor(account: EmailAccount, startHistoryId: string) {
+  if (usePerAccountGmail(account)) {
+    return gmail.getHistoryForAccount(account.refreshToken!, startHistoryId);
+  }
+  return gmail.getHistory(startHistoryId);
+}
+
+async function getMessageFor(account: EmailAccount, messageId: string) {
+  if (usePerAccountGmail(account)) {
+    return gmail.getMessageForAccount(account.refreshToken!, messageId);
+  }
+  return gmail.getMessage(messageId);
+}
+
+async function getThreadFor(account: EmailAccount, threadId: string) {
+  if (usePerAccountGmail(account)) {
+    return gmail.getThreadForAccount(account.refreshToken!, threadId);
+  }
+  return gmail.getThread(threadId);
+}
+
 let isSyncing = false;
 let syncInterval: NodeJS.Timeout | null = null;
 
@@ -79,7 +111,7 @@ async function triggerAiDraftGeneration(conversationId: number, triggerMessageId
 }
 
 async function syncThreadToConversation(conversationId: number, gmailThreadId: string, account: EmailAccount): Promise<number> {
-  const thread = await gmail.getThread(gmailThreadId);
+  const thread = await getThreadFor(account, gmailThreadId);
   if (!thread.messages) return 0;
 
   const existingMessages = await storage.getConversationMessages(conversationId);
@@ -135,7 +167,7 @@ async function syncGmailAccountIncremental(account: EmailAccount): Promise<{ syn
 
   try {
     if (!account.lastHistoryId) {
-      const historyId = await gmail.getHistoryId();
+      const historyId = await getHistoryIdFor(account);
       if (historyId) {
         await storage.updateEmailAccountHistoryId(account.id, historyId);
         console.log(`[AutoSync] Bootstrapped historyId for ${account.email}: ${historyId}`);
@@ -145,11 +177,11 @@ async function syncGmailAccountIncremental(account: EmailAccount): Promise<{ syn
 
     let historyResult;
     try {
-      historyResult = await gmail.getHistory(account.lastHistoryId);
+      historyResult = await getHistoryFor(account, account.lastHistoryId);
     } catch (err: any) {
       if (err?.code === 404 || err?.response?.status === 404) {
         console.log(`[AutoSync] HistoryId expired for ${account.email}, running thread-based backfill...`);
-        const newHistoryId = await gmail.getHistoryId();
+        const newHistoryId = await getHistoryIdFor(account);
         if (newHistoryId) {
           await storage.updateEmailAccountHistoryId(account.id, newHistoryId);
         }
@@ -196,7 +228,7 @@ async function syncGmailAccountIncremental(account: EmailAccount): Promise<{ syn
             try {
               const firstMsgId = messagesAdded.find(m => m.threadId === threadId)?.id;
               if (firstMsgId) {
-                const fullMsg = await gmail.getMessage(firstMsgId);
+                const fullMsg = await getMessageFor(account, firstMsgId);
                 const headers = gmail.parseMessageHeaders(fullMsg);
                 const fromEmail = headers.from?.match(/<([^>]+)>/)?.[1]?.toLowerCase() || headers.from?.toLowerCase() || '';
                 const toEmail = headers.to?.match(/<([^>]+)>/)?.[1]?.toLowerCase() || headers.to?.toLowerCase() || '';
@@ -248,7 +280,7 @@ async function syncGmailAccountIncremental(account: EmailAccount): Promise<{ syn
           if (existingGmailIds.has(msgId)) continue;
 
           try {
-            const fullMsg = await gmail.getMessage(msgId);
+            const fullMsg = await getMessageFor(account, msgId);
             const headers = gmail.parseMessageHeaders(fullMsg);
             const body = gmail.getMessageBody(fullMsg);
 
@@ -602,6 +634,10 @@ export function stopAutoSync() {
     syncInterval = null;
     console.log('[AutoSync] Stopped');
   }
+}
+
+export async function syncGmailThread(conversationId: number, gmailThreadId: string, account: EmailAccount): Promise<number> {
+  return syncThreadToConversation(conversationId, gmailThreadId, account);
 }
 
 export async function syncCampaignConversations(campaignId: number): Promise<{ synced: number; total: number; errors: number }> {

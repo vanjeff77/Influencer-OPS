@@ -28,8 +28,10 @@ export const session = pgTable("session", {
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   email: text("email").notNull().unique(),
-  password: text("password").notNull(), // bcrypt hash
+  password: text("password").notNull(), // bcrypt hash (legacy, can be empty for Google OAuth users)
   name: text("name").notNull(),
+  googleId: text("google_id"),
+  profileImageUrl: text("profile_image_url"),
   isActive: boolean("is_active").default(true), // For account activation status
   isPlatformAdmin: boolean("is_platform_admin").default(false), // Platform-wide admin privileges
   onboardingCompleted: boolean("onboarding_completed").default(false), // Main tour completed
@@ -291,6 +293,7 @@ export const emailAccounts = pgTable("email_accounts", {
   provider: text("provider").default("gmail"),
   accessToken: text("access_token"),
   refreshToken: text("refresh_token"),
+  useGmailApi: boolean("use_gmail_api").default(true),
   imapHost: text("imap_host"),
   imapPort: integer("imap_port"),
   smtpHost: text("smtp_host"),

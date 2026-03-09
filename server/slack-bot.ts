@@ -789,32 +789,56 @@ async function handleSendEditedDraft(parsed: any, values: any): Promise<{ status
       }
     }
 
-    const { createSmtpTransporter, getImapSmtpSettings } = await import('./smtp');
-    const { decryptPassword } = await import('./imap');
+    let sentMessageId: string | null = null;
 
-    const smtpSettings = getImapSmtpSettings(account);
-    if (!smtpSettings.smtpHost || !smtpSettings.imapPassword) {
-      return { status: 200, body: { response_action: 'errors', errors: { draft_body_block: 'SMTP 설정이 완료되지 않았습니다.' } } };
+    if (account.provider === 'gmail' && account.refreshToken && account.useGmailApi) {
+      const { sendEmailForAccount } = await import('./gmail');
+      const gmailReplyHeaders = inReplyTo ? {
+        inReplyTo,
+        references: Array.isArray(references) ? references : references ? [references] : undefined,
+      } : undefined;
+      const gmailResult = await sendEmailForAccount(
+        account.refreshToken, toEmail, subject, finalBody,
+        conv.gmailThreadId || undefined, ccEmails, gmailReplyHeaders
+      );
+      sentMessageId = gmailResult.messageId || gmailResult.id || null;
+    } else if (account.provider === 'imap' || (account.provider === 'gmail' && !account.useGmailApi)) {
+      const { createSmtpTransporter, getImapSmtpSettings } = await import('./smtp');
+      const { decryptPassword } = await import('./imap');
+
+      const smtpSettings = getImapSmtpSettings(account);
+      if (!smtpSettings.smtpHost || !smtpSettings.imapPassword) {
+        return { status: 200, body: { response_action: 'errors', errors: { draft_body_block: 'SMTP 설정이 완료되지 않았습니다.' } } };
+      }
+
+      const password = decryptPassword(smtpSettings.imapPassword);
+      const transporter = createSmtpTransporter({
+        host: smtpSettings.smtpHost,
+        port: smtpSettings.smtpPort,
+        secure: smtpSettings.smtpPort === 465,
+        user: account.email,
+        password,
+      });
+
+      const sendResult = await transporter.sendMail({
+        from: `"${account.senderName || account.email}" <${account.email}>`,
+        to: toEmail,
+        cc: ccEmails.length > 0 ? ccEmails.join(', ') : undefined,
+        subject,
+        html: finalBody,
+        inReplyTo,
+        references,
+      });
+      sentMessageId = sendResult.messageId || null;
+    } else {
+      const { sendEmail: sendLegacyGmail } = await import('./gmail');
+      const gmailReplyHeaders = inReplyTo ? {
+        inReplyTo,
+        references: Array.isArray(references) ? references : references ? [references] : undefined,
+      } : undefined;
+      const result = await sendLegacyGmail(toEmail, subject, finalBody, conv.gmailThreadId || undefined, ccEmails, undefined, gmailReplyHeaders);
+      sentMessageId = result.id || null;
     }
-
-    const password = decryptPassword(smtpSettings.imapPassword);
-    const transporter = createSmtpTransporter({
-      host: smtpSettings.smtpHost,
-      port: smtpSettings.smtpPort,
-      secure: smtpSettings.smtpPort === 465,
-      user: account.email,
-      password,
-    });
-
-    const sendResult = await transporter.sendMail({
-      from: `"${account.senderName || account.email}" <${account.email}>`,
-      to: toEmail,
-      cc: ccEmails.length > 0 ? ccEmails.join(', ') : undefined,
-      subject,
-      html: finalBody,
-      inReplyTo,
-      references,
-    });
 
     await storage.createConversationMessage({
       conversationId,
@@ -825,7 +849,7 @@ async function handleSendEditedDraft(parsed: any, values: any): Promise<{ status
       bodyHtml: finalBody,
       bodyText: editedDraft,
       snippet: editedDraft.substring(0, 200),
-      gmailMessageId: sendResult.messageId || null,
+      gmailMessageId: sentMessageId,
       sendStatus: 'sent',
       sentAt: new Date(),
     });

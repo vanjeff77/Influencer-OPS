@@ -489,6 +489,12 @@ export default function SettingsPage() {
               동기화 로그
             </TabsTrigger>
           )}
+          {isOwner && (
+            <TabsTrigger value="email-mode" className="gap-2" data-testid="tab-email-mode">
+              <Mail className="w-4 h-4" />
+              이메일 방식
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {isOwner && (
@@ -1319,6 +1325,11 @@ export default function SettingsPage() {
             <SyncLogsSection workspaceId={workspaceId} />
           </TabsContent>
         )}
+        {isOwner && (
+          <TabsContent value="email-mode" className="mt-6">
+            <EmailModeSection workspaceId={workspaceId} />
+          </TabsContent>
+        )}
       </Tabs>
 
       {editingClient && (
@@ -2006,6 +2017,122 @@ interface SyncedMessageDetail {
   snippet: string | null;
   subject: string | null;
   receivedAt: string;
+}
+
+function EmailModeSection({ workspaceId }: { workspaceId: number }) {
+  const { toast } = useToast();
+
+  const { data: allAccounts = [], isLoading } = useQuery<any[]>({
+    queryKey: ['/api/workspaces', workspaceId, 'all-email-accounts'],
+    queryFn: async () => {
+      const res = await fetch(`/api/workspaces/${workspaceId}/all-email-accounts`);
+      if (!res.ok) throw new Error('Failed to load');
+      return res.json();
+    },
+  });
+
+  const { data: workspaceUsers = [] } = useQuery<any[]>({
+    queryKey: [`/api/workspaces/${workspaceId}/users`],
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: async ({ accountId, useGmailApi }: { accountId: number; useGmailApi: boolean }) => {
+      const res = await apiRequest('PATCH', `/api/email/accounts/${accountId}/gmail-mode`, { useGmailApi });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/workspaces', workspaceId, 'all-email-accounts'] });
+      toast({ title: "이메일 방식이 변경되었습니다" });
+    },
+    onError: (err: any) => {
+      toast({ title: "변경 실패", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const getUserName = (userId: number) => {
+    const user = workspaceUsers.find((u: any) => u.id === userId);
+    return user?.name || user?.email || `사용자 #${userId}`;
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg flex items-center gap-2">
+          <Mail className="w-5 h-5" />
+          이메일 방식 관리
+        </CardTitle>
+        <CardDescription>
+          각 이메일 계정의 발송/동기화 방식을 설정합니다. Gmail API는 Google OAuth 인증이 필요하며, IMAP/SMTP는 별도 서버 설정이 필요합니다.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : allAccounts.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">
+            등록된 이메일 계정이 없습니다.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {allAccounts.map((account: any) => (
+              <div
+                key={account.id}
+                className="flex items-center justify-between p-4 rounded-lg border bg-card"
+                data-testid={`email-mode-account-${account.id}`}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="min-w-0">
+                    <div className="font-medium text-sm truncate">{account.email}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {getUserName(account.userId)} · {account.provider === 'gmail' ? 'Gmail' : 'IMAP'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  {account.provider === 'gmail' && !account.hasRefreshToken && account.useGmailApi && (
+                    <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">
+                      <AlertCircle className="w-3 h-3 mr-1" />
+                      재인증 필요
+                    </Badge>
+                  )}
+                  {account.provider === 'gmail' && account.hasRefreshToken && account.useGmailApi && (
+                    <Badge variant="outline" className="text-xs text-green-600 border-green-300">
+                      <CheckCircle className="w-3 h-3 mr-1" />
+                      Gmail API 연결됨
+                    </Badge>
+                  )}
+                  {account.provider === 'imap' && (
+                    <Badge variant="outline" className="text-xs">
+                      IMAP/SMTP
+                    </Badge>
+                  )}
+
+                  {account.provider === 'gmail' && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">
+                        {account.useGmailApi ? 'Gmail API' : 'IMAP/SMTP'}
+                      </span>
+                      <Switch
+                        checked={account.useGmailApi ?? true}
+                        onCheckedChange={(checked) => {
+                          toggleMutation.mutate({ accountId: account.id, useGmailApi: checked });
+                        }}
+                        disabled={toggleMutation.isPending}
+                        data-testid={`toggle-gmail-mode-${account.id}`}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 function SyncLogsSection({ workspaceId }: { workspaceId: number }) {

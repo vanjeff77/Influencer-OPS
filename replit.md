@@ -22,9 +22,9 @@ Preferred communication style: Simple, everyday language.
 ### Backend
 - **Framework**: Express.js with TypeScript
 - **API Design**: RESTful API with typed route definitions
-- **Authentication**: Passport.js (local strategy, session-based via PostgreSQL, 30-day cookie expiration)
+- **Authentication**: Google OAuth login (unified), Passport.js session-based via PostgreSQL, 30-day cookie expiration. Users must be pre-registered by workspace owner; Google OAuth creates session and auto-links Gmail API email account.
 - **Authorization**: Three-tier Role-Based Access Control (RBAC): `WORKSPACE_OWNER`, `WORKSPACE_MEMBER`, `CLIENT`, and `PLATFORM_ADMIN`.
-- **Email Services**: IMAP for searching/fetching threads, SMTP queue-based system for bulk email sending with throttling and variable substitution.
+- **Email Services**: Dual-mode per account — Gmail API (via per-user OAuth refresh_token) or IMAP/SMTP. Workspace owner toggles `useGmailApi` per email account. Gmail API used for sending, sync, search, and thread attach when enabled; IMAP/SMTP fallback when disabled.
 
 ### Data Storage
 - **Database**: PostgreSQL with Drizzle ORM

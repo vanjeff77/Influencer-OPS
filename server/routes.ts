@@ -248,7 +248,6 @@ export async function registerRoutes(
   app.get(api.auth.me.path, async (req, res) => {
     if (!req.isAuthenticated()) return res.json(null);
     const user = req.user as any;
-    // Fetch full user data to include isPlatformAdmin and onboarding status
     const fullUser = await storage.getUser(user.id);
     res.json({ 
       id: user.id, 
@@ -256,8 +255,27 @@ export async function registerRoutes(
       name: user.name,
       isPlatformAdmin: fullUser?.isPlatformAdmin || false,
       onboardingCompleted: fullUser?.onboardingCompleted || false,
-      dismissedHints: fullUser?.dismissedHints || []
+      dismissedHints: fullUser?.dismissedHints || [],
+      profileImageUrl: fullUser?.profileImageUrl || null,
+      googleId: fullUser?.googleId || null,
     });
+  });
+
+  app.get('/api/auth/google', (req, res) => {
+    try {
+      const { getAuthUrl } = require('./gmail');
+      const crypto = require('crypto');
+      const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+      const host = req.headers['x-forwarded-host'] || req.headers.host;
+      const redirectUri = `${protocol}://${host}/api/email/gmail/callback`;
+      const state = crypto.randomBytes(32).toString('hex');
+      (req.session as any).oauthState = state;
+      const authUrl = getAuthUrl(redirectUri, state);
+      res.redirect(authUrl);
+    } catch (err: any) {
+      console.error('Google auth error:', err);
+      res.status(500).json({ message: err.message });
+    }
   });
 
   // === ONBOARDING ===
@@ -1783,8 +1801,108 @@ export async function registerRoutes(
 
   // === EMAIL ===
   app.get('/api/email/gmail/callback', async (req, res) => {
-    const code = req.query.code;
-    res.send("Gmail Connected! You can close this window.");
+    const code = req.query.code as string;
+    const stateParam = req.query.state as string;
+    const errorParam = req.query.error as string;
+
+    if (errorParam) {
+      console.error('Google OAuth error:', errorParam, req.query.error_description);
+      return res.redirect('/login?error=oauth_denied');
+    }
+
+    if (!code) {
+      return res.status(400).send('No authorization code provided');
+    }
+
+    const savedState = (req.session as any).oauthState;
+    if (savedState && stateParam !== savedState) {
+      return res.status(403).send('Invalid OAuth state parameter');
+    }
+    delete (req.session as any).oauthState;
+
+    try {
+      const { exchangeCodeForTokens, getGoogleUserInfo } = await import('./gmail');
+      const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+      const host = req.headers['x-forwarded-host'] || req.headers.host;
+      const redirectUri = `${protocol}://${host}/api/email/gmail/callback`;
+
+      const tokens = await exchangeCodeForTokens(code, redirectUri);
+      if (!tokens.access_token) {
+        return res.status(400).send('Failed to get access token');
+      }
+
+      const googleUser = await getGoogleUserInfo(tokens.access_token);
+
+      let user = await storage.getUserByGoogleId(googleUser.id);
+      if (!user) {
+        user = await storage.getUserByEmail(googleUser.email);
+      }
+
+      if (!user) {
+        return res.send(`
+          <html><body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f5f5f5;">
+            <div style="text-align:center;padding:40px;background:white;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.1);">
+              <h2 style="color:#e11d48;">접근 권한이 없습니다</h2>
+              <p style="color:#666;">관리자가 먼저 계정을 등록해야 합니다.</p>
+              <p style="color:#999;font-size:14px;">${googleUser.email}</p>
+              <a href="/login" style="display:inline-block;margin-top:20px;padding:10px 20px;background:#3b82f6;color:white;border-radius:8px;text-decoration:none;">로그인 페이지로 돌아가기</a>
+            </div>
+          </body></html>
+        `);
+      }
+
+      if (user.googleId !== googleUser.id) {
+        await storage.updateUser(user.id, {
+          googleId: googleUser.id,
+          profileImageUrl: googleUser.picture || user.profileImageUrl,
+        });
+      }
+
+      if (tokens.refresh_token) {
+        const memberships = await storage.getWorkspaceMemberships(user.id);
+        for (const membership of memberships) {
+          const existingAccounts = await storage.getEmailAccounts(user.id, membership.workspaceId);
+          const gmailAccount = existingAccounts.find(a => a.email === googleUser.email);
+
+          if (gmailAccount) {
+            await db.update(emailAccounts)
+              .set({
+                provider: 'gmail',
+                refreshToken: tokens.refresh_token,
+                useGmailApi: gmailAccount.useGmailApi ?? true,
+              })
+              .where(eq(emailAccounts.id, gmailAccount.id));
+          } else {
+            await storage.createEmailAccount(user.id, membership.workspaceId, {
+              email: googleUser.email,
+              provider: 'gmail',
+              refreshToken: tokens.refresh_token,
+              useGmailApi: true,
+            });
+          }
+        }
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        req.logIn(user!, (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+
+      res.redirect('/');
+    } catch (err: any) {
+      console.error('Gmail OAuth callback error:', err);
+      res.status(500).send(`
+        <html><body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f5f5f5;">
+          <div style="text-align:center;padding:40px;background:white;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.1);">
+            <h2 style="color:#e11d48;">인증 오류</h2>
+            <p style="color:#666;">${err.message}</p>
+            <a href="/login" style="display:inline-block;margin-top:20px;padding:10px 20px;background:#3b82f6;color:white;border-radius:8px;text-decoration:none;">로그인 페이지로 돌아가기</a>
+          </div>
+        </body></html>
+      `);
+    }
   });
 
   // Register Gmail account (using Replit Google Mail connector)
@@ -2105,8 +2223,76 @@ export async function registerRoutes(
         smtpHost: acc.smtpHost,
         signature: acc.signature,
         useSignature: acc.useSignature ?? true,
+        useGmailApi: acc.useGmailApi ?? true,
+        hasRefreshToken: !!acc.refreshToken,
+        userId: acc.userId,
       }));
       res.json(safeAccounts);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get('/api/workspaces/:workspaceId/all-email-accounts', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      const workspaceId = parseInt(req.params.workspaceId);
+      const userId = (req.user as any).id;
+      
+      const membership = (await storage.getWorkspaceMemberships(userId)).find(m => m.workspaceId === workspaceId);
+      if (!membership || membership.role !== 'WORKSPACE_OWNER') {
+        return res.status(403).json({ message: "워크스페이스 소유자만 접근 가능합니다" });
+      }
+      
+      const allAccounts = await db.select().from(emailAccounts).where(eq(emailAccounts.workspaceId, workspaceId));
+      const safeAccounts = allAccounts.map(acc => ({
+        id: acc.id,
+        email: acc.email,
+        provider: acc.provider,
+        useGmailApi: acc.useGmailApi ?? true,
+        hasRefreshToken: !!acc.refreshToken,
+        userId: acc.userId,
+        imapHost: acc.imapHost,
+        smtpHost: acc.smtpHost,
+        senderName: acc.senderName,
+      }));
+      res.json(safeAccounts);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.patch('/api/email/accounts/:id/gmail-mode', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      const accountId = parseInt(req.params.id);
+      const userId = (req.user as any).id;
+      const { useGmailApi } = req.body;
+
+      if (typeof useGmailApi !== 'boolean') {
+        return res.status(400).json({ message: "useGmailApi must be a boolean" });
+      }
+
+      const account = await storage.getEmailAccountById(accountId);
+      if (!account) {
+        return res.status(404).json({ message: "이메일 계정을 찾을 수 없습니다" });
+      }
+
+      const membership = (await storage.getWorkspaceMemberships(userId)).find(m => m.workspaceId === account.workspaceId);
+      if (!membership || membership.role !== 'WORKSPACE_OWNER') {
+        return res.status(403).json({ message: "워크스페이스 소유자만 변경 가능합니다" });
+      }
+
+      const [updated] = await db.update(emailAccounts)
+        .set({ useGmailApi })
+        .where(eq(emailAccounts.id, accountId))
+        .returning();
+      
+      res.json({ id: updated.id, email: updated.email, useGmailApi: updated.useGmailApi });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
@@ -2172,10 +2358,16 @@ export async function registerRoutes(
       }
       
       const { accountId, searchMode, query } = parsed.data;
+      const userId = (req.user as any).id;
       const account = await storage.getEmailAccountById(accountId);
       
       if (!account) {
         return res.status(404).json({ message: "이메일 계정을 찾을 수 없습니다" });
+      }
+
+      const memberships = await storage.getWorkspaceMemberships(userId);
+      if (!memberships.some(m => m.workspaceId === account.workspaceId)) {
+        return res.status(403).json({ message: "이 이메일 계정에 대한 접근 권한이 없습니다" });
       }
       
       if (account.provider === 'imap') {
@@ -2198,7 +2390,38 @@ export async function registerRoutes(
         const threads = await searchThreads(imapConfig, searchMode, query, 20);
         return res.json({ threads, accountEmail: account.email });
       } else if (account.provider === 'gmail') {
-        return res.status(501).json({ message: "Gmail 검색은 아직 지원되지 않습니다. IMAP 계정을 사용해 주세요." });
+        if (account.refreshToken && account.useGmailApi) {
+          const gmailMod = await import('./gmail');
+          const gmailQuery = searchMode === 'email' ? `from:${query} OR to:${query}` : `subject:${query}`;
+          const threadsList = await gmailMod.getThreadsForAccount(account.refreshToken, gmailQuery, 20);
+          const threads: any[] = [];
+          for (const t of threadsList) {
+            if (!t.id) continue;
+            try {
+              const thread = await gmailMod.getThreadForAccount(account.refreshToken, t.id);
+              if (thread.messages && thread.messages.length > 0) {
+                const headers = gmailMod.parseMessageHeaders(thread.messages[0]);
+                const lastMsg = thread.messages[thread.messages.length - 1];
+                const lastHeaders = gmailMod.parseMessageHeaders(lastMsg);
+                threads.push({
+                  threadId: t.id,
+                  subject: headers.subject || '(no subject)',
+                  from: headers.from || '',
+                  to: headers.to || '',
+                  date: lastHeaders.date || headers.date || '',
+                  messageCount: thread.messages.length,
+                  snippet: gmailMod.generateSnippet(gmailMod.getMessageBody(lastMsg).text || gmailMod.getMessageBody(lastMsg).html) || '',
+                  messageId: headers.messageId || t.id,
+                });
+              }
+            } catch (threadErr) {
+              console.warn(`[SearchThreads] Failed to get thread ${t.id}:`, threadErr);
+            }
+          }
+          return res.json({ threads, accountEmail: account.email });
+        } else {
+          return res.status(501).json({ message: "Gmail API가 비활성화되어 있습니다. IMAP 설정을 확인해주세요." });
+        }
       }
       
       res.status(400).json({ message: "지원되지 않는 이메일 제공자입니다" });
@@ -2258,7 +2481,43 @@ export async function registerRoutes(
         });
       }
       
-      if (account.provider === 'imap') {
+      if (account.provider === 'gmail' && account.refreshToken && account.useGmailApi) {
+        try {
+          const gmailMod = await import('./gmail');
+          const thread = await gmailMod.getThreadForAccount(account.refreshToken, threadId);
+          if (thread.messages) {
+            for (const msg of thread.messages) {
+              const headers = gmailMod.parseMessageHeaders(msg);
+              const body = gmailMod.getMessageBody(msg);
+              const isOutbound = headers.from?.toLowerCase().includes(account.email.toLowerCase());
+              await storage.createConversationMessage({
+                conversationId: conversation.id,
+                direction: isOutbound ? 'outbound' : 'inbound',
+                senderEmail: headers.from || null,
+                senderName: null,
+                recipientEmail: headers.to || null,
+                ccEmails: headers.ccEmails?.length > 0 ? headers.ccEmails : null,
+                snippet: gmailMod.generateSnippet(body.text || body.html),
+                bodyHtml: body.html || null,
+                bodyText: body.text || null,
+                gmailMessageId: headers.messageId || msg.id || null,
+                gmailThreadId: threadId,
+                sendStatus: 'sent',
+                sentAt: isOutbound && headers.date ? new Date(headers.date) : null,
+                receivedAt: !isOutbound && headers.date ? new Date(headers.date) : null,
+              });
+            }
+            if (thread.messages.length > 0) {
+              const lastHeaders = gmailMod.parseMessageHeaders(thread.messages[thread.messages.length - 1]);
+              await storage.updateConversation(conversation.id, {
+                lastMessageAt: lastHeaders.date ? new Date(lastHeaders.date) : new Date(),
+              });
+            }
+          }
+        } catch (fetchErr: any) {
+          console.error('Error fetching Gmail thread:', fetchErr);
+        }
+      } else if (account.provider === 'imap' || (account.provider === 'gmail' && !account.useGmailApi)) {
         const { fetchThreadMessages, decryptPassword } = await import('./imap');
         
         const { imapHost, imapPort: imapPortNum, imapPassword: encPwd } = getImapSmtpSettings(account);
@@ -2460,11 +2719,12 @@ export async function registerRoutes(
           try {
             const targetThreadId = conv.gmailThreadId || lastInboundMsg?.gmailThreadId;
             if (targetThreadId) {
-              const { getThread } = await import('./gmail');
-              const thread = await getThread(targetThreadId);
+              const gmailMod = await import('./gmail');
+              const thread = account.refreshToken && account.useGmailApi
+                ? await gmailMod.getThreadForAccount(account.refreshToken, targetThreadId)
+                : await gmailMod.getThread(targetThreadId);
               if (thread.messages && thread.messages.length > 0) {
-                const { parseMessageHeaders } = await import('./gmail');
-                const threadHeaders = parseMessageHeaders(thread.messages[0]);
+                const threadHeaders = gmailMod.parseMessageHeaders(thread.messages[0]);
                 if (threadHeaders.subject) {
                   originalSubject = threadHeaders.subject.replace(/^Re:\s*/i, '').trim();
                 }
@@ -2490,7 +2750,8 @@ export async function registerRoutes(
       }
       
       try {
-        if (account.provider === 'imap') {
+        const useSmtp = account.provider === 'imap' || (account.provider === 'gmail' && !account.useGmailApi && account.imapHost);
+        if (useSmtp) {
           const { createSmtpTransporter, sendEmail: sendSmtpEmail } = await import('./smtp');
           const { decryptPassword } = await import('./imap');
           
@@ -2536,7 +2797,6 @@ export async function registerRoutes(
             sendStatus = 'failed';
           }
         } else {
-          const { sendEmail: sendGmailEmail } = await import('./gmail');
           let threadIdForReply = conv.gmailThreadId;
           if (!threadIdForReply && isReply) {
             const msgWithThread = existingMsgs.find(m => m.gmailThreadId);
@@ -2556,9 +2816,18 @@ export async function registerRoutes(
               };
             }
           }
-          const result = await sendGmailEmail(toEmail, finalSubject, finalBody, threadIdForReply || undefined, ccEmails, undefined, gmailReplyHeaders);
-          gmailMessageId = result.id || undefined;
-          gmailThreadId = result.threadId || undefined;
+
+          if (account.refreshToken && account.useGmailApi) {
+            const { sendEmailForAccount } = await import('./gmail');
+            const result = await sendEmailForAccount(account.refreshToken, toEmail, finalSubject, finalBody, threadIdForReply || undefined, ccEmails, gmailReplyHeaders);
+            gmailMessageId = result.messageId || result.id || undefined;
+            gmailThreadId = result.threadId || undefined;
+          } else {
+            const { sendEmail: sendGmailEmail } = await import('./gmail');
+            const result = await sendGmailEmail(toEmail, finalSubject, finalBody, threadIdForReply || undefined, ccEmails, undefined, gmailReplyHeaders);
+            gmailMessageId = result.id || undefined;
+            gmailThreadId = result.threadId || undefined;
+          }
           
           if (!conv.gmailThreadId && gmailThreadId) {
             await storage.updateConversation(conversationId, { gmailThreadId });
@@ -2612,6 +2881,9 @@ export async function registerRoutes(
   // Sync conversation (fetch new emails via IMAP Message-ID based threading)
   app.post('/api/conversations/:id/sync', async (req, res) => {
     try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       const conversationId = parseInt(req.params.id);
       const fullSync = req.body?.fullSync === true;
       const conv = await storage.getConversation(conversationId);
@@ -2644,6 +2916,13 @@ export async function registerRoutes(
 
       if (!emailAccount) {
         return res.json({ synced: 0, message: "이메일 계정을 찾을 수 없습니다" });
+      }
+
+      if (emailAccount.provider === 'gmail' && emailAccount.refreshToken && emailAccount.useGmailApi && conv.gmailThreadId) {
+        const gmailMod = await import('./gmail');
+        const { syncGmailThread } = await import('./email-sync');
+        const synced = await syncGmailThread(conv.id, conv.gmailThreadId, emailAccount);
+        return res.json({ synced });
       }
 
       const { imapHost, imapPort: imapPortNum, imapPassword: encPwd } = getImapSmtpSettings(emailAccount);

@@ -41,6 +41,9 @@ export function setupAuth(app: Express) {
         if (!user) {
           return done(null, false, { message: "Incorrect email." });
         }
+        if (!user.password) {
+          return done(null, false, { message: "Please use Google login." });
+        }
         const isValid = await bcrypt.compare(password, user.password);
         if (!isValid) {
           return done(null, false, { message: "Incorrect password." });

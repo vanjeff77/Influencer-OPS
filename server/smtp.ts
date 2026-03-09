@@ -252,9 +252,12 @@ export async function startBulkEmailWorker(jobId: number): Promise<void> {
       return;
     }
     
-    let smtpConfig: SmtpConfig;
-    
-    if (emailAccount.provider === 'imap') {
+    const useGmailApi = emailAccount.provider === 'gmail' && emailAccount.refreshToken && emailAccount.useGmailApi;
+    let transporter: Transporter | null = null;
+
+    if (useGmailApi) {
+      console.log(`[BulkEmail] Using Gmail API for account ${emailAccount.email}`);
+    } else if (emailAccount.provider === 'imap' || (emailAccount.provider === 'gmail' && !emailAccount.useGmailApi)) {
       try {
         const { smtpHost, smtpPort, imapPassword } = getImapSmtpSettings(emailAccount);
         if (!smtpHost || !imapPassword) {
@@ -266,13 +269,13 @@ export async function startBulkEmailWorker(jobId: number): Promise<void> {
           return;
         }
         const decryptedPassword = decryptPassword(imapPassword);
-        smtpConfig = {
+        transporter = createSmtpTransporter({
           host: smtpHost,
           port: smtpPort,
           secure: smtpPort === 465,
           user: emailAccount.email,
           password: decryptedPassword,
-        };
+        });
       } catch (e) {
         console.error(`[BulkEmail] Failed to parse SMTP config: ${e}`);
         await storage.updateBulkEmailJob(jobId, { 
@@ -289,8 +292,6 @@ export async function startBulkEmailWorker(jobId: number): Promise<void> {
       });
       return;
     }
-    
-    const transporter = createSmtpTransporter(smtpConfig);
     
     if (job.cc) {
       try {
@@ -321,14 +322,29 @@ export async function startBulkEmailWorker(jobId: number): Promise<void> {
       
       const ccEmails = job.cc ? job.cc.split(',').map((e: string) => e.trim()).filter(Boolean) : [];
       
-      const result = await sendEmail(transporter, {
-        from: emailAccount.email,
-        to: item.email,
-        cc: ccEmails.length > 0 ? ccEmails : undefined,
-        subject: item.renderedSubject,
-        html: item.renderedBody,
-        forceUniqueThread: true,
-      });
+      let result: { success: boolean; messageId?: string; threadId?: string; error?: string };
+
+      if (useGmailApi) {
+        try {
+          const { sendEmailForAccount } = await import('./gmail');
+          const gmailResult = await sendEmailForAccount(
+            emailAccount.refreshToken!, item.email, item.renderedSubject, item.renderedBody,
+            undefined, ccEmails.length > 0 ? ccEmails : undefined
+          );
+          result = { success: true, messageId: gmailResult.messageId || gmailResult.id, threadId: gmailResult.threadId };
+        } catch (gmailErr: any) {
+          result = { success: false, error: gmailErr.message || 'Gmail API error' };
+        }
+      } else {
+        result = await sendEmail(transporter!, {
+          from: emailAccount.email,
+          to: item.email,
+          cc: ccEmails.length > 0 ? ccEmails : undefined,
+          subject: item.renderedSubject,
+          html: item.renderedBody,
+          forceUniqueThread: true,
+        });
+      }
       
       if (result.success) {
         sentCount++;
@@ -371,12 +387,16 @@ export async function startBulkEmailWorker(jobId: number): Promise<void> {
             snippet: item.renderedSubject,
             bodyHtml: item.renderedBody,
             gmailMessageId: result.messageId || null,
+            gmailThreadId: result.threadId || null,
             sendStatus: 'sent',
             sentAt: now,
           });
           console.log(`[BulkEmail] Created conversation for line item ${item.lineItemId}`);
 
-          if (!conversation.gmailThreadId && result.messageId) {
+          if (!conversation.gmailThreadId && result.threadId) {
+            await storage.updateConversation(conversation.id, { gmailThreadId: result.threadId });
+            console.log(`[BulkEmail] Updated threadId for conversation ${conversation.id}: ${result.threadId}`);
+          } else if (!conversation.gmailThreadId && result.messageId && !useGmailApi) {
             const convId = conversation.id;
             const msgId = result.messageId;
             setTimeout(async () => {

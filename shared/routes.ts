@@ -51,7 +51,9 @@ export const api = {
           name: z.string(),
           isPlatformAdmin: z.boolean().optional(),
           onboardingCompleted: z.boolean().optional(),
-          dismissedHints: z.array(z.string()).optional()
+          dismissedHints: z.array(z.string()).optional(),
+          profileImageUrl: z.string().nullable().optional(),
+          googleId: z.string().nullable().optional(),
         }).nullable(),
       },
     },
