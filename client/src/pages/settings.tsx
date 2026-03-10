@@ -2032,7 +2032,7 @@ function EmailModeSection({ workspaceId }: { workspaceId: number }) {
   });
 
   const { data: workspaceUsers = [] } = useQuery<any[]>({
-    queryKey: [`/api/workspaces/${workspaceId}/users`],
+    queryKey: [`/api/workspace-users?workspaceId=${workspaceId}`],
   });
 
   const toggleMutation = useMutation({
