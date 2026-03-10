@@ -5652,6 +5652,23 @@ export async function registerRoutes(
     }
   });
 
+  // DEBUG: temporary endpoint to check API response structure
+  app.get('/api/debug/ig-user-info/:handle', async (req, res) => {
+    try {
+      const handle = req.params.handle;
+      const apiKey = process.env.RAPIDAPI_KEY;
+      if (!apiKey) return res.status(500).json({ error: 'No API key' });
+      const resp = await fetch(`https://instagram-scraper2.p.rapidapi.com/user_info?user_name=${handle}`, {
+        headers: { 'x-rapidapi-key': apiKey, 'x-rapidapi-host': 'instagram-scraper2.p.rapidapi.com' },
+      });
+      const text = await resp.text();
+      res.set('Content-Type', 'application/json');
+      res.send(`{"status":${resp.status},"body":${JSON.stringify(text)}}`);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // === AI SEARCH ===
   app.post('/api/workspaces/:workspaceId/ai-search', async (req, res) => {
     try {

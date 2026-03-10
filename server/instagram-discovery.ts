@@ -114,6 +114,9 @@ function parseProfileFromResponse(data: any, fallbackHandle: string): ProfileInf
 function extractUserId(data: any): string | null {
   const profile = data?.data || data;
   const id = profile?.pk || profile?.id || profile?.user_id;
+  if (!id) {
+    console.log(`[InstagramDiscovery] user_info response keys:`, JSON.stringify(data).substring(0, 500));
+  }
   return id ? String(id) : null;
 }
 
