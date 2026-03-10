@@ -1,7 +1,7 @@
 const RAPIDAPI_HOST = 'instagram-scraper2.p.rapidapi.com';
 const DEFAULT_MAX_FOLLOWINGS = 500;
 const RETRY_MAX = 3;
-const RATE_LIMIT_DELAY_MS = 1500;
+const RATE_LIMIT_DELAY_MS = 3000;
 
 export interface FollowingUser {
   handle: string;
@@ -112,7 +112,7 @@ export async function fetchFollowings(handle: string, maxCount: number = DEFAULT
     }
 
     const data = await withRetry(
-      () => apiRequest('/v1/following', params),
+      () => apiRequest('/followings', params),
       `fetchFollowings(@${cleanHandle})`
     );
 
@@ -130,7 +130,7 @@ export async function fetchFollowings(handle: string, maxCount: number = DEFAULT
       });
     }
 
-    paginationToken = data?.pagination_token || data?.data?.pagination_token;
+    paginationToken = data?.pagination_token || data?.data?.pagination_token || data?.next_max_id;
     if (!paginationToken) break;
 
     await delay(RATE_LIMIT_DELAY_MS);
@@ -145,7 +145,7 @@ export async function fetchProfileInfo(handle: string): Promise<ProfileInfo> {
   if (!cleanHandle) throw new Error('Invalid handle');
 
   const data = await withRetry(
-    () => apiRequest('/v1/info', { username: cleanHandle }),
+    () => apiRequest('/info', { username: cleanHandle }),
     `fetchProfileInfo(@${cleanHandle})`
   );
 

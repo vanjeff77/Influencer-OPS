@@ -28,6 +28,8 @@ interface JobProgress {
   profilesTotal?: number;
   analyzedCount?: number;
   totalToAnalyze?: number;
+  estimatedSeconds?: number;
+  startedAt?: string;
   logs?: LogEntry[];
 }
 
@@ -52,6 +54,45 @@ function addLog(jobId: number, type: 'success' | 'warning' | 'error', message: s
   jobLogs.get(jobId)!.push({ type, message, timestamp: new Date().toISOString() });
 }
 
+const DELAY_PER_REQUEST_SEC = 3;
+const AVG_FOLLOWINGS_PER_SEED = 200;
+
+function estimateInitialSeconds(seedCount: number, maxResults: number): number {
+  const followingPhase = seedCount * 15;
+  const estimatedCandidates = Math.min(seedCount * AVG_FOLLOWINGS_PER_SEED, maxResults * 3);
+  const profilePhase = estimatedCandidates * DELAY_PER_REQUEST_SEC;
+  const analyzePhase = 30;
+  return followingPhase + profilePhase + analyzePhase;
+}
+
+function estimateRemainingSeconds(
+  step: string,
+  seedsTotal: number,
+  seedsProcessed: number,
+  candidatesFound: number,
+  profilesFetched: number,
+  profilesTotal: number,
+  analyzedCount: number,
+  totalToAnalyze: number,
+): number {
+  let remaining = 0;
+  if (step === 'fetching_followings') {
+    const seedsLeft = seedsTotal - seedsProcessed;
+    remaining += seedsLeft * 15;
+    const estCandidates = Math.max(candidatesFound, seedsLeft * AVG_FOLLOWINGS_PER_SEED);
+    remaining += estCandidates * DELAY_PER_REQUEST_SEC;
+    remaining += 30;
+  } else if (step === 'fetching_profiles') {
+    const profilesLeft = profilesTotal - profilesFetched;
+    remaining += profilesLeft * DELAY_PER_REQUEST_SEC;
+    remaining += 30;
+  } else if (step === 'analyzing') {
+    const left = totalToAnalyze - analyzedCount;
+    remaining += Math.max(left * 0.5, 10);
+  }
+  return Math.max(remaining, 0);
+}
+
 function getLogs(jobId: number): LogEntry[] {
   return jobLogs.get(jobId) || [];
 }
@@ -71,7 +112,12 @@ export async function processAiSearchJob(jobId: number): Promise<void> {
   }
 
   jobLogs.set(jobId, []);
-  addLog(jobId, 'success', `서칭 시작: 시드 ${job.seedHandles.length}개 (${job.seedHandles.map(h => '@' + h).join(', ')})`);
+  const startedAt = new Date().toISOString();
+  const initialEstimate = estimateInitialSeconds(job.seedHandles.length, job.maxResults || 50);
+  const estMinutes = Math.ceil(initialEstimate / 60);
+  addLog(jobId, 'success', `서칭 시작: 시드 ${job.seedHandles.length}개 (${job.seedHandles.map(h => '@' + h).join(', ')}), 예상 소요시간: 약 ${estMinutes}분`);
+  (job as any)._startedAt = startedAt;
+  (job as any)._initialEstimate = initialEstimate;
 
   try {
     await stepFetchFollowings(job);
@@ -102,12 +148,15 @@ export async function processAiSearchJob(jobId: number): Promise<void> {
 
 async function stepFetchFollowings(job: AiSearchJob): Promise<void> {
   console.log(`[DiscoveryWorker] Job ${job.id}: fetching_followings`);
+  const startedAt = (job as any)._startedAt as string;
 
   const progress: JobProgress = {
     currentStep: "fetching_followings",
     seedsProcessed: 0,
     seedsTotal: job.seedHandles.length,
     candidatesFound: 0,
+    startedAt,
+    estimatedSeconds: (job as any)._initialEstimate,
   };
   await updateJobStatus(job.id, "fetching_followings", progress);
 
@@ -118,6 +167,7 @@ async function stepFetchFollowings(job: AiSearchJob): Promise<void> {
       progress.seedsProcessed = seedsProcessed;
       progress.seedsTotal = seedsTotal;
       progress.candidatesFound = candidatesFound;
+      progress.estimatedSeconds = estimateRemainingSeconds('fetching_followings', seedsTotal, seedsProcessed, candidatesFound, 0, 0, 0, 0);
       await updateJobProgress(job.id, { ...progress, logs: getLogs(job.id) });
     },
     (log) => addLog(job.id, log.type, log.message)
@@ -133,6 +183,7 @@ async function stepFetchFollowings(job: AiSearchJob): Promise<void> {
 
 async function stepFetchProfiles(job: AiSearchJob): Promise<void> {
   console.log(`[DiscoveryWorker] Job ${job.id}: fetching_profiles`);
+  const startedAt = (job as any)._startedAt as string;
 
   const candidateMap = (job as any)._candidateMap as Map<string, { followingUser: any; sourceSeeds: string[] }>;
   if (!candidateMap || candidateMap.size === 0) {
@@ -148,6 +199,8 @@ async function stepFetchProfiles(job: AiSearchJob): Promise<void> {
     candidatesFound: candidateMap.size,
     profilesFetched: 0,
     profilesTotal: candidateMap.size,
+    startedAt,
+    estimatedSeconds: estimateRemainingSeconds('fetching_profiles', 0, 0, 0, 0, candidateMap.size, 0, 0),
   };
   await updateJobStatus(job.id, "fetching_profiles", progress);
 
@@ -158,6 +211,7 @@ async function stepFetchProfiles(job: AiSearchJob): Promise<void> {
     async (profilesFetched, totalCandidates) => {
       progress.profilesFetched = profilesFetched;
       progress.profilesTotal = totalCandidates;
+      progress.estimatedSeconds = estimateRemainingSeconds('fetching_profiles', 0, 0, 0, profilesFetched, totalCandidates, 0, 0);
       await updateJobProgress(job.id, { ...progress, logs: getLogs(job.id) });
     },
     (log) => addLog(job.id, log.type, log.message)
@@ -178,6 +232,7 @@ async function stepFetchProfiles(job: AiSearchJob): Promise<void> {
 
 async function stepAnalyze(job: AiSearchJob): Promise<void> {
   console.log(`[DiscoveryWorker] Job ${job.id}: analyzing`);
+  const startedAt = (job as any)._startedAt as string;
 
   const aggregated: AggregatedCandidate[] = (job as any)._aggregated || [];
   if (aggregated.length === 0) {
@@ -193,6 +248,8 @@ async function stepAnalyze(job: AiSearchJob): Promise<void> {
     profilesFetched: aggregated.length,
     analyzedCount: 0,
     totalToAnalyze: aggregated.length,
+    startedAt,
+    estimatedSeconds: estimateRemainingSeconds('analyzing', 0, 0, 0, 0, 0, 0, aggregated.length),
   };
   await updateJobStatus(job.id, "analyzing", progress);
 

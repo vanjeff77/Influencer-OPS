@@ -122,6 +122,25 @@ function getProgressText(job: AiSearchJob): string {
   return "";
 }
 
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${Math.round(seconds)}초`;
+  const min = Math.floor(seconds / 60);
+  const sec = Math.round(seconds % 60);
+  return sec > 0 ? `${min}분 ${sec}초` : `${min}분`;
+}
+
+function getTimeDisplay(job: AiSearchJob): string | null {
+  if (!job.progress?.startedAt) return null;
+  const elapsed = (Date.now() - new Date(job.progress.startedAt).getTime()) / 1000;
+  const remaining = job.progress.estimatedSeconds;
+  const parts: string[] = [];
+  parts.push(`경과: ${formatDuration(elapsed)}`);
+  if (remaining != null && remaining > 0) {
+    parts.push(`남은 시간: ~${formatDuration(remaining)}`);
+  }
+  return parts.join(' / ');
+}
+
 function CreateJobForm({ workspaceId, onCreated }: { workspaceId: number; onCreated: () => void }) {
   const [handles, setHandles] = useState<string[]>([]);
   const [handleInput, setHandleInput] = useState("");
@@ -569,6 +588,12 @@ function JobDetail({
             </div>
             <Progress value={getProgressPercent(job)} className="h-2 mb-2" />
             <p className="text-xs text-muted-foreground">{getProgressText(job)}</p>
+            {getTimeDisplay(job) && (
+              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1" data-testid="text-time-display">
+                <Clock className="h-3 w-3" />
+                {getTimeDisplay(job)}
+              </p>
+            )}
           </CardContent>
         </Card>
       )}
