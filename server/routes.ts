@@ -14,6 +14,7 @@ import { encryptPassword } from "./imap";
 import { normalizeInstagramHandle, normalizeInstagramUrl } from "@shared/utils";
 import { getDefaultFrameworkDoc } from "./ai/draft-generator";
 import { fetchProfileImage, getDirectDownloadUrl } from "./profile-fetcher";
+import { getAuthUrl } from "./gmail";
 
 // Singleton browser instance for PDF generation
 let sharedBrowser: any = null;
@@ -263,8 +264,6 @@ export async function registerRoutes(
 
   app.get('/api/auth/google', (req, res) => {
     try {
-      const { getAuthUrl } = require('./gmail');
-      const crypto = require('crypto');
       const protocol = req.headers['x-forwarded-proto'] || req.protocol;
       const host = req.headers['x-forwarded-host'] || req.headers.host;
       const redirectUri = `${protocol}://${host}/api/email/gmail/callback`;
