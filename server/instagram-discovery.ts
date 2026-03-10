@@ -94,29 +94,84 @@ function sanitizeHandle(handle: string): string {
   return clean;
 }
 
+function parseProfileFromResponse(data: any, fallbackHandle: string): ProfileInfo {
+  const profile = data?.data || data;
+
+  return {
+    handle: profile.username || fallbackHandle,
+    fullName: profile.full_name || profile.fullName || '',
+    bio: profile.biography || profile.bio || '',
+    followers: profile.follower_count || profile.followers || 0,
+    following: profile.following_count || profile.following || 0,
+    category: profile.category || profile.category_name || '',
+    profilePicUrl: profile.profile_pic_url_hd || profile.profile_pic_url || profile.profilePicUrl || '',
+    isVerified: profile.is_verified ?? profile.isVerified ?? false,
+    isPrivate: profile.is_private ?? profile.isPrivate ?? false,
+    externalUrl: profile.external_url || profile.externalUrl || '',
+  };
+}
+
+function extractUserId(data: any): string | null {
+  const profile = data?.data || data;
+  const id = profile?.pk || profile?.id || profile?.user_id;
+  return id ? String(id) : null;
+}
+
+export async function fetchProfileInfo(handle: string): Promise<ProfileInfo> {
+  const cleanHandle = sanitizeHandle(handle);
+  if (!cleanHandle) throw new Error('Invalid handle');
+
+  const data = await withRetry(
+    () => apiRequest('/user_info', { user_name: cleanHandle }),
+    `fetchProfileInfo(@${cleanHandle})`
+  );
+
+  return parseProfileFromResponse(data, cleanHandle);
+}
+
+async function fetchUserId(handle: string): Promise<string> {
+  const cleanHandle = sanitizeHandle(handle);
+  if (!cleanHandle) throw new Error('Invalid handle');
+
+  const data = await withRetry(
+    () => apiRequest('/user_info', { user_name: cleanHandle }),
+    `fetchUserId(@${cleanHandle})`
+  );
+
+  const userId = extractUserId(data);
+  if (!userId) {
+    throw new Error(`Could not extract user_id for @${cleanHandle}`);
+  }
+  return userId;
+}
+
 export async function fetchFollowings(handle: string, maxCount: number = DEFAULT_MAX_FOLLOWINGS): Promise<FollowingUser[]> {
   const cleanHandle = sanitizeHandle(handle);
   if (!cleanHandle) throw new Error('Invalid handle');
 
   console.log(`[InstagramDiscovery] Fetching followings for @${cleanHandle} (max: ${maxCount})`);
 
+  const userId = await fetchUserId(cleanHandle);
+  console.log(`[InstagramDiscovery] Got user_id ${userId} for @${cleanHandle}`);
+
   const allFollowings: FollowingUser[] = [];
-  let paginationToken: string | undefined;
+  let nextCursor: string | undefined;
 
   while (allFollowings.length < maxCount) {
     const params: Record<string, string> = {
-      username: cleanHandle,
+      user_id: userId,
+      batch_size: '50',
     };
-    if (paginationToken) {
-      params.pagination_token = paginationToken;
+    if (nextCursor) {
+      params.next_cursor = nextCursor;
     }
 
     const data = await withRetry(
-      () => apiRequest('/followings', params),
+      () => apiRequest('/following', params),
       `fetchFollowings(@${cleanHandle})`
     );
 
-    const items = data?.data?.items || data?.items || [];
+    const items = data?.data?.items || data?.items || data?.data?.users || data?.users || [];
     if (!items.length) break;
 
     for (const item of items) {
@@ -130,39 +185,14 @@ export async function fetchFollowings(handle: string, maxCount: number = DEFAULT
       });
     }
 
-    paginationToken = data?.pagination_token || data?.data?.pagination_token || data?.next_max_id;
-    if (!paginationToken) break;
+    nextCursor = data?.next_cursor || data?.data?.next_cursor;
+    if (!nextCursor) break;
 
     await delay(RATE_LIMIT_DELAY_MS);
   }
 
   console.log(`[InstagramDiscovery] Found ${allFollowings.length} followings for @${cleanHandle}`);
   return allFollowings;
-}
-
-export async function fetchProfileInfo(handle: string): Promise<ProfileInfo> {
-  const cleanHandle = sanitizeHandle(handle);
-  if (!cleanHandle) throw new Error('Invalid handle');
-
-  const data = await withRetry(
-    () => apiRequest('/info', { username: cleanHandle }),
-    `fetchProfileInfo(@${cleanHandle})`
-  );
-
-  const profile = data?.data || data;
-
-  return {
-    handle: profile.username || cleanHandle,
-    fullName: profile.full_name || profile.fullName || '',
-    bio: profile.biography || profile.bio || '',
-    followers: profile.follower_count || profile.followers || 0,
-    following: profile.following_count || profile.following || 0,
-    category: profile.category || profile.category_name || '',
-    profilePicUrl: profile.profile_pic_url_hd || profile.profile_pic_url || profile.profilePicUrl || '',
-    isVerified: profile.is_verified ?? profile.isVerified ?? false,
-    isPrivate: profile.is_private ?? profile.isPrivate ?? false,
-    externalUrl: profile.external_url || profile.externalUrl || '',
-  };
 }
 
 export interface SeedLog {
