@@ -1,4 +1,4 @@
-const RAPIDAPI_HOST = 'instagram-scraper-api2.p.rapidapi.com';
+const RAPIDAPI_HOST = 'instagram-scraper2.p.rapidapi.com';
 const DEFAULT_MAX_FOLLOWINGS = 500;
 const RETRY_MAX = 3;
 const RATE_LIMIT_DELAY_MS = 1500;
@@ -105,7 +105,7 @@ export async function fetchFollowings(handle: string, maxCount: number = DEFAULT
 
   while (allFollowings.length < maxCount) {
     const params: Record<string, string> = {
-      username_or_id_or_url: cleanHandle,
+      username: cleanHandle,
     };
     if (paginationToken) {
       params.pagination_token = paginationToken;
@@ -145,7 +145,7 @@ export async function fetchProfileInfo(handle: string): Promise<ProfileInfo> {
   if (!cleanHandle) throw new Error('Invalid handle');
 
   const data = await withRetry(
-    () => apiRequest('/v1/info', { username_or_id_or_url: cleanHandle }),
+    () => apiRequest('/v1/info', { username: cleanHandle }),
     `fetchProfileInfo(@${cleanHandle})`
   );
 
