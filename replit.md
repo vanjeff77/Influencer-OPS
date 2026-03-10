@@ -22,7 +22,7 @@ Preferred communication style: Simple, everyday language.
 ### Backend
 - **Framework**: Express.js with TypeScript
 - **API Design**: RESTful API with typed route definitions
-- **Authentication**: Dual login — Google OAuth + email/password (LocalStrategy). Passport.js session-based via PostgreSQL, 30-day cookie expiration. Users must be pre-registered by workspace owner; Google OAuth creates session and auto-links Gmail API email account.
+- **Authentication**: Google OAuth single sign-on. Passport.js session-based via PostgreSQL, 30-day cookie expiration. Users must be pre-registered by workspace owner; Google OAuth creates session and auto-links Gmail API email account. (Email/password login removed — backend LocalStrategy still exists but login UI only shows Google button.)
 - **Authorization**: Three-tier Role-Based Access Control (RBAC): `WORKSPACE_OWNER`, `WORKSPACE_MEMBER`, `CLIENT`, and `PLATFORM_ADMIN`.
 - **Email Services**: Dual-mode per account — Gmail API (via per-user OAuth refresh_token) or IMAP/SMTP. Workspace owner toggles `useGmailApi` per email account. Gmail API used for sending, sync, search, and thread attach when enabled; IMAP/SMTP fallback when disabled.
 
