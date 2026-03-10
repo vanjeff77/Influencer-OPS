@@ -657,79 +657,55 @@ function JobDetail({
 }
 
 export default function AiSearch() {
-  const { data: workspaces } = useWorkspaces();
-  const workspaceId = workspaces?.[0]?.id;
-  const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
-  const [showForm, setShowForm] = useState(false);
-
-  const { data: jobs, isLoading } = useQuery<AiSearchJob[]>({
-    queryKey: ["/api/workspaces", workspaceId, "ai-search"],
-    enabled: !!workspaceId,
-    refetchInterval: 10000,
-  });
-
-  if (!workspaceId) return <Layout><div className="p-6">로딩중...</div></Layout>;
-
-  if (selectedJobId) {
-    return (
-      <Layout>
-        <div className="p-4 md:p-6 max-w-5xl mx-auto">
-          <JobDetail
-            workspaceId={workspaceId}
-            jobId={selectedJobId}
-            onBack={() => setSelectedJobId(null)}
-          />
-        </div>
-      </Layout>
-    );
-  }
-
   return (
     <Layout>
-      <div className="p-4 md:p-6 max-w-5xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2" data-testid="text-page-title">
-              <Sparkles className="h-6 w-6 text-primary" />
-              AI 인플루언서 서칭
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              시드 인플루언서의 팔로잉을 탐색하고 AI가 최적의 후보를 추천합니다
-            </p>
-          </div>
-          <Button onClick={() => setShowForm(!showForm)} data-testid="button-new-search">
-            {showForm ? "닫기" : (<><Plus className="h-4 w-4 mr-1" /> 새 서칭</>)}
-          </Button>
-        </div>
-
-        {showForm && (
-          <div className="mb-6">
-            <CreateJobForm
-              workspaceId={workspaceId}
-              onCreated={() => setShowForm(false)}
-            />
-          </div>
-        )}
-
-        <div className="space-y-3">
-          <h2 className="text-sm font-medium text-muted-foreground">이전 서칭</h2>
-          {isLoading && (
-            <div className="flex justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin" />
+      <div className="p-4 md:p-6 max-w-3xl mx-auto">
+        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
+          <div className="relative mb-8">
+            <div className="w-28 h-28 rounded-full bg-primary/5 flex items-center justify-center">
+              <Sparkles className="h-14 w-14 text-primary/40" />
             </div>
-          )}
-          {jobs && jobs.length === 0 && !showForm && (
-            <div className="text-center py-16">
-              <Sparkles className="h-16 w-16 mx-auto mb-4 text-muted-foreground/30" />
-              <p className="text-muted-foreground mb-4">아직 AI 서칭 기록이 없습니다</p>
-              <Button onClick={() => setShowForm(true)} data-testid="button-first-search">
-                <Plus className="h-4 w-4 mr-1" /> 첫 서칭 시작하기
-              </Button>
+            <div className="absolute -bottom-1 -right-1 w-10 h-10 rounded-full bg-amber-50 dark:bg-amber-950/30 flex items-center justify-center border-2 border-background">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
             </div>
-          )}
-          {jobs?.map((job) => (
-            <JobListItem key={job.id} job={job} onClick={() => setSelectedJobId(job.id)} />
-          ))}
+          </div>
+
+          <h1 className="text-xl md:text-2xl font-bold mb-3" data-testid="text-page-title">
+            AI 인플루언서 서칭
+          </h1>
+
+          <Badge variant="secondary" className="mb-6 px-4 py-1.5 text-sm font-medium">
+            개발중
+          </Badge>
+
+          <p className="text-muted-foreground max-w-md leading-relaxed mb-2">
+            시드 인플루언서의 팔로잉 네트워크를 분석하고,
+            AI가 최적의 협업 후보를 자동으로 추천하는 기능입니다.
+          </p>
+          <p className="text-sm text-muted-foreground/70 max-w-md">
+            현재 안정성 개선 작업을 진행하고 있습니다. 빠른 시일 내에 공개될 예정입니다.
+          </p>
+
+          <div className="mt-10 flex items-center gap-6 text-muted-foreground/50">
+            <div className="flex flex-col items-center gap-1.5">
+              <div className="w-10 h-10 rounded-lg bg-muted/50 flex items-center justify-center">
+                <Users className="h-5 w-5" />
+              </div>
+              <span className="text-[11px]">팔로잉 분석</span>
+            </div>
+            <div className="flex flex-col items-center gap-1.5">
+              <div className="w-10 h-10 rounded-lg bg-muted/50 flex items-center justify-center">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <span className="text-[11px]">AI 추천</span>
+            </div>
+            <div className="flex flex-col items-center gap-1.5">
+              <div className="w-10 h-10 rounded-lg bg-muted/50 flex items-center justify-center">
+                <UserPlus className="h-5 w-5" />
+              </div>
+              <span className="text-[11px]">원클릭 추가</span>
+            </div>
+          </div>
         </div>
       </div>
     </Layout>
