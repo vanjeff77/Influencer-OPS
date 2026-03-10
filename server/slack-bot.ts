@@ -1194,7 +1194,7 @@ async function regenerateInBackground(
       const errorBlocks = (payload.message.blocks || []).slice(0, 3);
       errorBlocks.push({
         type: "section",
-        text: { type: "mrkdwn", text: "❌ *AI 초안 생성 실패.* 다시 시도해 주세요." }
+        text: { type: "mrkdwn", text: `❌ *AI 초안 생성 실패.*\n사유: ${((genErr as Error).message || '알 수 없는 오류').slice(0, 150)}\n다시 시도해 주세요.` }
       });
       errorBlocks.push({
         type: "actions",
