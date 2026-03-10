@@ -165,10 +165,16 @@ export async function fetchProfileInfo(handle: string): Promise<ProfileInfo> {
   };
 }
 
+export interface SeedLog {
+  type: 'success' | 'warning' | 'error';
+  message: string;
+}
+
 export async function collectFollowingsFromSeeds(
   seedHandles: string[],
   maxFollowingsPerSeed: number = DEFAULT_MAX_FOLLOWINGS,
-  onProgress?: (seedsProcessed: number, seedsTotal: number, candidatesFound: number) => void
+  onProgress?: (seedsProcessed: number, seedsTotal: number, candidatesFound: number) => void,
+  onLog?: (log: SeedLog) => void
 ): Promise<Map<string, { followingUser: FollowingUser; sourceSeeds: string[] }>> {
   const candidateMap = new Map<string, { followingUser: FollowingUser; sourceSeeds: string[] }>();
   const seedSet = new Set(seedHandles.map((h) => sanitizeHandle(h).toLowerCase()));
@@ -178,10 +184,11 @@ export async function collectFollowingsFromSeeds(
 
     try {
       const followings = await fetchFollowings(seedHandle, maxFollowingsPerSeed);
+      let privateSkipped = 0;
 
       for (const following of followings) {
         if (!following.handle) continue;
-        if (following.isPrivate) continue;
+        if (following.isPrivate) { privateSkipped++; continue; }
 
         const key = following.handle.toLowerCase();
         if (seedSet.has(key)) continue;
@@ -198,8 +205,10 @@ export async function collectFollowingsFromSeeds(
           });
         }
       }
+      onLog?.({ type: 'success', message: `@${seedHandle}: 팔로잉 ${followings.length}명 수집 완료 (비공개 ${privateSkipped}명 제외)` });
     } catch (err: any) {
       console.error(`[InstagramDiscovery] Failed to fetch followings for seed @${seedHandle}: ${err.message}`);
+      onLog?.({ type: 'error', message: `@${seedHandle}: 팔로잉 수집 실패 — ${err.message}` });
     }
 
     onProgress?.(i + 1, seedHandles.length, candidateMap.size);
@@ -212,27 +221,40 @@ export async function collectFollowingsFromSeeds(
   return candidateMap;
 }
 
+export interface ProfileFetchStats {
+  total: number;
+  passed: number;
+  filteredByFollowerMin: number;
+  filteredByFollowerMax: number;
+  filteredByPrivate: number;
+  fetchErrors: number;
+}
+
 export async function fetchProfilesForCandidates(
   candidates: Map<string, { followingUser: FollowingUser; sourceSeeds: string[] }>,
   followerMin?: number | null,
   followerMax?: number | null,
-  onProgress?: (profilesFetched: number, totalCandidates: number) => void
-): Promise<AggregatedCandidate[]> {
+  onProgress?: (profilesFetched: number, totalCandidates: number) => void,
+  onLog?: (log: SeedLog) => void
+): Promise<{ results: AggregatedCandidate[]; stats: ProfileFetchStats }> {
   const results: AggregatedCandidate[] = [];
   const entries = Array.from(candidates.entries());
   let fetched = 0;
+  const stats: ProfileFetchStats = { total: entries.length, passed: 0, filteredByFollowerMin: 0, filteredByFollowerMax: 0, filteredByPrivate: 0, fetchErrors: 0 };
 
   for (const [handle, { followingUser, sourceSeeds }] of entries) {
     try {
       const profile = await fetchProfileInfo(handle);
 
       if (followerMin != null && profile.followers < followerMin) {
+        stats.filteredByFollowerMin++;
         fetched++;
         onProgress?.(fetched, entries.length);
         await delay(RATE_LIMIT_DELAY_MS);
         continue;
       }
       if (followerMax != null && profile.followers > followerMax) {
+        stats.filteredByFollowerMax++;
         fetched++;
         onProgress?.(fetched, entries.length);
         await delay(RATE_LIMIT_DELAY_MS);
@@ -240,18 +262,21 @@ export async function fetchProfilesForCandidates(
       }
 
       if (profile.isPrivate) {
+        stats.filteredByPrivate++;
         fetched++;
         onProgress?.(fetched, entries.length);
         await delay(RATE_LIMIT_DELAY_MS);
         continue;
       }
 
+      stats.passed++;
       results.push({
         handle: profile.handle || handle,
         profileData: profile,
         sourceSeeds,
       });
     } catch (err: any) {
+      stats.fetchErrors++;
       console.error(`[InstagramDiscovery] Failed to fetch profile for @${handle}: ${err.message}`);
     }
 
@@ -260,5 +285,14 @@ export async function fetchProfilesForCandidates(
     await delay(RATE_LIMIT_DELAY_MS);
   }
 
-  return results;
+  const filterParts: string[] = [];
+  if (stats.filteredByFollowerMin > 0) filterParts.push(`최소 팔로워 미달 ${stats.filteredByFollowerMin}명`);
+  if (stats.filteredByFollowerMax > 0) filterParts.push(`최대 팔로워 초과 ${stats.filteredByFollowerMax}명`);
+  if (stats.filteredByPrivate > 0) filterParts.push(`비공개 계정 ${stats.filteredByPrivate}명`);
+  if (stats.fetchErrors > 0) filterParts.push(`조회 실패 ${stats.fetchErrors}명`);
+
+  const filterSummary = filterParts.length > 0 ? ` (제외: ${filterParts.join(', ')})` : '';
+  onLog?.({ type: stats.passed > 0 ? 'success' : 'warning', message: `프로필 조회 완료: ${stats.total}명 중 ${stats.passed}명 통과${filterSummary}` });
+
+  return { results, stats };
 }

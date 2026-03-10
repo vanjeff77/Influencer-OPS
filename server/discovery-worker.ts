@@ -6,11 +6,18 @@ import {
   collectFollowingsFromSeeds,
   fetchProfilesForCandidates,
   type AggregatedCandidate,
+  type SeedLog,
 } from "./instagram-discovery";
 import {
   analyzeInfluencerCandidates,
   type CandidateProfile,
 } from "./ai/influencer-analyzer";
+
+interface LogEntry {
+  type: 'success' | 'warning' | 'error';
+  message: string;
+  timestamp: string;
+}
 
 interface JobProgress {
   currentStep: string;
@@ -21,6 +28,7 @@ interface JobProgress {
   profilesTotal?: number;
   analyzedCount?: number;
   totalToAnalyze?: number;
+  logs?: LogEntry[];
 }
 
 async function updateJobStatus(jobId: number, status: string, progress?: JobProgress, errorMessage?: string) {
@@ -37,6 +45,17 @@ async function updateJobProgress(jobId: number, progress: JobProgress) {
   await db.update(aiSearchJobs).set({ progress }).where(eq(aiSearchJobs.id, jobId));
 }
 
+const jobLogs = new Map<number, LogEntry[]>();
+
+function addLog(jobId: number, type: 'success' | 'warning' | 'error', message: string) {
+  if (!jobLogs.has(jobId)) jobLogs.set(jobId, []);
+  jobLogs.get(jobId)!.push({ type, message, timestamp: new Date().toISOString() });
+}
+
+function getLogs(jobId: number): LogEntry[] {
+  return jobLogs.get(jobId) || [];
+}
+
 export async function processAiSearchJob(jobId: number): Promise<void> {
   console.log(`[DiscoveryWorker] Starting job ${jobId}`);
 
@@ -51,18 +70,33 @@ export async function processAiSearchJob(jobId: number): Promise<void> {
     return;
   }
 
+  jobLogs.set(jobId, []);
+  addLog(jobId, 'success', `서칭 시작: 시드 ${job.seedHandles.length}개 (${job.seedHandles.map(h => '@' + h).join(', ')})`);
+
   try {
     await stepFetchFollowings(job);
     await stepFetchProfiles(job);
     await stepAnalyze(job);
 
+    const aggregated: AggregatedCandidate[] = (job as any)._aggregated || [];
+    const recommendedCount = aggregated.length;
+    addLog(jobId, recommendedCount > 0 ? 'success' : 'warning',
+      recommendedCount > 0
+        ? `서칭 완료: ${recommendedCount}명의 후보를 찾았습니다.`
+        : `서칭 완료: 조건에 맞는 후보를 찾지 못했습니다.`
+    );
+
     await updateJobStatus(job.id, "completed", {
       currentStep: "completed",
+      logs: getLogs(jobId),
     });
     console.log(`[DiscoveryWorker] Job ${job.id} completed successfully`);
   } catch (err: any) {
     console.error(`[DiscoveryWorker] Job ${job.id} failed:`, err);
-    await updateJobStatus(job.id, "failed", undefined, err.message || "Unknown error");
+    addLog(jobId, 'error', `작업 실패: ${err.message || '알 수 없는 오류'}`);
+    await updateJobStatus(job.id, "failed", { currentStep: "failed", logs: getLogs(jobId) }, err.message || "Unknown error");
+  } finally {
+    jobLogs.delete(jobId);
   }
 }
 
@@ -84,13 +118,15 @@ async function stepFetchFollowings(job: AiSearchJob): Promise<void> {
       progress.seedsProcessed = seedsProcessed;
       progress.seedsTotal = seedsTotal;
       progress.candidatesFound = candidatesFound;
-      await updateJobProgress(job.id, { ...progress });
-    }
+      await updateJobProgress(job.id, { ...progress, logs: getLogs(job.id) });
+    },
+    (log) => addLog(job.id, log.type, log.message)
   );
 
   progress.seedsProcessed = job.seedHandles.length;
   progress.candidatesFound = candidateMap.size;
-  await updateJobProgress(job.id, progress);
+  addLog(job.id, 'success', `팔로잉 수집 완료: 중복 제거 후 고유 후보 ${candidateMap.size}명`);
+  await updateJobProgress(job.id, { ...progress, logs: getLogs(job.id) });
 
   (job as any)._candidateMap = candidateMap;
 }
@@ -115,24 +151,29 @@ async function stepFetchProfiles(job: AiSearchJob): Promise<void> {
   };
   await updateJobStatus(job.id, "fetching_profiles", progress);
 
-  const aggregated = await fetchProfilesForCandidates(
+  const { results: aggregated } = await fetchProfilesForCandidates(
     candidateMap,
     job.followerMin,
     job.followerMax,
     async (profilesFetched, totalCandidates) => {
       progress.profilesFetched = profilesFetched;
       progress.profilesTotal = totalCandidates;
-      await updateJobProgress(job.id, { ...progress });
-    }
+      await updateJobProgress(job.id, { ...progress, logs: getLogs(job.id) });
+    },
+    (log) => addLog(job.id, log.type, log.message)
   );
 
   const maxResults = job.maxResults || 50;
   const sorted = aggregated.sort((a, b) => b.sourceSeeds.length - a.sourceSeeds.length);
   const trimmed = sorted.slice(0, maxResults);
 
+  if (trimmed.length < aggregated.length) {
+    addLog(job.id, 'success', `최대 결과 수(${maxResults}명) 제한 적용: ${aggregated.length}명 → ${trimmed.length}명`);
+  }
+
   (job as any)._aggregated = trimmed;
   progress.profilesFetched = candidateMap.size;
-  await updateJobProgress(job.id, progress);
+  await updateJobProgress(job.id, { ...progress, logs: getLogs(job.id) });
 }
 
 async function stepAnalyze(job: AiSearchJob): Promise<void> {
@@ -208,6 +249,10 @@ async function stepAnalyze(job: AiSearchJob): Promise<void> {
   }
 
   progress.analyzedCount = candidateRows.length;
-  await updateJobProgress(job.id, progress);
+
+  const recommendedCount = candidateRows.filter(c => c.status === 'recommended').length;
+  addLog(job.id, 'success', `AI 분석 완료: ${candidateRows.length}명 중 ${recommendedCount}명 추천 (점수 50점 이상)`);
+
+  await updateJobProgress(job.id, { ...progress, logs: getLogs(job.id) });
   console.log(`[DiscoveryWorker] Job ${job.id}: inserted ${candidateRows.length} candidates`);
 }

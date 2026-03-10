@@ -24,6 +24,11 @@ import {
   ExternalLink,
   Users,
   ChevronDown,
+  ChevronUp,
+  CheckCircle,
+  AlertTriangle,
+  XCircle,
+  FileText,
 } from "lucide-react";
 import {
   Select,
@@ -446,6 +451,50 @@ function CandidateCard({
   );
 }
 
+function ExecutionLog({ logs, defaultOpen = false }: { logs?: any[]; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  if (!logs || logs.length === 0) return null;
+
+  const logIcon = (type: string) => {
+    if (type === 'success') return <CheckCircle className="h-3.5 w-3.5 text-green-500 shrink-0" />;
+    if (type === 'warning') return <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />;
+    return <XCircle className="h-3.5 w-3.5 text-destructive shrink-0" />;
+  };
+
+  const hasWarningsOrErrors = logs.some((l: any) => l.type === 'warning' || l.type === 'error');
+
+  return (
+    <Card data-testid="card-execution-log">
+      <CardContent className="p-0">
+        <button
+          onClick={() => setOpen(!open)}
+          className="w-full flex items-center justify-between p-3 hover:bg-muted/50 transition-colors text-left"
+          data-testid="button-toggle-log"
+        >
+          <div className="flex items-center gap-2">
+            <FileText className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium">실행 로그</span>
+            <span className="text-xs text-muted-foreground">({logs.length}건)</span>
+            {hasWarningsOrErrors && <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />}
+          </div>
+          {open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+        </button>
+        {open && (
+          <div className="border-t px-3 pb-3 space-y-1.5 max-h-60 overflow-y-auto">
+            {logs.map((log: any, i: number) => (
+              <div key={i} className="flex items-start gap-2 py-1" data-testid={`log-entry-${i}`}>
+                {logIcon(log.type)}
+                <span className="text-xs text-muted-foreground flex-1">{log.message}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function JobDetail({
   workspaceId,
   jobId,
@@ -535,6 +584,8 @@ function JobDetail({
           </CardContent>
         </Card>
       )}
+
+      <ExecutionLog logs={job.progress?.logs} defaultOpen={job.status === "failed" || (job.status === "completed" && (!candidates || candidates.length === 0))} />
 
       {job.status === "completed" && candidates && (
         <>
