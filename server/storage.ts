@@ -18,7 +18,9 @@ import {
   type FeedbackNote, type InsertFeedbackNote,
   type ContractTemplate, type InsertContractTemplate,
   type ContentSubmission, type InsertContentSubmission,
-  type AiDraftReply, type InsertAiDraftReply
+  type AiDraftReply, type InsertAiDraftReply,
+  type AiSearchJob, type InsertAiSearchJob, type AiSearchCandidate, type InsertAiSearchCandidate,
+  aiSearchJobs, aiSearchCandidates
 } from "@shared/schema";
 import { eq, like, or, and, sql, inArray, desc } from "drizzle-orm";
 import { fetchProfileImage } from "./profile-fetcher";
@@ -223,6 +225,16 @@ export interface IStorage {
   updateEmailSyncLog(id: number, data: Partial<EmailSyncLog>): Promise<EmailSyncLog>;
   getEmailSyncLogs(workspaceId: number, limit?: number, offset?: number): Promise<{ logs: EmailSyncLog[]; total: number }>;
   getEmailSyncLog(id: number): Promise<EmailSyncLog | undefined>;
+
+  // AI Search
+  createAiSearchJob(data: InsertAiSearchJob): Promise<AiSearchJob>;
+  getAiSearchJob(id: number): Promise<AiSearchJob | undefined>;
+  getAiSearchJobs(workspaceId: number): Promise<AiSearchJob[]>;
+  updateAiSearchJob(id: number, data: Partial<AiSearchJob>): Promise<AiSearchJob>;
+  createAiSearchCandidate(data: InsertAiSearchCandidate): Promise<AiSearchCandidate>;
+  getAiSearchCandidates(jobId: number): Promise<AiSearchCandidate[]>;
+  updateAiSearchCandidate(id: number, data: Partial<AiSearchCandidate>): Promise<AiSearchCandidate>;
+  bulkCreateAiSearchCandidates(data: InsertAiSearchCandidate[]): Promise<AiSearchCandidate[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1766,6 +1778,48 @@ export class DatabaseStorage implements IStorage {
   async getEmailSyncLog(id: number): Promise<EmailSyncLog | undefined> {
     const [log] = await db.select().from(emailSyncLogs).where(eq(emailSyncLogs.id, id));
     return log;
+  }
+
+  async createAiSearchJob(data: InsertAiSearchJob): Promise<AiSearchJob> {
+    const [job] = await db.insert(aiSearchJobs).values(data).returning();
+    return job;
+  }
+
+  async getAiSearchJob(id: number): Promise<AiSearchJob | undefined> {
+    const [job] = await db.select().from(aiSearchJobs).where(eq(aiSearchJobs.id, id));
+    return job;
+  }
+
+  async getAiSearchJobs(workspaceId: number): Promise<AiSearchJob[]> {
+    return await db.select().from(aiSearchJobs)
+      .where(eq(aiSearchJobs.workspaceId, workspaceId))
+      .orderBy(desc(aiSearchJobs.createdAt));
+  }
+
+  async updateAiSearchJob(id: number, data: Partial<AiSearchJob>): Promise<AiSearchJob> {
+    const [job] = await db.update(aiSearchJobs).set(data).where(eq(aiSearchJobs.id, id)).returning();
+    return job;
+  }
+
+  async createAiSearchCandidate(data: InsertAiSearchCandidate): Promise<AiSearchCandidate> {
+    const [candidate] = await db.insert(aiSearchCandidates).values(data).returning();
+    return candidate;
+  }
+
+  async getAiSearchCandidates(jobId: number): Promise<AiSearchCandidate[]> {
+    return await db.select().from(aiSearchCandidates)
+      .where(eq(aiSearchCandidates.jobId, jobId))
+      .orderBy(desc(aiSearchCandidates.aiScore));
+  }
+
+  async updateAiSearchCandidate(id: number, data: Partial<AiSearchCandidate>): Promise<AiSearchCandidate> {
+    const [candidate] = await db.update(aiSearchCandidates).set(data).where(eq(aiSearchCandidates.id, id)).returning();
+    return candidate;
+  }
+
+  async bulkCreateAiSearchCandidates(data: InsertAiSearchCandidate[]): Promise<AiSearchCandidate[]> {
+    if (data.length === 0) return [];
+    return await db.insert(aiSearchCandidates).values(data).returning();
   }
 }
 

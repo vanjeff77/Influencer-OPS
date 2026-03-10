@@ -1,13 +1,21 @@
-import { useUser } from "@/hooks/use-auth";
+import { useUser, useLogin } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useEffect } from "react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { KO } from "@/i18n/ko";
+import { Loader2 } from "lucide-react";
 
 export default function Login() {
   const { data: user } = useUser();
   const [, setLocation] = useLocation();
+  const loginMutation = useLogin();
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (user) setLocation("/");
@@ -15,6 +23,16 @@ export default function Login() {
 
   const handleGoogleLogin = () => {
     window.location.href = '/api/auth/google';
+  };
+
+  const handleEmailLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    try {
+      await loginMutation.mutateAsync({ username: email, password });
+    } catch (err: any) {
+      setError(err.message || "로그인에 실패했습니다.");
+    }
   };
 
   return (
@@ -40,6 +58,62 @@ export default function Login() {
               </svg>
               Google로 로그인
             </Button>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-2 text-muted-foreground">또는</span>
+              </div>
+            </div>
+
+            <form onSubmit={handleEmailLogin} className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="email">이메일</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="email@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  data-testid="input-email"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="password">비밀번호</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="비밀번호를 입력하세요"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  data-testid="input-password"
+                />
+              </div>
+
+              {error && (
+                <p className="text-sm text-destructive" data-testid="text-login-error">{error}</p>
+              )}
+
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={loginMutation.isPending}
+                data-testid="button-email-login"
+              >
+                {loginMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    로그인 중...
+                  </>
+                ) : (
+                  "로그인"
+                )}
+              </Button>
+            </form>
           </div>
         </CardContent>
       </Card>

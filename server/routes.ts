@@ -5652,6 +5652,207 @@ export async function registerRoutes(
     }
   });
 
+  // === AI SEARCH ===
+  app.post('/api/workspaces/:workspaceId/ai-search', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const workspaceId = parseInt(req.params.workspaceId);
+      const userId = (req.user as any).id;
+      const membership = await storage.getWorkspaceMember(userId, workspaceId);
+      if (!membership) return res.status(403).json({ message: "Forbidden" });
+
+      const { seedHandles, criteria, platform, followerMin, followerMax, maxResults } = req.body as {
+        seedHandles: string[];
+        criteria?: string;
+        platform?: string;
+        followerMin?: number;
+        followerMax?: number;
+        maxResults?: number;
+      };
+
+      if (!seedHandles || !Array.isArray(seedHandles) || seedHandles.length === 0) {
+        return res.status(400).json({ message: '시드 인플루언서 핸들을 1개 이상 입력해주세요.' });
+      }
+
+      const cleanHandles = seedHandles.map(h => h.replace(/^@/, '').trim()).filter(Boolean);
+      if (cleanHandles.length === 0) {
+        return res.status(400).json({ message: '유효한 핸들을 입력해주세요.' });
+      }
+
+      const job = await storage.createAiSearchJob({
+        workspaceId,
+        createdByUserId: userId,
+        status: 'pending',
+        seedHandles: cleanHandles,
+        criteria: criteria || null,
+        platform: platform || 'instagram',
+        followerMin: followerMin || null,
+        followerMax: followerMax || null,
+        maxResults: maxResults || 50,
+        progress: null,
+        errorMessage: null,
+      });
+
+      const { processAiSearchJob } = await import('./discovery-worker');
+      processAiSearchJob(job.id).catch(err => {
+        console.error(`[AI Search] Job ${job.id} failed:`, err);
+      });
+
+      res.status(201).json(job);
+    } catch (err: any) {
+      console.error('[API] ai-search create error:', err);
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get('/api/workspaces/:workspaceId/ai-search', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const workspaceId = parseInt(req.params.workspaceId);
+      const userId = (req.user as any).id;
+      const membership = await storage.getWorkspaceMember(userId, workspaceId);
+      if (!membership) return res.status(403).json({ message: "Forbidden" });
+
+      const jobs = await storage.getAiSearchJobs(workspaceId);
+      res.json(jobs);
+    } catch (err: any) {
+      console.error('[API] ai-search list error:', err);
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get('/api/workspaces/:workspaceId/ai-search/:jobId', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const workspaceId = parseInt(req.params.workspaceId);
+      const userId = (req.user as any).id;
+      const membership = await storage.getWorkspaceMember(userId, workspaceId);
+      if (!membership) return res.status(403).json({ message: "Forbidden" });
+
+      const jobId = parseInt(req.params.jobId);
+      const job = await storage.getAiSearchJob(jobId);
+      if (!job || job.workspaceId !== workspaceId) {
+        return res.status(404).json({ message: 'Job not found' });
+      }
+      res.json(job);
+    } catch (err: any) {
+      console.error('[API] ai-search detail error:', err);
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get('/api/workspaces/:workspaceId/ai-search/:jobId/candidates', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const workspaceId = parseInt(req.params.workspaceId);
+      const userId = (req.user as any).id;
+      const membership = await storage.getWorkspaceMember(userId, workspaceId);
+      if (!membership) return res.status(403).json({ message: "Forbidden" });
+
+      const jobId = parseInt(req.params.jobId);
+      const job = await storage.getAiSearchJob(jobId);
+      if (!job || job.workspaceId !== workspaceId) {
+        return res.status(404).json({ message: 'Job not found' });
+      }
+
+      const candidates = await storage.getAiSearchCandidates(jobId);
+      res.json(candidates);
+    } catch (err: any) {
+      console.error('[API] ai-search candidates error:', err);
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post('/api/workspaces/:workspaceId/ai-search/:jobId/candidates/:candidateId/add', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const workspaceId = parseInt(req.params.workspaceId);
+      const userId = (req.user as any).id;
+      const membership = await storage.getWorkspaceMember(userId, workspaceId);
+      if (!membership) return res.status(403).json({ message: "Forbidden" });
+
+      const jobId = parseInt(req.params.jobId);
+      const candidateId = parseInt(req.params.candidateId);
+
+      const job = await storage.getAiSearchJob(jobId);
+      if (!job || job.workspaceId !== workspaceId) {
+        return res.status(404).json({ message: 'Job not found' });
+      }
+
+      const candidates = await storage.getAiSearchCandidates(jobId);
+      const candidate = candidates.find(c => c.id === candidateId);
+      if (!candidate) {
+        return res.status(404).json({ message: 'Candidate not found' });
+      }
+
+      if (candidate.status === 'added' && candidate.addedInfluencerId) {
+        return res.status(400).json({ message: '이미 추가된 후보입니다.' });
+      }
+
+      const profileData = candidate.profileData as any || {};
+      const handle = candidate.handle.replace(/^@/, '');
+      const platform = candidate.platform === 'instagram' ? 'IG' : candidate.platform;
+
+      const inf = await storage.createInfluencer(workspaceId, {
+        name: handle,
+        email: null,
+        accounts: [{
+          platform,
+          handle,
+          url: platform === 'IG' ? `https://instagram.com/${handle}` : `https://${candidate.platform}.com/${handle}`,
+          followers: profileData.followers || 0,
+          category: profileData.category || null,
+          verified: profileData.isVerified || false,
+        }],
+      });
+
+      await storage.updateAiSearchCandidate(candidateId, {
+        status: 'added',
+        addedInfluencerId: inf.id,
+      });
+
+      res.json({ influencer: inf, candidate: { ...candidate, status: 'added', addedInfluencerId: inf.id } });
+    } catch (err: any) {
+      console.error('[API] ai-search add candidate error:', err);
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.patch('/api/workspaces/:workspaceId/ai-search/:jobId/candidates/:candidateId', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const workspaceId = parseInt(req.params.workspaceId);
+      const userId = (req.user as any).id;
+      const membership = await storage.getWorkspaceMember(userId, workspaceId);
+      if (!membership) return res.status(403).json({ message: "Forbidden" });
+
+      const jobId = parseInt(req.params.jobId);
+      const candidateId = parseInt(req.params.candidateId);
+
+      const job = await storage.getAiSearchJob(jobId);
+      if (!job || job.workspaceId !== workspaceId) {
+        return res.status(404).json({ message: 'Job not found' });
+      }
+
+      const candidates = await storage.getAiSearchCandidates(jobId);
+      const candidate = candidates.find(c => c.id === candidateId);
+      if (!candidate) {
+        return res.status(404).json({ message: 'Candidate not found in this job' });
+      }
+
+      const { status } = req.body as { status: string };
+      if (!status || !['pending', 'recommended', 'dismissed', 'added'].includes(status)) {
+        return res.status(400).json({ message: '유효하지 않은 상태입니다.' });
+      }
+
+      const updated = await storage.updateAiSearchCandidate(candidateId, { status });
+      res.json(updated);
+    } catch (err: any) {
+      console.error('[API] ai-search update candidate error:', err);
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   // SEED DATA
   seedDatabase();
 

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb, date } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, date, real } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -731,6 +731,55 @@ export const contentSubmissions = pgTable("content_submissions", {
 export const insertContentSubmissionSchema = createInsertSchema(contentSubmissions).omit({ id: true, submittedAt: true });
 export type InsertContentSubmission = z.infer<typeof insertContentSubmissionSchema>;
 export type ContentSubmission = typeof contentSubmissions.$inferSelect;
+
+// === AI SEARCH (AI 인플루언서 서칭) ===
+export const aiSearchJobs = pgTable("ai_search_jobs", {
+  id: serial("id").primaryKey(),
+  workspaceId: integer("workspace_id").notNull(),
+  createdByUserId: integer("created_by_user_id").notNull(),
+  status: text("status").notNull().default("pending"),
+  seedHandles: text("seed_handles").array().notNull(),
+  criteria: text("criteria"),
+  platform: text("platform").default("instagram"),
+  followerMin: integer("follower_min"),
+  followerMax: integer("follower_max"),
+  maxResults: integer("max_results").default(50),
+  progress: jsonb("progress"),
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at").defaultNow(),
+  completedAt: timestamp("completed_at"),
+});
+
+export const aiSearchCandidates = pgTable("ai_search_candidates", {
+  id: serial("id").primaryKey(),
+  jobId: integer("job_id").notNull(),
+  handle: text("handle").notNull(),
+  platform: text("platform").notNull().default("instagram"),
+  profileData: jsonb("profile_data"),
+  sourceSeeds: text("source_seeds").array(),
+  aiScore: real("ai_score"),
+  aiReason: text("ai_reason"),
+  status: text("status").notNull().default("pending"),
+  addedInfluencerId: integer("added_influencer_id"),
+});
+
+export const aiSearchJobRelations = relations(aiSearchJobs, ({ one, many }) => ({
+  workspace: one(workspaces, { fields: [aiSearchJobs.workspaceId], references: [workspaces.id] }),
+  createdBy: one(users, { fields: [aiSearchJobs.createdByUserId], references: [users.id] }),
+  candidates: many(aiSearchCandidates),
+}));
+
+export const aiSearchCandidateRelations = relations(aiSearchCandidates, ({ one }) => ({
+  job: one(aiSearchJobs, { fields: [aiSearchCandidates.jobId], references: [aiSearchJobs.id] }),
+}));
+
+export const insertAiSearchJobSchema = createInsertSchema(aiSearchJobs).omit({ id: true, createdAt: true, completedAt: true });
+export const insertAiSearchCandidateSchema = createInsertSchema(aiSearchCandidates).omit({ id: true });
+
+export type AiSearchJob = typeof aiSearchJobs.$inferSelect;
+export type AiSearchCandidate = typeof aiSearchCandidates.$inferSelect;
+export type InsertAiSearchJob = z.infer<typeof insertAiSearchJobSchema>;
+export type InsertAiSearchCandidate = z.infer<typeof insertAiSearchCandidateSchema>;
 
 export const emailSyncLogs = pgTable("email_sync_logs", {
   id: serial("id").primaryKey(),

@@ -16,6 +16,7 @@ import Tracking from "@/pages/tracking";
 import Groups from "@/pages/groups";
 import Settings from "@/pages/settings";
 import Submit from "@/pages/submit";
+import AiSearch from "@/pages/ai-search";
 
 function Router() {
   return (
@@ -30,6 +31,7 @@ function Router() {
       <Route path="/finance" component={Finance} />
       <Route path="/tracking" component={Tracking} />
       <Route path="/settings" component={Settings} />
+      <Route path="/ai-search" component={AiSearch} />
       <Route path="/submit/:campaignId" component={Submit} />
       <Route component={NotFound} />
     </Switch>

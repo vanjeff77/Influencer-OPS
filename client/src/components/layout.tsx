@@ -30,7 +30,8 @@ import {
   ChevronsUpDown,
   Search,
   Menu,
-  Settings
+  Settings,
+  Sparkles
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -187,6 +188,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       <div className={`flex-1 overflow-y-auto py-4 md:py-6 space-y-1 ${collapsed ? 'px-1.5' : 'px-2 md:px-3'}`}>
         {!isClientRole && <NavItem href="/" icon={LayoutDashboard} label={KO.nav.overview} onClick={onNavClick} collapsed={collapsed} />}
+        {!isClientRole && <NavItem href="/ai-search" icon={Sparkles} label="AI 인플루언서 서칭" onClick={onNavClick} collapsed={collapsed} />}
         {!isClientRole && <div data-tour="discover"><NavItem href="/discover" icon={Search} label={KO.nav.discover} onClick={onNavClick} collapsed={collapsed} /></div>}
         <div data-tour="campaigns"><NavItem href="/campaigns" icon={Megaphone} label={KO.nav.campaigns} onClick={onNavClick} collapsed={collapsed} /></div>
         {!isClientRole && <NavItem href="/groups" icon={Users} label={KO.nav.groups} onClick={onNavClick} collapsed={collapsed} />}

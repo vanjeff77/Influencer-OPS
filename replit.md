@@ -22,7 +22,7 @@ Preferred communication style: Simple, everyday language.
 ### Backend
 - **Framework**: Express.js with TypeScript
 - **API Design**: RESTful API with typed route definitions
-- **Authentication**: Google OAuth login (unified), Passport.js session-based via PostgreSQL, 30-day cookie expiration. Users must be pre-registered by workspace owner; Google OAuth creates session and auto-links Gmail API email account.
+- **Authentication**: Dual login — Google OAuth + email/password (LocalStrategy). Passport.js session-based via PostgreSQL, 30-day cookie expiration. Users must be pre-registered by workspace owner; Google OAuth creates session and auto-links Gmail API email account.
 - **Authorization**: Three-tier Role-Based Access Control (RBAC): `WORKSPACE_OWNER`, `WORKSPACE_MEMBER`, `CLIENT`, and `PLATFORM_ADMIN`.
 - **Email Services**: Dual-mode per account — Gmail API (via per-user OAuth refresh_token) or IMAP/SMTP. Workspace owner toggles `useGmailApi` per email account. Gmail API used for sending, sync, search, and thread attach when enabled; IMAP/SMTP fallback when disabled.
 
@@ -88,6 +88,14 @@ Preferred communication style: Simple, everyday language.
     - **Draft Generator**: Builds prompts from various contexts, returns draft text and classification.
     - **Background Generation**: Async, non-blocking generation after inbound message sync.
     - **UI Integration**: Displays pending draft cards, allows user feedback for regeneration, and provides alternative classification options. Never auto-sends; user always reviews.
+
+- **AI Influencer Discovery**:
+    - **Schema**: `ai_search_jobs` and `ai_search_candidates` tables for tracking search jobs and results.
+    - **Instagram Service** (`server/instagram-discovery.ts`): RapidAPI-based following list collection and profile fetching. Rate limiting, retry logic, private account skipping.
+    - **AI Analyzer** (`server/ai/influencer-analyzer.ts`): LLM-powered candidate scoring (0-100) with batch processing. Uses existing LLM Provider abstraction. Source seed bonus scoring.
+    - **Background Worker** (`server/discovery-worker.ts`): Async job processing — fetching followings → fetching profiles → AI analysis. Real-time progress tracking via jsonb.
+    - **APIs**: CRUD for jobs/candidates, add-to-workspace, status updates. 6 endpoints under `/api/workspaces/:workspaceId/ai-search`.
+    - **Frontend**: Dedicated "AI 인플루언서 서칭" page (`/ai-search`) with job creation form (seed handles, criteria, follower range), job list, progress tracking, and candidate result cards with add/dismiss actions.
 
 ## External Dependencies
 
