@@ -59,12 +59,32 @@ async function apiRequest(endpoint: string, params: Record<string, string> = {})
       signal: controller.signal,
     });
 
+    const text = await res.text();
+
     if (!res.ok) {
-      const text = await res.text().catch(() => '');
       throw new Error(`RapidAPI ${res.status}: ${text.substring(0, 200)}`);
     }
 
-    return await res.json();
+    if (text.includes('429') && text.includes('rate limit')) {
+      throw new Error(`RapidAPI rate limit: ${text.substring(0, 200)}`);
+    }
+
+    try {
+      const json = JSON.parse(text);
+      if (typeof json === 'string') {
+        if (json.includes('429') || json.toLowerCase().includes('rate limit')) {
+          throw new Error(`RapidAPI rate limit (wrapped 200): ${json.substring(0, 200)}`);
+        }
+        throw new Error(`RapidAPI unexpected string response: ${json.substring(0, 200)}`);
+      }
+      if (json?.message && (json.message.includes('rate limit') || json.message.includes('429'))) {
+        throw new Error(`RapidAPI rate limit: ${json.message.substring(0, 200)}`);
+      }
+      return json;
+    } catch (parseErr: any) {
+      if (parseErr.message.startsWith('RapidAPI')) throw parseErr;
+      throw new Error(`RapidAPI invalid JSON response: ${text.substring(0, 200)}`);
+    }
   } finally {
     clearTimeout(timer);
   }
@@ -79,7 +99,10 @@ async function withRetry<T>(fn: () => Promise<T>, label: string): Promise<T> {
       lastError = err;
       console.log(`[InstagramDiscovery] ${label} attempt ${attempt}/${RETRY_MAX} failed: ${err.message}`);
       if (attempt < RETRY_MAX) {
-        await delay(RATE_LIMIT_DELAY_MS * attempt);
+        const isRateLimit = err.message?.includes('rate limit') || err.message?.includes('429');
+        const waitMs = isRateLimit ? RATE_LIMIT_DELAY_MS * attempt * 3 : RATE_LIMIT_DELAY_MS * attempt;
+        console.log(`[InstagramDiscovery] Waiting ${waitMs}ms before retry...`);
+        await delay(waitMs);
       }
     }
   }
@@ -95,7 +118,7 @@ function sanitizeHandle(handle: string): string {
 }
 
 function parseProfileFromResponse(data: any, fallbackHandle: string): ProfileInfo {
-  const profile = data?.data || data;
+  const profile = data?.data?.user || data?.data || data?.user || data;
 
   return {
     handle: profile.username || fallbackHandle,
@@ -112,12 +135,19 @@ function parseProfileFromResponse(data: any, fallbackHandle: string): ProfileInf
 }
 
 function extractUserId(data: any): string | null {
-  const profile = data?.data || data;
-  const id = profile?.pk || profile?.id || profile?.user_id;
-  if (!id) {
-    console.log(`[InstagramDiscovery] user_info response keys:`, JSON.stringify(data).substring(0, 500));
+  const candidates = [
+    data?.data?.user,
+    data?.data,
+    data?.user,
+    data,
+  ];
+  for (const obj of candidates) {
+    if (!obj || typeof obj !== 'object') continue;
+    const id = obj.pk || obj.id || obj.user_id || obj.pk_id;
+    if (id) return String(id);
   }
-  return id ? String(id) : null;
+  console.log(`[InstagramDiscovery] Could not find user_id in response:`, JSON.stringify(data).substring(0, 500));
+  return null;
 }
 
 export async function fetchProfileInfo(handle: string): Promise<ProfileInfo> {
