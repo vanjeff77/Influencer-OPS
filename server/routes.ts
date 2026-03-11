@@ -15,6 +15,7 @@ import { normalizeInstagramHandle, normalizeInstagramUrl } from "@shared/utils";
 import { getDefaultFrameworkDoc } from "./ai/draft-generator";
 import { fetchProfileImage, getDirectDownloadUrl } from "./profile-fetcher";
 import { getAuthUrl } from "./gmail";
+import { scheduleCampaignSync, scheduleInfluencerSync } from "./sheets-sync";
 
 // Singleton browser instance for PDF generation
 let sharedBrowser: any = null;
@@ -336,7 +337,7 @@ export async function registerRoutes(
       return res.status(403).json({ message: '워크스페이스 소유자만 이름을 변경할 수 있습니다.' });
     }
 
-    const { name, tabDescriptions, aiDraftEnabled, aiProvider, aiApiKey, aiModel, slackBotToken, slackChannelId, slackEnabled } = req.body as {
+    const { name, tabDescriptions, aiDraftEnabled, aiProvider, aiApiKey, aiModel, slackBotToken, slackChannelId, slackEnabled, sheetSpreadsheetId } = req.body as {
       name?: string;
       tabDescriptions?: Record<string, string>;
       aiDraftEnabled?: boolean;
@@ -346,6 +347,7 @@ export async function registerRoutes(
       slackBotToken?: string;
       slackChannelId?: string;
       slackEnabled?: boolean;
+      sheetSpreadsheetId?: string | null;
     };
 
     const updateData: any = {};
@@ -397,6 +399,10 @@ export async function registerRoutes(
     }
     if (slackChannelId !== undefined) {
       updateData.slackChannelId = slackChannelId || null;
+    }
+
+    if (sheetSpreadsheetId !== undefined) {
+      updateData.sheetSpreadsheetId = sheetSpreadsheetId || null;
     }
 
     if (Object.keys(updateData).length === 0) {
@@ -686,6 +692,9 @@ export async function registerRoutes(
       if (data.settlementInfoUpdatedAt) data.settlementInfoUpdatedAt = new Date(data.settlementInfoUpdatedAt);
       
       const inf = await storage.updateInfluencer(id, data);
+      if (data.settlementType !== undefined || data.bankName !== undefined || data.accountNumber !== undefined || data.accountHolder !== undefined || data.businessName !== undefined) {
+        scheduleInfluencerSync(inf.workspaceId, id);
+      }
       res.json(inf);
     } catch (err: any) {
       console.error('Failed to update influencer:', err);
@@ -1217,6 +1226,7 @@ export async function registerRoutes(
       }
     }
     
+    if (campaign) scheduleCampaignSync(campaign.workspaceId, campaignId);
     res.status(201).json(items);
   });
 
@@ -1251,6 +1261,9 @@ export async function registerRoutes(
         refreshSlackParentForLineItem(itemId).catch(err => console.error('[API] Slack parent refresh error:', err));
       });
     }
+
+    const campaignForSync = await storage.getCampaign(item.campaignId);
+    if (campaignForSync) scheduleCampaignSync(campaignForSync.workspaceId, item.campaignId);
     
     res.json(item);
   });
@@ -1447,6 +1460,8 @@ export async function registerRoutes(
       if (data.paidAt) data.paidAt = new Date(data.paidAt);
       
       const updated = await storage.updateLineItemPayout(itemId, data);
+      const campaignForSync = await storage.getCampaign(updated.campaignId);
+      if (campaignForSync) scheduleCampaignSync(campaignForSync.workspaceId, updated.campaignId);
       res.json(updated);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
@@ -1473,6 +1488,8 @@ export async function registerRoutes(
         paidAt: new Date()
       });
       
+      const campaignForSync = await storage.getCampaign(updated.campaignId);
+      if (campaignForSync) scheduleCampaignSync(campaignForSync.workspaceId, updated.campaignId);
       res.json(updated);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
@@ -3643,6 +3660,7 @@ export async function registerRoutes(
       }
       
       await storage.deleteCampaignItem(lineItemId);
+      scheduleCampaignSync(campaign.workspaceId, campaign.id);
       res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
@@ -3677,6 +3695,9 @@ export async function registerRoutes(
           refreshSlackParentForLineItem(lineItemId).catch(err => console.error('[API] Slack parent refresh error:', err));
         });
       }
+
+      const campaignForSync = await storage.getCampaign(updated.campaignId);
+      if (campaignForSync) scheduleCampaignSync(campaignForSync.workspaceId, updated.campaignId);
 
       res.json(updated);
     } catch (err: any) {
@@ -5848,6 +5869,43 @@ export async function registerRoutes(
       res.json(updated);
     } catch (err: any) {
       console.error('[API] ai-search update candidate error:', err);
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // === GOOGLE SHEETS SYNC ===
+  app.post('/api/workspaces/:workspaceId/sync-sheets', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: 'Unauthorized' });
+      const workspaceId = parseInt(req.params.workspaceId);
+      const userId = (req.user as any).id;
+      const membership = (await storage.getWorkspaceMemberships(userId)).find(m => m.workspaceId === workspaceId);
+      if (!membership || membership.role !== 'WORKSPACE_OWNER') {
+        return res.status(403).json({ message: '워크스페이스 소유자만 실행 가능합니다' });
+      }
+      const { syncAllCampaignsToSheet } = await import('./sheets-sync');
+      const result = await syncAllCampaignsToSheet(workspaceId);
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post('/api/workspaces/:workspaceId/test-sheet-access', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: 'Unauthorized' });
+      const workspaceId = parseInt(req.params.workspaceId);
+      const userId = (req.user as any).id;
+      const membership = (await storage.getWorkspaceMemberships(userId)).find(m => m.workspaceId === workspaceId);
+      if (!membership || membership.role !== 'WORKSPACE_OWNER') {
+        return res.status(403).json({ message: '워크스페이스 소유자만 실행 가능합니다' });
+      }
+      const { spreadsheetId } = req.body;
+      if (!spreadsheetId) return res.status(400).json({ message: '스프레드시트 ID를 입력해주세요' });
+      const { testSheetAccess } = await import('./sheets-sync');
+      const result = await testSheetAccess(spreadsheetId);
+      res.json(result);
+    } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
   });

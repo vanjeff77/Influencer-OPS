@@ -17,7 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { KO } from "@/i18n/ko";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Pencil, Trash2, Building2, Users, Shield, FileText, Star, Settings, RotateCcw, Mail, X, Sparkles, ImageDown, Loader2, CheckCircle, AlertCircle, Bell } from "lucide-react";
+import { Plus, Pencil, Trash2, Building2, Users, Shield, FileText, Star, Settings, RotateCcw, Mail, X, Sparkles, ImageDown, Loader2, CheckCircle, AlertCircle, Bell, Sheet, ExternalLink } from "lucide-react";
 import { SiSlack } from "react-icons/si";
 import { useResetOnboarding } from "@/hooks/use-auth";
 
@@ -493,6 +493,12 @@ export default function SettingsPage() {
             <TabsTrigger value="email-mode" className="gap-2" data-testid="tab-email-mode">
               <Mail className="w-4 h-4" />
               이메일 방식
+            </TabsTrigger>
+          )}
+          {isOwner && (
+            <TabsTrigger value="sheets-sync" className="gap-2" data-testid="tab-sheets-sync">
+              <Sheet className="w-4 h-4" />
+              스프레드시트
             </TabsTrigger>
           )}
         </TabsList>
@@ -1330,6 +1336,11 @@ export default function SettingsPage() {
             <EmailModeSection workspaceId={workspaceId} />
           </TabsContent>
         )}
+        {isOwner && (
+          <TabsContent value="sheets-sync" className="mt-6">
+            <SheetsSyncSection workspaceId={workspaceId} />
+          </TabsContent>
+        )}
       </Tabs>
 
       {editingClient && (
@@ -2017,6 +2028,211 @@ interface SyncedMessageDetail {
   snippet: string | null;
   subject: string | null;
   receivedAt: string;
+}
+
+function SheetsSyncSection({ workspaceId }: { workspaceId: number }) {
+  const { toast } = useToast();
+  const { data: workspacesData } = useQuery<any[]>({ queryKey: ['/api/workspaces'] });
+  const workspace = workspacesData?.find((w: any) => w.id === workspaceId);
+  const [sheetUrl, setSheetUrl] = useState('');
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  useEffect(() => {
+    if (workspace && !isInitialized) {
+      const sid = workspace.sheetSpreadsheetId;
+      if (sid) {
+        setSheetUrl(`https://docs.google.com/spreadsheets/d/${sid}/edit`);
+      }
+      setIsInitialized(true);
+    }
+  }, [workspace, isInitialized]);
+
+  const extractSpreadsheetId = (input: string): string | null => {
+    if (!input.trim()) return null;
+    const match = input.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+    if (match) return match[1];
+    if (/^[a-zA-Z0-9-_]+$/.test(input.trim())) return input.trim();
+    return null;
+  };
+
+  const saveMutation = useMutation({
+    mutationFn: async (spreadsheetId: string | null) => {
+      const res = await apiRequest('PATCH', `/api/workspaces/${workspaceId}`, { sheetSpreadsheetId: spreadsheetId });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/workspaces'] });
+      toast({ title: '스프레드시트 설정이 저장되었습니다' });
+    },
+    onError: (err: any) => {
+      toast({ title: '저장 실패', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const testMutation = useMutation({
+    mutationFn: async (spreadsheetId: string) => {
+      const res = await apiRequest('POST', `/api/workspaces/${workspaceId}/test-sheet-access`, { spreadsheetId });
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      if (data.success) {
+        toast({ title: `연결 성공: "${data.title}"` });
+      } else {
+        toast({ title: '연결 실패', description: data.error, variant: 'destructive' });
+      }
+    },
+    onError: (err: any) => {
+      toast({ title: '테스트 실패', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const syncMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('POST', `/api/workspaces/${workspaceId}/sync-sheets`);
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      toast({ title: `동기화 완료: ${data.synced}/${data.total} 캠페인`, description: data.errors?.length ? `오류: ${data.errors.join(', ')}` : undefined });
+    },
+    onError: (err: any) => {
+      toast({ title: '동기화 실패', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const spreadsheetId = extractSpreadsheetId(sheetUrl);
+  const isConnected = !!workspace?.sheetSpreadsheetId;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg flex items-center gap-2">
+          <Sheet className="w-5 h-5" />
+          Google Sheets 동기화
+        </CardTitle>
+        <CardDescription>
+          캠페인별 인플루언서 계약정보와 정산정보를 Google 스프레드시트에 자동으로 동기화합니다.
+          데이터 변경 시 자동으로 업데이트됩니다.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label>스프레드시트 URL 또는 ID</Label>
+          <div className="flex gap-2">
+            <Input
+              value={sheetUrl}
+              onChange={(e) => setSheetUrl(e.target.value)}
+              placeholder="https://docs.google.com/spreadsheets/d/... 또는 스프레드시트 ID"
+              className="flex-1"
+              data-testid="input-spreadsheet-url"
+            />
+            {spreadsheetId && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => testMutation.mutate(spreadsheetId)}
+                disabled={testMutation.isPending}
+                data-testid="button-test-sheet"
+              >
+                {testMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : '연결 테스트'}
+              </Button>
+            )}
+          </div>
+          {spreadsheetId && (
+            <p className="text-xs text-muted-foreground">
+              ID: {spreadsheetId}
+            </p>
+          )}
+          {sheetUrl && !spreadsheetId && (
+            <p className="text-xs text-red-500">
+              올바른 Google 스프레드시트 URL 또는 ID를 입력해주세요.
+            </p>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => saveMutation.mutate(spreadsheetId)}
+            disabled={saveMutation.isPending || (!spreadsheetId && !isConnected)}
+            data-testid="button-save-spreadsheet"
+          >
+            {saveMutation.isPending ? '저장 중...' : '설정 저장'}
+          </Button>
+          {isConnected && (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => syncMutation.mutate()}
+                disabled={syncMutation.isPending}
+                data-testid="button-sync-now"
+              >
+                {syncMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                {syncMutation.isPending ? '동기화 중...' : '전체 동기화'}
+              </Button>
+              <a
+                href={`https://docs.google.com/spreadsheets/d/${workspace.sheetSpreadsheetId}/edit`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 hover:underline"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                스프레드시트 열기
+              </a>
+            </>
+          )}
+          {isConnected && sheetUrl === '' && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => saveMutation.mutate(null)}
+              disabled={saveMutation.isPending}
+              className="text-red-500 hover:text-red-600"
+            >
+              연결 해제
+            </Button>
+          )}
+        </div>
+
+        {isConnected && (
+          <div className="rounded-lg border bg-green-50/50 dark:bg-green-950/20 p-3">
+            <div className="flex items-center gap-2 text-sm">
+              <CheckCircle className="w-4 h-4 text-green-600" />
+              <span className="font-medium text-green-700 dark:text-green-400">자동 동기화 활성화됨</span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              캠페인 인플루언서의 계약/정산 정보가 변경되면 자동으로 스프레드시트에 반영됩니다.
+              캠페인별로 시트가 자동 생성됩니다.
+            </p>
+          </div>
+        )}
+
+        <div className="rounded-lg border p-3 space-y-2">
+          <p className="text-sm font-medium">동기화되는 정보</p>
+          <div className="grid grid-cols-2 gap-1 text-xs text-muted-foreground">
+            <div>
+              <p className="font-medium text-foreground mb-1">계약 정보</p>
+              <ul className="space-y-0.5">
+                <li>제안단가, VAT포함여부</li>
+                <li>2차활용 기간/메모</li>
+                <li>계약서 URL</li>
+                <li>초안/업로드 마감일</li>
+                <li>운영단계, 커뮤니케이션 상태</li>
+              </ul>
+            </div>
+            <div>
+              <p className="font-medium text-foreground mb-1">정산 정보</p>
+              <ul className="space-y-0.5">
+                <li>정산유형 (사업자/프리랜서)</li>
+                <li>예금주, 은행, 계좌번호</li>
+                <li>정산상태 (공급가/VAT/총액)</li>
+                <li>지급메모, 지급예정일</li>
+                <li>지급완료일</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 function EmailModeSection({ workspaceId }: { workspaceId: number }) {

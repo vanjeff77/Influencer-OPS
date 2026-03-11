@@ -52,6 +52,7 @@ export const workspaces = pgTable("workspaces", {
   slackBotToken: text("slack_bot_token"),
   slackChannelId: text("slack_channel_id"),
   slackEnabled: boolean("slack_enabled").default(false),
+  sheetSpreadsheetId: text("sheet_spreadsheet_id"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

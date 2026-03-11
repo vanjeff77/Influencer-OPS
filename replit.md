@@ -62,6 +62,15 @@ Preferred communication style: Simple, everyday language.
     - **Environment**: `RAPIDAPI_KEY` (secret) for Instagram, `YOUTUBE_API_KEY` (optional) for YouTube.
 - **Security**: IMAP password encryption (AES-256-CBC), Zod validation, authentication and workspace authorization.
 - **Contract Template Management**: CRUD operations for templates, rich text editor (TipTap), variable substitution, and dual DOCX/PDF export.
+- **Google Sheets Auto-Sync**:
+    - **Schema**: `sheetSpreadsheetId` column on `workspaces` table.
+    - **Service**: `server/sheets-sync.ts` — syncs campaign influencer contract/settlement data to Google Sheets.
+    - **Structure**: One spreadsheet per workspace, one sheet per campaign (sheet name = campaign name).
+    - **Auto-trigger**: Data changes to campaign line items (create/update/delete), payout updates, and influencer settlement info updates trigger 5-second debounced sync.
+    - **Data Synced**: Influencer info, platform/handle, offer details (fee, VAT, usage), contract URLs, schedule dates, settlement info (type, bank, account), payout status/amounts.
+    - **Google Sheets Client**: `server/google-sheets.ts` — Replit connector-based OAuth (google-sheet integration).
+    - **Settings UI**: "스프레드시트" tab in Settings — URL/ID input, connection test, manual full sync, auto-sync status indicator.
+    - **APIs**: `POST /api/workspaces/:workspaceId/sync-sheets`, `POST /api/workspaces/:workspaceId/test-sheet-access`.
 - **Client Logo Management**: URL-based client logos with live preview and integration into campaign UI.
 - **User Onboarding System**: TourGuide component for step-by-step walkthroughs and FeatureHint for contextual hints.
 - **Slack Bot for Email Notifications**:
