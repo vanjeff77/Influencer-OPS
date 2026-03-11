@@ -4,7 +4,7 @@ import type { EmailAccount } from "@shared/schema";
 import { notifyInboundEmail } from "./slack-bot";
 
 function usePerAccountGmail(account: EmailAccount): boolean {
-  return !!(account.provider === 'gmail' && account.refreshToken && account.useGmailApi);
+  return !!(account.refreshToken && account.useGmailApi);
 }
 
 async function getHistoryIdFor(account: EmailAccount): Promise<string> {
@@ -116,11 +116,34 @@ function isValidGmailThreadId(id: string): boolean {
   return /^[0-9a-fA-F]+$/.test(id);
 }
 
+function isRfc822MessageId(id: string): boolean {
+  return !!id && (id.startsWith('<') || id.includes('@'));
+}
+
 async function syncThreadToConversation(conversationId: number, gmailThreadId: string, account: EmailAccount): Promise<number> {
+  let resolvedThreadId = gmailThreadId;
+
   if (!isValidGmailThreadId(gmailThreadId)) {
-    return 0;
+    if (isRfc822MessageId(gmailThreadId) && usePerAccountGmail(account)) {
+      try {
+        const resolved = await gmail.resolveThreadIdFromMessageId(account.refreshToken!, gmailThreadId);
+        if (resolved) {
+          resolvedThreadId = resolved;
+          await storage.updateConversation(conversationId, { gmailThreadId: resolved });
+          console.log(`[Sync] Resolved RFC822 ID → Gmail Thread ID for conversation ${conversationId}: ${resolved}`);
+        } else {
+          return 0;
+        }
+      } catch (err: any) {
+        console.warn(`[Sync] Failed to resolve RFC822 ID for conversation ${conversationId}:`, err.message);
+        return 0;
+      }
+    } else {
+      return 0;
+    }
   }
-  const thread = await getThreadFor(account, gmailThreadId);
+
+  const thread = await getThreadFor(account, resolvedThreadId);
   if (!thread.messages) return 0;
 
   const existingMessages = await storage.getConversationMessages(conversationId);
@@ -149,7 +172,7 @@ async function syncThreadToConversation(conversationId: number, gmailThreadId: s
       bodyHtml: body.html || null,
       bodyText: body.text || null,
       gmailMessageId: gmailMsgId || msgId,
-      gmailThreadId,
+      gmailThreadId: resolvedThreadId,
       sendStatus: 'sent',
       receivedAt: headers.date ? new Date(headers.date) : new Date(),
     });

@@ -468,3 +468,13 @@ export async function listMessagesForAccount(refreshToken: string, query?: strin
   });
   return response.data.messages || [];
 }
+
+export async function resolveThreadIdFromMessageId(refreshToken: string, rfc822MessageId: string): Promise<string | null> {
+  const cleanId = rfc822MessageId.trim().replace(/^<|>$/g, '');
+  const msgs = await listMessagesForAccount(refreshToken, `rfc822msgid:${cleanId}`, 1);
+  if (msgs.length > 0 && msgs[0].id) {
+    const fullMsg = await getMessageForAccount(refreshToken, msgs[0].id);
+    return fullMsg.threadId || null;
+  }
+  return null;
+}

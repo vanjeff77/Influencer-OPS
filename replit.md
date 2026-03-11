@@ -43,10 +43,11 @@ Preferred communication style: Simple, everyday language.
 - **Influencer Import**: Batch import with validation, platform normalization, duplicate detection, and partial success handling.
 - **Instagram URL Normalization**: Utility to normalize Instagram handles across all save paths.
 - **Email Communication**:
-    - **Attach Existing Email Thread**: Wizard for linking external email threads via IMAP search.
-    - **Bulk Email Sending**: Queue-based 1:1 delivery with throttling, WYSIWYG editor, variable substitution.
+    - **Attach Existing Email Thread**: Wizard for linking external email threads via IMAP search. At attach time, if the email account has Gmail API enabled, RFC822 Message-IDs from IMAP are automatically resolved to Gmail Thread IDs via `rfc822msgid:` query.
+    - **Bulk Email Sending**: Queue-based 1:1 delivery with throttling, WYSIWYG editor, variable substitution. Uses Gmail API when `useGmailApi` is enabled on the email account, otherwise SMTP.
     - **Integrated Messenger**: 3-pane layout for campaign communication, Gmail syncing, influencer detail editing, and content sanitization.
     - **Auto Email Sync**: Gmail History API-based incremental sync with background worker and frontend auto-refresh. IMAP auto-sync via `fetchInboxReplies` (two-phase: headers-first matching, then full body fetch for matches only). 60-second sync interval with 45-second IMAP timeout. Supports both Gmail OAuth and IMAP provider accounts. Both Gmail and IMAP sync paths update `subjectPrefix` from inbound message subject (stripping `Re:` prefix) for accurate reply threading.
+    - **RFC822 → Gmail Thread ID Auto-Resolution**: `resolveThreadIdFromMessageId()` in `server/gmail.ts` converts RFC822 Message-IDs to Gmail Thread IDs via `rfc822msgid:` search. Applied at: (1) thread attach time, (2) sync time (auto-sync and manual), (3) server startup backfill. `usePerAccountGmail` check is `refreshToken && useGmailApi` (provider-agnostic). `isValidGmailThreadId()` and `isRfc822MessageId()` helpers in `server/email-sync.ts`.
 - **Mobile Optimization**: Fully responsive UI.
 - **Influencer Campaign History**: Displays past campaigns and allows navigation to details.
 - **Content Submission History**: Tracks influencer content submissions, supports multiple uploads, and integrates with review tracking.

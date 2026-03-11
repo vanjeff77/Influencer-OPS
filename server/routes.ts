@@ -2498,29 +2498,48 @@ export async function registerRoutes(
       if (!memberships.some(m => m.workspaceId === account.workspaceId)) {
         return res.status(403).json({ message: "이 이메일 계정에 대한 접근 권한이 없습니다" });
       }
+
+      let resolvedThreadId = threadId;
+      const isRfc822 = threadId.startsWith('<') || threadId.includes('@');
+      const isGmailApiAccount = !!(account.refreshToken && account.useGmailApi);
+
+      if (isRfc822 && isGmailApiAccount) {
+        try {
+          const gmailMod = await import('./gmail');
+          const resolved = await gmailMod.resolveThreadIdFromMessageId(account.refreshToken!, threadId);
+          if (resolved) {
+            resolvedThreadId = resolved;
+            console.log(`[AttachThread] Resolved RFC822 → Gmail Thread ID: ${resolved}`);
+          }
+        } catch (err: any) {
+          console.warn(`[AttachThread] Failed to resolve RFC822 ID, using original:`, err.message);
+        }
+      }
       
       let conversation = await storage.getConversationByLineItem(lineItemId);
       
       if (conversation) {
         conversation = await storage.updateConversation(conversation.id, {
           emailAccountId: accountId,
-          gmailThreadId: threadId,
+          gmailThreadId: resolvedThreadId,
           subjectPrefix: threadSubject,
         });
       } else {
         conversation = await storage.createConversation({
           campaignLineItemId: lineItemId,
           emailAccountId: accountId,
-          gmailThreadId: threadId,
+          gmailThreadId: resolvedThreadId,
           subjectPrefix: threadSubject,
           status: 'active',
         });
       }
       
-      if (account.provider === 'gmail' && account.refreshToken && account.useGmailApi) {
+      const resolvedIsValidGmailId = /^[0-9a-fA-F]+$/.test(resolvedThreadId) && !resolvedThreadId.startsWith('<') && !resolvedThreadId.includes('@');
+
+      if (isGmailApiAccount && resolvedIsValidGmailId) {
         try {
           const gmailMod = await import('./gmail');
-          const thread = await gmailMod.getThreadForAccount(account.refreshToken, threadId);
+          const thread = await gmailMod.getThreadForAccount(account.refreshToken!, resolvedThreadId);
           if (thread.messages) {
             for (const msg of thread.messages) {
               const headers = gmailMod.parseMessageHeaders(msg);
@@ -2537,7 +2556,7 @@ export async function registerRoutes(
                 bodyHtml: body.html || null,
                 bodyText: body.text || null,
                 gmailMessageId: headers.messageId || msg.id || null,
-                gmailThreadId: threadId,
+                gmailThreadId: resolvedThreadId,
                 sendStatus: 'sent',
                 sentAt: isOutbound && headers.date ? new Date(headers.date) : null,
                 receivedAt: !isOutbound && headers.date ? new Date(headers.date) : null,
@@ -2955,12 +2974,29 @@ export async function registerRoutes(
       }
 
       const isValidGmailId = conv.gmailThreadId && !conv.gmailThreadId.startsWith('<') && !conv.gmailThreadId.includes('@') && /^[0-9a-fA-F]+$/.test(conv.gmailThreadId);
+      const isRfc822Id = conv.gmailThreadId && (conv.gmailThreadId.startsWith('<') || conv.gmailThreadId.includes('@'));
+      const isGmailApiAccount = !!(emailAccount.refreshToken && emailAccount.useGmailApi);
 
-      if (emailAccount.provider === 'gmail' && emailAccount.refreshToken && emailAccount.useGmailApi && isValidGmailId) {
-        const gmailMod = await import('./gmail');
+      if (isGmailApiAccount && isValidGmailId) {
         const { syncGmailThread } = await import('./email-sync');
         const synced = await syncGmailThread(conv.id, conv.gmailThreadId!, emailAccount);
         return res.json({ synced });
+      }
+
+      if (isGmailApiAccount && isRfc822Id) {
+        try {
+          const gmailMod = await import('./gmail');
+          const resolved = await gmailMod.resolveThreadIdFromMessageId(emailAccount.refreshToken!, conv.gmailThreadId!);
+          if (resolved) {
+            await storage.updateConversation(conv.id, { gmailThreadId: resolved });
+            console.log(`[Sync] Resolved RFC822 → Gmail Thread ID for conversation ${conv.id}: ${resolved}`);
+            const { syncGmailThread } = await import('./email-sync');
+            const synced = await syncGmailThread(conv.id, resolved, emailAccount);
+            return res.json({ synced });
+          }
+        } catch (err: any) {
+          console.warn(`[Sync] Failed to resolve RFC822 ID for conversation ${conv.id}:`, err.message);
+        }
       }
 
       const { imapHost, imapPort: imapPortNum, imapPassword: encPwd } = getImapSmtpSettings(emailAccount);
@@ -5939,6 +5975,7 @@ export async function registerRoutes(
   backfillCampaignCcEmails();
   fixNixonEmailTypo();
   backfillConversationSubjectPrefix();
+  backfillRfc822ThreadIds();
 
   return httpServer;
 }
@@ -6023,6 +6060,43 @@ async function backfillConversationSubjectPrefix() {
     console.log('Backfill conversation subjectPrefix completed');
   } catch (err) {
     console.error('Backfill conversation subjectPrefix error:', err);
+  }
+}
+
+async function backfillRfc822ThreadIds() {
+  try {
+    const rows = await db.execute(sql`
+      SELECT c.id, c.gmail_thread_id, c.email_account_id
+      FROM conversations c
+      WHERE c.gmail_thread_id IS NOT NULL
+        AND (c.gmail_thread_id LIKE '<%' OR c.gmail_thread_id LIKE '%@%')
+        AND c.email_account_id IS NOT NULL
+    `);
+    const convs = (rows as any).rows || rows;
+    if (!convs || convs.length === 0) {
+      console.log('Backfill RFC822 thread IDs: no records to fix');
+      return;
+    }
+    console.log(`[Backfill] Found ${convs.length} conversations with RFC822 gmailThreadId`);
+    const gmailMod = await import('./gmail');
+    let resolved = 0;
+    for (const conv of convs) {
+      try {
+        const account = await storage.getEmailAccountById(conv.email_account_id);
+        if (!account || !account.refreshToken || !account.useGmailApi) continue;
+        const threadId = await gmailMod.resolveThreadIdFromMessageId(account.refreshToken, conv.gmail_thread_id);
+        if (threadId) {
+          await storage.updateConversation(conv.id, { gmailThreadId: threadId });
+          resolved++;
+          console.log(`[Backfill] Conversation ${conv.id}: ${conv.gmail_thread_id} → ${threadId}`);
+        }
+      } catch (err: any) {
+        console.warn(`[Backfill] Failed for conversation ${conv.id}:`, err.message);
+      }
+    }
+    console.log(`Backfill RFC822 thread IDs completed: ${resolved}/${convs.length} resolved`);
+  } catch (err) {
+    console.error('Backfill RFC822 thread IDs error:', err);
   }
 }
 
