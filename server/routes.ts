@@ -2954,10 +2954,12 @@ export async function registerRoutes(
         return res.json({ synced: 0, message: "이메일 계정을 찾을 수 없습니다" });
       }
 
-      if (emailAccount.provider === 'gmail' && emailAccount.refreshToken && emailAccount.useGmailApi && conv.gmailThreadId) {
+      const isValidGmailId = conv.gmailThreadId && !conv.gmailThreadId.startsWith('<') && !conv.gmailThreadId.includes('@') && /^[0-9a-fA-F]+$/.test(conv.gmailThreadId);
+
+      if (emailAccount.provider === 'gmail' && emailAccount.refreshToken && emailAccount.useGmailApi && isValidGmailId) {
         const gmailMod = await import('./gmail');
         const { syncGmailThread } = await import('./email-sync');
-        const synced = await syncGmailThread(conv.id, conv.gmailThreadId, emailAccount);
+        const synced = await syncGmailThread(conv.id, conv.gmailThreadId!, emailAccount);
         return res.json({ synced });
       }
 

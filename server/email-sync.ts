@@ -110,7 +110,16 @@ async function triggerAiDraftGeneration(conversationId: number, triggerMessageId
   }
 }
 
+function isValidGmailThreadId(id: string): boolean {
+  if (!id || id.trim() === '') return false;
+  if (id.startsWith('<') || id.includes('@')) return false;
+  return /^[0-9a-fA-F]+$/.test(id);
+}
+
 async function syncThreadToConversation(conversationId: number, gmailThreadId: string, account: EmailAccount): Promise<number> {
+  if (!isValidGmailThreadId(gmailThreadId)) {
+    return 0;
+  }
   const thread = await getThreadFor(account, gmailThreadId);
   if (!thread.messages) return 0;
 
