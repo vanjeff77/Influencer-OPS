@@ -499,23 +499,39 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
   return (
     <div className="flex flex-col gap-2">
       {aiEnabled && (
-        <div className="border rounded-lg bg-purple-50/50 dark:bg-purple-950/20" data-testid="section-ai-instruction">
+        <div className={`border rounded-lg transition-colors ${aiInstructionText ? 'bg-purple-50/50 dark:bg-purple-950/20 border-purple-200/50 dark:border-purple-800/30' : 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-300/60 dark:border-amber-700/40'}`} data-testid="section-ai-instruction">
           <button
             onClick={() => setAiInstructionOpen(!aiInstructionOpen)}
-            className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-left hover:bg-purple-100/50 dark:hover:bg-purple-900/30 rounded-lg transition-colors"
+            className={`w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-left rounded-lg transition-colors ${aiInstructionText ? 'hover:bg-purple-100/50 dark:hover:bg-purple-900/30' : 'hover:bg-amber-100/60 dark:hover:bg-amber-900/30'}`}
             data-testid="button-toggle-ai-instruction"
           >
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-purple-500" />
+            <div className="flex items-center gap-2 min-w-0">
+              <Sparkles className={`h-4 w-4 shrink-0 ${aiInstructionText ? 'text-purple-500' : 'text-amber-500'}`} />
               <span>캠페인 AI 지침</span>
-              {aiInstructionText && (
-                <span className="text-xs text-muted-foreground max-w-[300px] truncate">
-                  — {aiInstructionText.substring(0, 50)}{aiInstructionText.length > 50 ? '...' : ''}
+              {aiInstructionText ? (
+                <>
+                  <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 shrink-0">
+                    <CheckCircle2 className="h-3 w-3" />
+                    설정됨
+                  </span>
+                  <span className="text-xs text-muted-foreground max-w-[300px] truncate">
+                    — {aiInstructionText.substring(0, 50)}{aiInstructionText.length > 50 ? '...' : ''}
+                  </span>
+                </>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 shrink-0">
+                  <AlertCircle className="h-3 w-3" />
+                  미설정
                 </span>
               )}
             </div>
             {aiInstructionOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
           </button>
+          {!aiInstructionText && !aiInstructionOpen && (
+            <p className="px-4 pb-2.5 text-xs text-amber-600 dark:text-amber-400">
+              AI가 자동초안을 잘 작성하도록, 지침을 입력해주세요! (원하는 광고단가, 업로드 일정 등)
+            </p>
+          )}
           {aiInstructionOpen && (
             <div className="px-4 pb-3 space-y-2">
               <p className="text-xs text-muted-foreground">
