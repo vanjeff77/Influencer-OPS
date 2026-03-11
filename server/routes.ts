@@ -27,6 +27,7 @@ let pdfServiceError: string | null = null;
 // Check font files at startup
 import * as fsSync from 'fs';
 import * as pathSync from 'path';
+import * as childProcessSync from 'child_process';
 
 const fontPathRegularCheck = pathSync.join(process.cwd(), 'server', 'fonts', 'NotoSansKR-Regular.ttf');
 const fontPathBoldCheck = pathSync.join(process.cwd(), 'server', 'fonts', 'NotoSansKR-Bold.ttf');
@@ -50,25 +51,42 @@ const PUPPETEER_ARGS = [
   '--disable-setuid-sandbox',
   '--disable-dev-shm-usage',
   '--disable-gpu',
-  '--font-render-hinting=none'
+  '--font-render-hinting=none',
+  '--disable-software-rasterizer',
+  '--disable-extensions',
+  '--disable-background-networking',
+  '--disable-default-apps',
+  '--disable-sync',
+  '--no-first-run',
+  '--no-zygote',
+  '--single-process',
 ];
 
 // Find system Chromium executable path
-import * as fsSync from 'fs';
 function findChromiumPath(): string | undefined {
   const paths = [
     process.env.PUPPETEER_EXECUTABLE_PATH,
     '/nix/store/zi4f80l169xlmivz8vja8wlphq74qqk0-chromium-125.0.6422.141/bin/chromium',
     '/usr/bin/chromium',
     '/usr/bin/chromium-browser',
-    '/usr/bin/google-chrome'
+    '/usr/bin/google-chrome',
   ];
-  
+
   for (const p of paths) {
     if (p && fsSync.existsSync(p)) {
       console.log('[PDF] Found Chromium at:', p);
       return p;
     }
+  }
+
+  try {
+    const { execSync: execSyncFn } = childProcessSync;
+    const whichResult = execSyncFn('which chromium 2>/dev/null || which chromium-browser 2>/dev/null || which google-chrome 2>/dev/null || find /nix/store -name chromium -type f 2>/dev/null | head -1', { encoding: 'utf8' }).trim();
+    if (whichResult && fsSync.existsSync(whichResult)) {
+      console.log('[PDF] Found Chromium via search at:', whichResult);
+      return whichResult;
+    }
+  } catch (e) {
   }
   return undefined;
 }
@@ -91,40 +109,41 @@ const chromiumPath = findChromiumPath();
     return;
   }
   
-  try {
-    const puppeteer = await import('puppeteer');
-    sharedBrowser = await puppeteer.default.launch({
-      headless: true,
-      executablePath: chromiumPath,
-      args: PUPPETEER_ARGS
-    });
-    
-    // Handle browser disconnect
-    sharedBrowser.on('disconnected', () => {
-      sharedBrowser = null;
-      browserLaunchPromise = null;
-    });
-    
-    pdfServiceReady = true;
-    console.log('[PDF] Puppeteer preflight check passed. PDF service ready.');
-  } catch (err: any) {
-    console.error('[PDF] Puppeteer preflight check failed:', err.message);
-    puppeteerAvailable = false;
-    pdfServiceError = 'PDF 생성 서비스 초기화에 실패했습니다. Chromium 브라우저를 확인해주세요.';
+  const maxRetries = 2;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const puppeteer = await import('puppeteer');
+      sharedBrowser = await puppeteer.default.launch({
+        headless: true,
+        executablePath: chromiumPath,
+        args: PUPPETEER_ARGS,
+        timeout: 60000,
+        protocolTimeout: 60000,
+      });
+      
+      sharedBrowser.on('disconnected', () => {
+        sharedBrowser = null;
+        browserLaunchPromise = null;
+      });
+      
+      pdfServiceReady = true;
+      console.log('[PDF] Puppeteer preflight check passed. PDF service ready.');
+      return;
+    } catch (err: any) {
+      console.error(`[PDF] Puppeteer preflight attempt ${attempt}/${maxRetries} failed:`, err.message);
+      if (attempt === maxRetries) {
+        puppeteerAvailable = false;
+        pdfServiceError = 'PDF 생성 서비스 초기화에 실패했습니다. Chromium 브라우저를 확인해주세요.';
+      } else {
+        await new Promise(r => setTimeout(r, 3000));
+      }
+    }
   }
 })();
 
 async function getSharedBrowser() {
-  // Check for service errors first
-  if (pdfServiceError) {
-    throw new Error(pdfServiceError);
-  }
-  if (!puppeteerAvailable) {
-    throw new Error('PDF 생성 서비스가 현재 사용 불가능합니다. 관리자에게 문의해주세요.');
-  }
-  // Check if service is ready (preflight passed)
-  if (!pdfServiceReady) {
-    throw new Error('PDF 생성 서비스가 아직 준비 중입니다. 잠시 후 다시 시도해주세요.');
+  if (!chromiumPath) {
+    throw new Error('PDF 생성에 필요한 Chromium 브라우저가 설치되어 있지 않습니다.');
   }
   
   if (sharedBrowser) return sharedBrowser;
@@ -137,10 +156,11 @@ async function getSharedBrowser() {
       sharedBrowser = await puppeteer.default.launch({
         headless: true,
         executablePath: chromiumPath,
-        args: PUPPETEER_ARGS
+        args: PUPPETEER_ARGS,
+        timeout: 60000,
+        protocolTimeout: 60000,
       });
       
-      // Handle browser disconnect
       sharedBrowser.on('disconnected', () => {
         sharedBrowser = null;
         browserLaunchPromise = null;
