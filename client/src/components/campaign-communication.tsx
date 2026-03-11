@@ -571,15 +571,23 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
           <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
             <span className="text-sm font-medium">인플루언서</span>
             <div className="flex items-center gap-1">
-              <Button
-                size="sm"
-                className="h-7 text-xs bg-blue-600 hover:bg-blue-700 text-white"
-                onClick={() => setBulkEmailOpen(true)}
-                data-testid="button-bulk-email"
-              >
-                <Users className="w-3 h-3 mr-1" />
-                {KO.pages.bulkEmail.title}
-              </Button>
+              <div className="relative group">
+                <Button
+                  size="sm"
+                  className="h-7 text-xs bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => setBulkEmailOpen(true)}
+                  disabled={!aiInstructionText?.trim()}
+                  data-testid="button-bulk-email"
+                >
+                  <Users className="w-3 h-3 mr-1" />
+                  {KO.pages.bulkEmail.title}
+                </Button>
+                {!aiInstructionText?.trim() && (
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs bg-gray-800 text-white rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none">
+                    AI 지침을 먼저 입력해주세요
+                  </div>
+                )}
+              </div>
               <Button
                 size="sm"
                 variant="outline"

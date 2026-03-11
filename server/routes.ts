@@ -3561,6 +3561,10 @@ export async function registerRoutes(
       if (!campaign) {
         return res.status(404).json({ message: "캠페인을 찾을 수 없습니다" });
       }
+
+      if (!campaign.aiInstruction?.trim()) {
+        return res.status(400).json({ message: "AI 지침이 설정되지 않은 캠페인은 일괄 발송을 사용할 수 없습니다. 캠페인 AI 지침을 먼저 입력해주세요." });
+      }
       
       const ccString = cc ? (typeof cc === 'string' ? cc.trim() : '') : '';
       
