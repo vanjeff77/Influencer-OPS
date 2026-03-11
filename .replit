@@ -44,7 +44,7 @@ args = "npm run dev"
 waitForPort = 5000
 
 [agent]
-integrations = ["google-mail:1.0.0", "onedrive:1.0.0", "javascript_openai_ai_integrations:2.0.0"]
+integrations = ["google-mail:1.0.0", "onedrive:1.0.0", "javascript_openai_ai_integrations:2.0.0", "google-sheet:1.0.0"]
 
 [userenv]
 
