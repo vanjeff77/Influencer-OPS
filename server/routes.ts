@@ -5645,8 +5645,11 @@ export async function registerRoutes(
       }
 
       if (payload.type === 'block_actions') {
-        const result = await handleSlackInteraction(payload);
-        return res.status(result.status).json(result.body);
+        res.status(200).json({});
+        handleSlackInteraction(payload).catch(err => {
+          console.error('[SlackRoute] Background interaction error:', err);
+        });
+        return;
       }
 
       res.status(200).json({});

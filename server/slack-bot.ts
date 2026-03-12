@@ -464,6 +464,45 @@ async function openSlackModal(
   callbackId?: string,
   privateMetadata?: string,
   submit?: { type: string; text: string },
+): Promise<string | null> {
+  const view: any = {
+    type: "modal",
+    title: { type: "plain_text", text: title.substring(0, 25) },
+    blocks,
+  };
+  if (callbackId) view.callback_id = callbackId;
+  if (privateMetadata) view.private_metadata = privateMetadata;
+  if (submit) view.submit = submit;
+
+  try {
+    const resp = await fetch('https://slack.com/api/views.open', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${botToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ trigger_id: triggerId, view }),
+    });
+    const result = await resp.json() as any;
+    if (!result.ok) {
+      console.error('[SlackBot] views.open failed:', result.error, result.response_metadata?.messages);
+      return null;
+    }
+    return result.view?.id || null;
+  } catch (err) {
+    console.error('[SlackBot] Open modal error:', err);
+    return null;
+  }
+}
+
+async function updateSlackModalView(
+  botToken: string,
+  viewId: string,
+  title: string,
+  blocks: SlackBlock[],
+  callbackId?: string,
+  privateMetadata?: string,
+  submit?: { type: string; text: string },
 ): Promise<void> {
   const view: any = {
     type: "modal",
@@ -475,24 +514,30 @@ async function openSlackModal(
   if (submit) view.submit = submit;
 
   try {
-    await fetch('https://slack.com/api/views.open', {
+    const resp = await fetch('https://slack.com/api/views.update', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${botToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ trigger_id: triggerId, view }),
+      body: JSON.stringify({ view_id: viewId, view }),
     });
+    const result = await resp.json() as any;
+    if (!result.ok) {
+      console.error('[SlackBot] views.update failed:', result.error, result.response_metadata?.messages);
+    }
   } catch (err) {
-    console.error('[SlackBot] Open modal error:', err);
+    console.error('[SlackBot] Update modal error:', err);
   }
 }
 
 export async function handleSlackInteraction(payload: any): Promise<{ status: number; body: any }> {
   const actionId = payload.actions?.[0]?.action_id;
   const actionValue = payload.actions?.[0]?.value;
+  console.log('[SlackBot] handleSlackInteraction called, actionId:', actionId);
 
   if (!actionId || !actionValue) {
+    console.log('[SlackBot] No actionId or actionValue, returning empty');
     return { status: 200, body: {} };
   }
 
@@ -500,10 +545,12 @@ export async function handleSlackInteraction(payload: any): Promise<{ status: nu
   try {
     parsed = JSON.parse(actionValue);
   } catch {
+    console.log('[SlackBot] Failed to parse actionValue:', actionValue);
     return { status: 200, body: {} };
   }
 
   if (actionId === 'send_draft') {
+    console.log('[SlackBot] Routing to handleOpenSendDraftModal, parsed:', JSON.stringify(parsed));
     return handleOpenSendDraftModal(payload, parsed);
   } else if (actionId.startsWith('regenerate_alt_')) {
     return handleRegenerateAlt(payload, parsed);
@@ -584,97 +631,17 @@ async function getConversationCcEmails(conversationId: number, accountEmail: str
 async function handleOpenSendDraftModal(payload: any, parsed: any): Promise<{ status: number; body: any }> {
   const { conversationId, workspaceId, draftId } = parsed;
   const triggerId = payload.trigger_id;
-  if (!triggerId) return { status: 200, body: {} };
+  console.log('[SlackBot] handleOpenSendDraftModal start, triggerId:', triggerId, 'convId:', conversationId, 'draftId:', draftId);
+  if (!triggerId) {
+    console.log('[SlackBot] No triggerId, returning');
+    return { status: 200, body: {} };
+  }
 
   const workspace = (await storage.getWorkspaces()).find(w => w.id === workspaceId);
-  if (!workspace?.slackBotToken) return { status: 200, body: {} };
-
-  const conv = await storage.getConversation(conversationId);
-  if (!conv) return { status: 200, body: { text: '대화를 찾을 수 없습니다.' } };
-
-  let draftText = '';
-  if (draftId) {
-    const draftRecord = await storage.getAiDraft(draftId);
-    draftText = draftRecord?.draft || '';
+  if (!workspace?.slackBotToken) {
+    console.log('[SlackBot] No workspace or slackBotToken for workspaceId:', workspaceId);
+    return { status: 200, body: {} };
   }
-  if (!draftText) {
-    const latestDraft = await storage.getLatestPendingDraft(conversationId);
-    draftText = latestDraft?.draft || '';
-  }
-
-  const lineItem = await storage.getLineItemWithDetails(conv.campaignLineItemId);
-  const toEmail = lineItem?.influencer?.email || '(이메일 없음)';
-
-  let accountEmail = '';
-  if (conv.emailAccountId) {
-    const directAccount = await storage.getEmailAccountById(conv.emailAccountId);
-    if (directAccount) accountEmail = directAccount.email;
-  }
-  if (!accountEmail) {
-    const members = await storage.getWorkspaceMembers(workspace.id);
-    for (const member of members) {
-      const userAccounts = await storage.getEmailAccounts(member.userId, workspace.id);
-      if (userAccounts.length > 0) {
-        accountEmail = userAccounts[0].email;
-        break;
-      }
-    }
-  }
-
-  const ccEmails = await getConversationCcEmails(conversationId, accountEmail, toEmail);
-  const ccDefault = ccEmails.length > 0 ? ccEmails.join(', ') : '';
-
-  const existingMsgs = await storage.getConversationMessages(conversationId);
-  const lastInbound = existingMsgs.filter((m: any) => m.direction === 'inbound').pop();
-
-  const modalBlocks: SlackBlock[] = [];
-
-  if (lastInbound) {
-    const inboundBody = lastInbound.bodyText || lastInbound.snippet || '';
-    const inboundPreview = inboundBody.length > 300 ? inboundBody.substring(0, 300) + '...' : inboundBody;
-    modalBlocks.push(
-      {
-        type: "section",
-        text: { type: "mrkdwn", text: `📨 *수신 메일*  |  ${lastInbound.senderEmail || ''}` },
-      },
-      {
-        type: "section",
-        text: { type: "mrkdwn", text: `\`\`\`\n${inboundPreview}\n\`\`\`` },
-      },
-      { type: "divider" },
-    );
-  }
-
-  modalBlocks.push(
-    {
-      type: "context",
-      elements: [
-        { type: "mrkdwn", text: `📤 *발신:* ${accountEmail || '(계정 없음)'}  |  📥 *수신:* ${toEmail}` },
-      ],
-    } as any,
-    {
-      type: "input",
-      block_id: "cc_block",
-      element: {
-        type: "plain_text_input",
-        action_id: "cc_input",
-        initial_value: ccDefault,
-        placeholder: { type: "plain_text", text: "쉼표로 구분 (예: a@email.com, b@email.com)" },
-      },
-      label: { type: "plain_text", text: "참조 (CC)" },
-      optional: true,
-    } as any,
-    {
-      type: "input",
-      block_id: "draft_body_block",
-      element: {
-        type: "rich_text_input",
-        action_id: "draft_body_input",
-        initial_value: textToRichTextBlock(draftText),
-      },
-      label: { type: "plain_text", text: "메일 본문" },
-    } as any,
-  );
 
   const metadata = JSON.stringify({
     conversationId,
@@ -684,15 +651,122 @@ async function handleOpenSendDraftModal(payload: any, parsed: any): Promise<{ st
     channelId: payload.channel?.id,
   });
 
-  await openSlackModal(
+  const loadingBlocks: SlackBlock[] = [
+    { type: "section", text: { type: "mrkdwn", text: "⏳ 데이터를 불러오는 중..." } },
+  ];
+  const viewId = await openSlackModal(
     workspace.slackBotToken,
     triggerId,
     "초안 편집 및 발송",
-    modalBlocks,
+    loadingBlocks,
     "send_edited_draft",
     metadata,
     { type: "plain_text", text: "📤 발송하기" },
   );
+  if (!viewId) {
+    console.error('[SlackBot] Failed to open loading modal');
+    return { status: 200, body: {} };
+  }
+
+  try {
+    const [conv, draftRecord, latestDraft] = await Promise.all([
+      storage.getConversation(conversationId),
+      draftId ? storage.getAiDraft(draftId) : Promise.resolve(undefined),
+      storage.getLatestPendingDraft(conversationId),
+    ]);
+
+    if (!conv) return { status: 200, body: {} };
+
+    let draftText = draftRecord?.draft || latestDraft?.draft || '';
+
+    const [lineItem, existingMsgs] = await Promise.all([
+      storage.getLineItemWithDetails(conv.campaignLineItemId),
+      storage.getConversationMessages(conversationId),
+    ]);
+    const toEmail = lineItem?.influencer?.email || '(이메일 없음)';
+
+    let accountEmail = '';
+    if (conv.emailAccountId) {
+      const directAccount = await storage.getEmailAccountById(conv.emailAccountId);
+      if (directAccount) accountEmail = directAccount.email;
+    }
+    if (!accountEmail) {
+      const members = await storage.getWorkspaceMembers(workspace.id);
+      for (const member of members) {
+        const userAccounts = await storage.getEmailAccounts(member.userId, workspace.id);
+        if (userAccounts.length > 0) {
+          accountEmail = userAccounts[0].email;
+          break;
+        }
+      }
+    }
+
+    const ccEmails = await getConversationCcEmails(conversationId, accountEmail, toEmail);
+    const ccDefault = ccEmails.length > 0 ? ccEmails.join(', ') : '';
+
+    const lastInbound = existingMsgs.filter((m: any) => m.direction === 'inbound').pop();
+
+    const modalBlocks: SlackBlock[] = [];
+
+    if (lastInbound) {
+      const inboundBody = lastInbound.bodyText || lastInbound.snippet || '';
+      const inboundPreview = inboundBody.length > 300 ? inboundBody.substring(0, 300) + '...' : inboundBody;
+      modalBlocks.push(
+        {
+          type: "section",
+          text: { type: "mrkdwn", text: `📨 *수신 메일*  |  ${lastInbound.senderEmail || ''}` },
+        },
+        {
+          type: "section",
+          text: { type: "mrkdwn", text: `\`\`\`\n${inboundPreview}\n\`\`\`` },
+        },
+        { type: "divider" },
+      );
+    }
+
+    modalBlocks.push(
+      {
+        type: "context",
+        elements: [
+          { type: "mrkdwn", text: `📤 *발신:* ${accountEmail || '(계정 없음)'}  |  📥 *수신:* ${toEmail}` },
+        ],
+      } as any,
+      {
+        type: "input",
+        block_id: "cc_block",
+        element: {
+          type: "plain_text_input",
+          action_id: "cc_input",
+          initial_value: ccDefault,
+          placeholder: { type: "plain_text", text: "쉼표로 구분 (예: a@email.com, b@email.com)" },
+        },
+        label: { type: "plain_text", text: "참조 (CC)" },
+        optional: true,
+      } as any,
+      {
+        type: "input",
+        block_id: "draft_body_block",
+        element: {
+          type: "rich_text_input",
+          action_id: "draft_body_input",
+          initial_value: textToRichTextBlock(draftText),
+        },
+        label: { type: "plain_text", text: "메일 본문" },
+      } as any,
+    );
+
+    await updateSlackModalView(
+      workspace.slackBotToken,
+      viewId,
+      "초안 편집 및 발송",
+      modalBlocks,
+      "send_edited_draft",
+      metadata,
+      { type: "plain_text", text: "📤 발송하기" },
+    );
+  } catch (err) {
+    console.error('[SlackBot] Failed to populate send draft modal:', err);
+  }
 
   return { status: 200, body: {} };
 }
