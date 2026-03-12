@@ -1033,8 +1033,8 @@ function MessageThread({ messages, onViewFull, influencerName, influencerEmail, 
   return (
     <div className="space-y-3">
       {dedupedMessages.map(msg => {
-        const isFromInfluencer = influencerEmail && msg.senderEmail?.toLowerCase() === influencerEmail.toLowerCase();
-        const isOutbound = !isFromInfluencer;
+        const isOutbound = msg.direction === 'outbound';
+        const isFromInfluencer = !isOutbound;
         const senderName = getSenderDisplayName(msg);
         const timeStr = (msg.sentAt || msg.receivedAt) ? formatMessageTime(new Date(msg.sentAt || msg.receivedAt!)) : null;
         return (

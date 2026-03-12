@@ -7,6 +7,58 @@ function usePerAccountGmail(account: EmailAccount): boolean {
   return !!(account.refreshToken && account.useGmailApi);
 }
 
+export function extractEmailAddress(raw: string): string {
+  const match = raw.match(/<([^>]+)>/);
+  return (match ? match[1] : raw).toLowerCase().trim();
+}
+
+export function isTeamEmail(senderRaw: string, account: EmailAccount, workspaceEmailDomains: Set<string>): boolean {
+  const senderAddr = extractEmailAddress(senderRaw);
+  if (senderAddr === account.email.toLowerCase()) return true;
+  const senderDomain = senderAddr.split('@')[1];
+  if (senderDomain && workspaceEmailDomains.has(senderDomain)) return true;
+  return false;
+}
+
+const workspaceEmailDomainsCache = new Map<number, { domains: Set<string>; cachedAt: number }>();
+const DOMAIN_CACHE_TTL = 5 * 60 * 1000;
+
+export async function getWorkspaceEmailDomains(workspaceId: number): Promise<Set<string>> {
+  const cached = workspaceEmailDomainsCache.get(workspaceId);
+  if (cached && Date.now() - cached.cachedAt < DOMAIN_CACHE_TTL) {
+    return cached.domains;
+  }
+  const domains = new Set<string>();
+  try {
+    const members = await storage.getWorkspaceMembers(workspaceId);
+    for (const member of members) {
+      const accounts = await storage.getEmailAccounts(member.userId, workspaceId);
+      for (const acc of accounts) {
+        const domain = acc.email.toLowerCase().split('@')[1];
+        if (domain) domains.add(domain);
+      }
+    }
+    const users = await Promise.all(members.map(m => storage.getUser(m.userId)));
+    for (const user of users) {
+      if (user?.email) {
+        const domain = user.email.toLowerCase().split('@')[1];
+        if (domain) domains.add(domain);
+      }
+    }
+  } catch (err) {
+    console.warn('[EmailSync] Failed to load workspace email domains:', err);
+  }
+  domains.delete('gmail.com');
+  domains.delete('naver.com');
+  domains.delete('hotmail.com');
+  domains.delete('yahoo.com');
+  domains.delete('outlook.com');
+  domains.delete('daum.net');
+  domains.delete('hanmail.net');
+  workspaceEmailDomainsCache.set(workspaceId, { domains, cachedAt: Date.now() });
+  return domains;
+}
+
 async function getHistoryIdFor(account: EmailAccount): Promise<string> {
   if (usePerAccountGmail(account)) {
     return gmail.getHistoryIdForAccount(account.refreshToken!);
@@ -120,7 +172,7 @@ function isRfc822MessageId(id: string): boolean {
   return !!id && (id.startsWith('<') || id.includes('@'));
 }
 
-async function syncThreadToConversation(conversationId: number, gmailThreadId: string, account: EmailAccount): Promise<number> {
+async function syncThreadToConversation(conversationId: number, gmailThreadId: string, account: EmailAccount, teamDomains?: Set<string>): Promise<number> {
   let resolvedThreadId = gmailThreadId;
 
   if (!isValidGmailThreadId(gmailThreadId)) {
@@ -159,7 +211,8 @@ async function syncThreadToConversation(conversationId: number, gmailThreadId: s
     if (gmailMsgId && existingGmailIds.has(gmailMsgId)) continue;
 
     const body = gmail.getMessageBody(msg);
-    const isOutbound = headers.from?.toLowerCase().includes(account.email.toLowerCase());
+    const domains = teamDomains || await getWorkspaceEmailDomains(account.workspaceId);
+    const isOutbound = headers.from ? isTeamEmail(headers.from, account, domains) : false;
 
     const createdMsg = await storage.createConversationMessage({
       conversationId,
@@ -196,6 +249,7 @@ async function syncThreadToConversation(conversationId: number, gmailThreadId: s
 
 async function syncGmailAccountIncremental(account: EmailAccount): Promise<{ synced: number; accountEmail: string; syncedMessages: SyncedMessageInfo[] }> {
   const result = { synced: 0, accountEmail: account.email, syncedMessages: [] as SyncedMessageInfo[] };
+  const teamDomains = await getWorkspaceEmailDomains(account.workspaceId);
 
   try {
     if (!account.lastHistoryId) {
@@ -222,7 +276,7 @@ async function syncGmailAccountIncremental(account: EmailAccount): Promise<{ syn
           for (const conv of allConvs) {
             if (!conv.gmailThreadId) continue;
             try {
-              const synced = await syncThreadToConversation(conv.id, conv.gmailThreadId, account);
+              const synced = await syncThreadToConversation(conv.id, conv.gmailThreadId, account, teamDomains);
               result.synced += synced;
             } catch (threadErr) {
               console.warn(`[AutoSync] Backfill thread ${conv.gmailThreadId} failed:`, threadErr);
@@ -319,7 +373,7 @@ async function syncGmailAccountIncremental(account: EmailAccount): Promise<{ syn
             const gmailMsgId = headers.messageId;
             if (gmailMsgId && existingGmailIds.has(gmailMsgId)) continue;
 
-            const isOutbound = headers.from?.toLowerCase().includes(account.email.toLowerCase());
+            const isOutbound = headers.from ? isTeamEmail(headers.from, account, teamDomains) : false;
 
             const createdMsg = await storage.createConversationMessage({
               conversationId: conv.id,
@@ -385,6 +439,7 @@ async function syncGmailAccountIncremental(account: EmailAccount): Promise<{ syn
 async function syncImapAccountConversations(account: EmailAccount): Promise<{ synced: number; syncedMessages: SyncedMessageInfo[] }> {
   let totalSynced = 0;
   const syncedMessages: SyncedMessageInfo[] = [];
+  const teamDomains = await getWorkspaceEmailDomains(account.workspaceId);
 
   try {
     const { getImapSmtpSettings } = await import('./smtp');
@@ -482,7 +537,7 @@ async function syncImapAccountConversations(account: EmailAccount): Promise<{ sy
       const fingerprint = `${msgSender}|${msgDate}|${msgSnip}`;
       if (existingFingerprints.has(fingerprint)) continue;
 
-      const isOutbound = msgSender.includes(account.email.toLowerCase());
+      const isOutbound = isTeamEmail(msgSender, account, teamDomains);
 
       if (isOutbound) {
         const TIME_TOLERANCE = 10000;

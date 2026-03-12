@@ -2544,7 +2544,9 @@ export async function registerRoutes(
             for (const msg of thread.messages) {
               const headers = gmailMod.parseMessageHeaders(msg);
               const body = gmailMod.getMessageBody(msg);
-              const isOutbound = headers.from?.toLowerCase().includes(account.email.toLowerCase());
+              const { isTeamEmail, getWorkspaceEmailDomains } = await import('./email-sync');
+              const teamDomains = await getWorkspaceEmailDomains(account.workspaceId);
+              const isOutbound = headers.from ? isTeamEmail(headers.from, account, teamDomains) : false;
               await storage.createConversationMessage({
                 conversationId: conversation.id,
                 direction: isOutbound ? 'outbound' : 'inbound',
@@ -2592,8 +2594,10 @@ export async function registerRoutes(
         try {
           const messages = await fetchThreadMessages(imapConfig, threadSubject);
           
+          const { isTeamEmail: isTeamEmailCheck, getWorkspaceEmailDomains: getWsDomainsCheck } = await import('./email-sync');
+          const wsDomainsCheck = await getWsDomainsCheck(account.workspaceId);
           for (const msg of messages) {
-            const direction = msg.from === account.email ? 'outbound' : 'inbound';
+            const direction = msg.from ? (isTeamEmailCheck(msg.from, account, wsDomainsCheck) ? 'outbound' : 'inbound') : 'inbound';
             await storage.createConversationMessage({
               conversationId: conversation.id,
               direction,
@@ -3065,14 +3069,10 @@ export async function registerRoutes(
         const fingerprint = `${msgSender}|${msgDate}|${msgSnip}`;
         if (existingFingerprints.has(fingerprint)) continue;
 
-        const isInbound = influencer?.email
-          ? msg.from.toLowerCase().includes(influencer.email.toLowerCase())
-          : false;
-        const isOutbound = emailAccount.email
-          ? msg.from.toLowerCase().includes(emailAccount.email.toLowerCase())
-          : false;
-
-        if (!isInbound && !isOutbound) continue;
+        const { isTeamEmail: isTeamEmailFn, getWorkspaceEmailDomains: getWsDomains } = await import('./email-sync');
+        const wsDomains = await getWsDomains(emailAccount.workspaceId);
+        const isOutbound = isTeamEmailFn(msg.from, emailAccount, wsDomains);
+        const isInbound = !isOutbound;
 
         const ccEmails = msg.cc
           ? msg.cc.split(',').map((e: string) => e.trim()).filter(Boolean)
@@ -5983,6 +5983,7 @@ export async function registerRoutes(
   fixNixonEmailTypo();
   backfillConversationSubjectPrefix();
   backfillRfc822ThreadIds();
+  backfillMessageDirections();
 
   return httpServer;
 }
@@ -6229,5 +6230,47 @@ async function seedDatabase() {
         imapPassword: encryptedPassword
       });
     }
+  }
+}
+
+async function backfillMessageDirections() {
+  try {
+    const { getWorkspaceEmailDomains, isTeamEmail } = await import('./email-sync');
+    const allWorkspaces = await db.select({ id: workspaces.id }).from(workspaces);
+    let totalFixed = 0;
+
+    for (const ws of allWorkspaces) {
+      const domains = await getWorkspaceEmailDomains(ws.id);
+      if (domains.size === 0) continue;
+
+      const wsAccounts = await db.select().from(emailAccounts).where(eq(emailAccounts.workspaceId, ws.id));
+      const teamEmails = new Set(wsAccounts.map(a => a.email.toLowerCase()));
+
+      const domainConditions = Array.from(domains).map(d => `cm.sender_email LIKE '%@${d}'`);
+      const emailConditions = Array.from(teamEmails).map(e => `cm.sender_email = '${e}'`);
+      const allConditions = [...domainConditions, ...emailConditions].join(' OR ');
+
+      const result = await db.execute(sql.raw(`
+        UPDATE conversation_messages cm
+        SET direction = 'outbound'
+        FROM conversations c
+        JOIN campaign_influencers ci ON ci.id = c.campaign_line_item_id
+        JOIN campaigns camp ON camp.id = ci.campaign_id
+        WHERE cm.conversation_id = c.id
+          AND camp.workspace_id = ${ws.id}
+          AND cm.direction = 'inbound'
+          AND cm.sender_email IS NOT NULL
+          AND (${allConditions})
+      `));
+
+      const count = (result as any)?.rowCount ?? (result as any)?.count ?? 0;
+      totalFixed += count;
+    }
+
+    if (totalFixed > 0) {
+      console.log(`[Backfill] Fixed ${totalFixed} messages direction: inbound → outbound (team domain emails)`);
+    }
+  } catch (err) {
+    console.error('[Backfill] Message direction fix error:', err);
   }
 }
