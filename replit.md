@@ -34,7 +34,7 @@ Preferred communication style: Simple, everyday language.
 ### Core Features & Technical Implementations
 - **Campaign Operations**: Management of influencer line items, stages, communication, review, and deadlines.
 - **Influencer Management**: Batch import with validation, Instagram URL normalization, and profile image auto-fetching from social media platforms with OneDrive caching.
-- **Email Communication**: Features include attaching existing email threads, bulk email sending, integrated messenger with Gmail syncing, and auto-email synchronization.
+- **Email Communication**: Features include attaching existing email threads, bulk email sending, integrated messenger with Gmail syncing, auto-email synchronization, and message soft-delete (hover trash icon on bubbles + delete button in full message dialog, `deletedAt` column on `conversation_messages`, `DELETE /api/messages/:messageId`).
 - **Finance & Tracking**: Real-time finance summary, CSV export, and settlement management with workflow and role-based access.
 - **Security**: IMAP password encryption (AES-256-CBC), Zod validation, authentication, and workspace authorization.
 - **Contract Management**: CRUD operations for templates, rich text editor, variable substitution, and DOCX/PDF export.

@@ -341,6 +341,7 @@ export const conversationMessages = pgTable("conversation_messages", {
   sentAt: timestamp("sent_at"),
   receivedAt: timestamp("received_at"),
   createdAt: timestamp("created_at").defaultNow(),
+  deletedAt: timestamp("deleted_at"),
 });
 
 // Email templates for quick sending

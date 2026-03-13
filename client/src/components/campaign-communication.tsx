@@ -39,7 +39,8 @@ import {
   X,
   ChevronDown,
   ChevronUp,
-  Maximize2
+  Maximize2,
+  Trash2
 } from "lucide-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
@@ -292,6 +293,21 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
     onSuccess: () => {
       refetchAiDraft();
       queryClient.invalidateQueries({ queryKey: ['/api/conversations/ai-draft-ids', campaignId] });
+    },
+  });
+
+  const deleteMessage = useMutation({
+    mutationFn: async (messageId: number) => {
+      await apiRequest('DELETE', `/api/messages/${messageId}`);
+    },
+    onSuccess: () => {
+      refetchConversation();
+      queryClient.invalidateQueries({ queryKey: [`/api/conversations?campaignId=${campaignId}`] });
+      setShowFullMessage(null);
+      toast({ title: '메시지가 삭제되었습니다' });
+    },
+    onError: (err: any) => {
+      toast({ title: '삭제 실패', description: err.message, variant: 'destructive' });
     },
   });
 
@@ -821,6 +837,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
                 <MessageThread 
                   messages={conversationDetail?.messages || []} 
                   onViewFull={setShowFullMessage}
+                  onDeleteMessage={(messageId) => deleteMessage.mutate(messageId)}
                   influencerName={selectedLineItem.influencer?.name}
                   influencerEmail={selectedLineItem.influencer?.email}
                   influencerProfileImageUrl={selectedLineItem.influencer?.accounts?.[0]?.profileImageUrl}
@@ -908,8 +925,25 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
       {/* Full Message Drawer */}
       <Dialog open={!!showFullMessage} onOpenChange={(open) => !open && setShowFullMessage(null)}>
         <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
-          <DialogHeader className="shrink-0">
+          <DialogHeader className="shrink-0 flex flex-row items-center justify-between">
             <DialogTitle>{KO.pages.communication.viewFullMessage}</DialogTitle>
+            {showFullMessage && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive hover:bg-destructive/10 gap-1"
+                onClick={() => {
+                  if (confirm('이 메시지를 삭제하시겠습니까?')) {
+                    deleteMessage.mutate(showFullMessage.id);
+                  }
+                }}
+                disabled={deleteMessage.isPending}
+                data-testid="button-delete-msg-full"
+              >
+                <Trash2 className="w-4 h-4" />
+                삭제
+              </Button>
+            )}
           </DialogHeader>
           <div className="flex-1 min-h-0 mt-2 overflow-y-auto pr-1">
             {showFullMessage && (
@@ -953,7 +987,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
   );
 }
 
-function MessageThread({ messages, onViewFull, influencerName, influencerEmail, influencerProfileImageUrl, aiDraft, aiEnabled, isLastInbound, onGenerateDraft, isGeneratingDraft, onUseDraft, onDismissDraft }: { messages: ConversationMessage[]; onViewFull: (msg: ConversationMessage) => void; influencerName?: string; influencerEmail?: string | null; influencerProfileImageUrl?: string | null; aiDraft?: any; aiEnabled?: boolean; isLastInbound?: boolean; onGenerateDraft?: (userFeedback?: string, requestedClassification?: string, requestedClassificationLabel?: string) => void; isGeneratingDraft?: boolean; onUseDraft?: (id: number) => void; onDismissDraft?: (id: number) => void }) {
+function MessageThread({ messages, onViewFull, onDeleteMessage, influencerName, influencerEmail, influencerProfileImageUrl, aiDraft, aiEnabled, isLastInbound, onGenerateDraft, isGeneratingDraft, onUseDraft, onDismissDraft }: { messages: ConversationMessage[]; onViewFull: (msg: ConversationMessage) => void; onDeleteMessage?: (messageId: number) => void; influencerName?: string; influencerEmail?: string | null; influencerProfileImageUrl?: string | null; aiDraft?: any; aiEnabled?: boolean; isLastInbound?: boolean; onGenerateDraft?: (userFeedback?: string, requestedClassification?: string, requestedClassificationLabel?: string) => void; isGeneratingDraft?: boolean; onUseDraft?: (id: number) => void; onDismissDraft?: (id: number) => void }) {
   const [showFeedbackInput, setShowFeedbackInput] = useState(false);
   const [feedbackText, setFeedbackText] = useState("");
   const threadEndRef = useRef<HTMLDivElement>(null);
@@ -1040,12 +1074,21 @@ function MessageThread({ messages, onViewFull, influencerName, influencerEmail, 
         const senderName = getSenderDisplayName(msg);
         const timeStr = (msg.sentAt || msg.receivedAt) ? formatMessageTime(new Date(msg.sentAt || msg.receivedAt!)) : null;
         return (
-          <div key={msg.id} className={`flex ${isOutbound ? 'justify-end' : 'justify-start'} items-end gap-1.5`}>
+          <div key={msg.id} className={`group/msg flex ${isOutbound ? 'justify-end' : 'justify-start'} items-end gap-1.5`}>
             {isOutbound && timeStr && (
               <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0 mb-1 flex items-center gap-1" data-testid={`text-msg-time-${msg.id}`}>
                 {msg.sendStatus === 'sent' && <CheckCircle2 className="w-3 h-3" />}
                 {timeStr}
               </span>
+            )}
+            {isOutbound && onDeleteMessage && (
+              <button
+                className="opacity-0 group-hover/msg:opacity-100 transition-opacity mb-1 p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive shrink-0"
+                onClick={(e) => { e.stopPropagation(); if (confirm('이 메시지를 삭제하시겠습니까?')) onDeleteMessage(msg.id); }}
+                data-testid={`button-delete-msg-${msg.id}`}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
             )}
             {isFromInfluencer && (
               <CachedAvatar
@@ -1079,6 +1122,15 @@ function MessageThread({ messages, onViewFull, influencerName, influencerEmail, 
                 )}
               </div>
             </div>
+            {!isOutbound && onDeleteMessage && (
+              <button
+                className="opacity-0 group-hover/msg:opacity-100 transition-opacity mb-1 p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive shrink-0"
+                onClick={(e) => { e.stopPropagation(); if (confirm('이 메시지를 삭제하시겠습니까?')) onDeleteMessage(msg.id); }}
+                data-testid={`button-delete-msg-${msg.id}`}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
             {!isOutbound && timeStr && (
               <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0 mb-1" data-testid={`text-msg-time-${msg.id}`}>
                 {timeStr}

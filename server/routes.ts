@@ -1706,7 +1706,8 @@ export async function registerRoutes(
           .from(conversationMessages)
           .where(and(
             inArray(conversationMessages.conversationId, convIds),
-            eq(conversationMessages.direction, 'inbound')
+            eq(conversationMessages.direction, 'inbound'),
+            isNull(conversationMessages.deletedAt)
           ))
           .orderBy(desc(conversationMessages.createdAt))
           .limit(15);
@@ -2934,6 +2935,33 @@ export async function registerRoutes(
     } catch (err) {
       console.error('Send message error:', err);
       res.status(500).json({ message: "메시지 전송 실패" });
+    }
+  });
+
+  app.delete('/api/messages/:messageId', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const messageId = parseInt(req.params.messageId);
+      const msg = await storage.getMessageById(messageId);
+      if (!msg) return res.status(404).json({ message: "Message not found" });
+
+      const conv = await storage.getConversation(msg.conversationId);
+      if (!conv) return res.status(404).json({ message: "Conversation not found" });
+
+      const userId = (req.user as any).id;
+      const campaign = await db.select().from(campaigns).where(eq(campaigns.id, conv.lineItem.campaignId));
+      if (!campaign.length) return res.status(404).json({ message: "Campaign not found" });
+
+      const member = await storage.getWorkspaceMember(userId, campaign[0].workspaceId);
+      if (!member || member.role === 'CLIENT') {
+        return res.status(403).json({ message: "메시지를 삭제할 권한이 없습니다" });
+      }
+
+      await storage.softDeleteMessage(messageId);
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error('Delete message error:', err);
+      res.status(500).json({ message: err.message });
     }
   });
 
@@ -5400,7 +5428,7 @@ export async function registerRoutes(
 
       for (const conv of allConvs) {
         const msgs = await db.select().from(conversationMessages)
-          .where(eq(conversationMessages.conversationId, conv.id))
+          .where(and(eq(conversationMessages.conversationId, conv.id), isNull(conversationMessages.deletedAt)))
           .orderBy(desc(conversationMessages.createdAt));
 
         if (msgs.length === 0) {

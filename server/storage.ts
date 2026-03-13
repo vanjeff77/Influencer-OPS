@@ -22,7 +22,7 @@ import {
   type AiSearchJob, type InsertAiSearchJob, type AiSearchCandidate, type InsertAiSearchCandidate,
   aiSearchJobs, aiSearchCandidates
 } from "@shared/schema";
-import { eq, like, or, and, sql, inArray, desc } from "drizzle-orm";
+import { eq, like, or, and, sql, inArray, desc, isNull } from "drizzle-orm";
 import { fetchProfileImage } from "./profile-fetcher";
 
 export interface IStorage {
@@ -1003,11 +1003,13 @@ export class DatabaseStorage implements IStorage {
       .where(inArray(conversations.campaignLineItemId, lineItemIds))
       .orderBy(desc(conversations.lastMessageAt));
     
-    // Get all messages for counts
     const convIds = convList.map(c => c.id);
     const allMessages = convIds.length > 0 
       ? await db.select().from(conversationMessages)
-          .where(inArray(conversationMessages.conversationId, convIds))
+          .where(and(
+            inArray(conversationMessages.conversationId, convIds),
+            isNull(conversationMessages.deletedAt)
+          ))
           .orderBy(desc(conversationMessages.createdAt))
       : [];
     
@@ -1028,7 +1030,10 @@ export class DatabaseStorage implements IStorage {
     if (!conv) return undefined;
     
     const messages = await db.select().from(conversationMessages)
-      .where(eq(conversationMessages.conversationId, id))
+      .where(and(
+        eq(conversationMessages.conversationId, id),
+        isNull(conversationMessages.deletedAt)
+      ))
       .orderBy(conversationMessages.createdAt);
     
     const [lineItem] = await db.select().from(campaignInfluencers).where(eq(campaignInfluencers.id, conv.campaignLineItemId));
@@ -1076,8 +1081,23 @@ export class DatabaseStorage implements IStorage {
 
   async getConversationMessages(conversationId: number): Promise<ConversationMessage[]> {
     return await db.select().from(conversationMessages)
-      .where(eq(conversationMessages.conversationId, conversationId))
+      .where(and(
+        eq(conversationMessages.conversationId, conversationId),
+        isNull(conversationMessages.deletedAt)
+      ))
       .orderBy(conversationMessages.createdAt);
+  }
+
+  async softDeleteMessage(messageId: number): Promise<void> {
+    await db.update(conversationMessages)
+      .set({ deletedAt: new Date() })
+      .where(eq(conversationMessages.id, messageId));
+  }
+
+  async getMessageById(messageId: number): Promise<ConversationMessage | undefined> {
+    const [msg] = await db.select().from(conversationMessages)
+      .where(eq(conversationMessages.id, messageId));
+    return msg;
   }
 
   async getRecentInboundMessages(workspaceId: number, limit: number = 30): Promise<any[]> {
@@ -1104,6 +1124,7 @@ export class DatabaseStorage implements IStorage {
         and(
           eq(campaigns.workspaceId, workspaceId),
           eq(conversationMessages.direction, 'inbound'),
+          isNull(conversationMessages.deletedAt),
         )
       )
       .orderBy(desc(conversationMessages.createdAt))
