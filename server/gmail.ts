@@ -112,8 +112,15 @@ function buildRawMessage(
     if (replyHeaders?.inReplyTo) messageParts.push(`In-Reply-To: ${replyHeaders.inReplyTo}`);
     if (replyHeaders?.references && replyHeaders.references.length > 0)
       messageParts.push(`References: ${replyHeaders.references.join(' ')}`);
-    messageParts.push(`Subject: ${subject}`, 'Content-Type: text/html; charset=utf-8', '', body);
-    return messageParts.join('\n');
+    messageParts.push(
+      `Subject: =?UTF-8?B?${Buffer.from(subject).toString('base64')}?=`,
+      'MIME-Version: 1.0',
+      'Content-Type: text/html; charset=utf-8',
+      'Content-Transfer-Encoding: base64',
+      '',
+      Buffer.from(body).toString('base64'),
+    );
+    return messageParts.join('\r\n');
   }
 }
 
