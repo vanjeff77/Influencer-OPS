@@ -4533,6 +4533,21 @@ export async function registerRoutes(
           if (!result.success) {
             throw new Error(result.error || 'SMTP 전송 실패');
           }
+        } else if (account.refreshToken && account.useGmailApi) {
+          const { sendEmailForAccount } = await import('./gmail');
+          const result = await sendEmailForAccount(
+            account.refreshToken, toEmail, subject, finalBody,
+            conversation.gmailThreadId || undefined,
+            undefined, undefined,
+            [{ filename, content: pdfBuffer, mimeType: 'application/pdf' }],
+            { fromEmail: account.email }
+          );
+          gmailMessageId = result.messageId || result.id || null;
+          gmailThreadId = result.threadId || null;
+
+          if (!conversation.gmailThreadId && gmailThreadId) {
+            await storage.updateConversation(conversation.id, { gmailThreadId });
+          }
         } else {
           const { sendEmail: sendGmailEmail } = await import('./gmail');
           const result = await sendGmailEmail(

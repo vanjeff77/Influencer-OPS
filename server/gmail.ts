@@ -74,14 +74,21 @@ function buildRawMessage(
   body: string,
   cc?: string[],
   replyHeaders?: { inReplyTo?: string; references?: string[] },
-  attachments?: EmailAttachment[]
+  attachments?: EmailAttachment[],
+  forceUniqueThread?: boolean
 ): string {
   if (attachments && attachments.length > 0) {
     const boundary = `boundary_${Date.now()}_${Math.random().toString(36).substr(2)}`;
     const headerParts = [`From: ${from}`, `To: ${to}`];
     if (cc && cc.length > 0) headerParts.push(`Cc: ${cc.join(', ')}`);
-    if (replyHeaders?.inReplyTo) headerParts.push(`In-Reply-To: ${replyHeaders.inReplyTo}`);
-    if (replyHeaders?.references && replyHeaders.references.length > 0)
+    if (forceUniqueThread) {
+      const domain = from.split('@')[1] || 'localhost';
+      const uniqueId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      headerParts.push(`Message-ID: <bulk-${uniqueId}@${domain}>`);
+      headerParts.push(`X-Entity-Ref-ID: bulk-${uniqueId}`);
+    }
+    if (!forceUniqueThread && replyHeaders?.inReplyTo) headerParts.push(`In-Reply-To: ${replyHeaders.inReplyTo}`);
+    if (!forceUniqueThread && replyHeaders?.references && replyHeaders.references.length > 0)
       headerParts.push(`References: ${replyHeaders.references.join(' ')}`);
     headerParts.push(
       `Subject: =?UTF-8?B?${Buffer.from(subject).toString('base64')}?=`,
@@ -109,8 +116,14 @@ function buildRawMessage(
   } else {
     const messageParts = [`From: ${from}`, `To: ${to}`];
     if (cc && cc.length > 0) messageParts.push(`Cc: ${cc.join(', ')}`);
-    if (replyHeaders?.inReplyTo) messageParts.push(`In-Reply-To: ${replyHeaders.inReplyTo}`);
-    if (replyHeaders?.references && replyHeaders.references.length > 0)
+    if (forceUniqueThread) {
+      const domain = from.split('@')[1] || 'localhost';
+      const uniqueId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      messageParts.push(`Message-ID: <bulk-${uniqueId}@${domain}>`);
+      messageParts.push(`X-Entity-Ref-ID: bulk-${uniqueId}`);
+    }
+    if (!forceUniqueThread && replyHeaders?.inReplyTo) messageParts.push(`In-Reply-To: ${replyHeaders.inReplyTo}`);
+    if (!forceUniqueThread && replyHeaders?.references && replyHeaders.references.length > 0)
       messageParts.push(`References: ${replyHeaders.references.join(' ')}`);
     messageParts.push(
       `Subject: =?UTF-8?B?${Buffer.from(subject).toString('base64')}?=`,
@@ -140,13 +153,17 @@ export async function sendEmailForAccount(
   threadId?: string,
   cc?: string[],
   replyHeaders?: { inReplyTo?: string; references?: string[] },
-  attachments?: EmailAttachment[]
+  attachments?: EmailAttachment[],
+  options?: { forceUniqueThread?: boolean; fromEmail?: string }
 ): Promise<{ id: string; threadId: string; messageId: string }> {
   const gmail = getGmailClientForAccount(refreshToken);
-  const profile = await gmail.users.getProfile({ userId: 'me' });
-  const from = profile.data.emailAddress || '';
+  let from = options?.fromEmail || '';
+  if (!from) {
+    const profile = await gmail.users.getProfile({ userId: 'me' });
+    from = profile.data.emailAddress || '';
+  }
 
-  const rawMessage = buildRawMessage(from, to, subject, body, cc, replyHeaders, attachments);
+  const rawMessage = buildRawMessage(from, to, subject, body, cc, replyHeaders, attachments, options?.forceUniqueThread);
   const encodedMessage = encodeRawMessage(rawMessage);
 
   const response = await gmail.users.messages.send({

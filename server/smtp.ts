@@ -208,6 +208,12 @@ function isTransientError(error: string): boolean {
     /try again/i,
     /rate limit/i,
     /too many/i,
+    /rateLimitExceeded/i,
+    /userRateLimitExceeded/i,
+    /quotaExceeded/i,
+    /429/,
+    /Resource has been exhausted/i,
+    /RESOURCE_EXHAUSTED/i,
   ];
   return transientPatterns.some(pattern => pattern.test(error));
 }
@@ -329,7 +335,9 @@ export async function startBulkEmailWorker(jobId: number): Promise<void> {
           const { sendEmailForAccount } = await import('./gmail');
           const gmailResult = await sendEmailForAccount(
             emailAccount.refreshToken!, item.email, item.renderedSubject, item.renderedBody,
-            undefined, ccEmails.length > 0 ? ccEmails : undefined
+            undefined, ccEmails.length > 0 ? ccEmails : undefined,
+            undefined, undefined,
+            { forceUniqueThread: true, fromEmail: emailAccount.email }
           );
           result = { success: true, messageId: gmailResult.messageId || gmailResult.id, threadId: gmailResult.threadId };
         } catch (gmailErr: any) {
