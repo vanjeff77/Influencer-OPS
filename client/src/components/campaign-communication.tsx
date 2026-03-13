@@ -124,6 +124,7 @@ interface CampaignCommunicationProps {
   workspaceId: number;
   lineItems: CampaignLineItem[];
   campaignCcEmails?: string | null;
+  clientId?: number | null;
 }
 
 function formatConversationDate(dateStr: string | null): string {
@@ -151,7 +152,7 @@ function formatConversationDate(dateStr: string | null): string {
   return `${y}.${m}.${d}`;
 }
 
-export function CampaignCommunication({ campaignId, campaignName, workspaceId, lineItems, campaignCcEmails }: CampaignCommunicationProps) {
+export function CampaignCommunication({ campaignId, campaignName, workspaceId, lineItems, campaignCcEmails, clientId }: CampaignCommunicationProps) {
   const { toast } = useToast();
   const [selectedLineItemId, setSelectedLineItemId] = useState<number | null>(null);
   const [showFullMessage, setShowFullMessage] = useState<ConversationMessage | null>(null);
@@ -928,6 +929,7 @@ export function CampaignCommunication({ campaignId, campaignName, workspaceId, l
         campaignName={campaignName || ''}
         lineItems={lineItems}
         workspaceId={workspaceId}
+        clientId={clientId}
       />
       {/* Bulk Email Log Dialog */}
       <BulkEmailLogDialog

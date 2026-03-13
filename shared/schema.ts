@@ -73,6 +73,7 @@ export const clients = pgTable("clients", {
   memo: text("memo"),
   status: text("status").default("active"),
   slackChannelId: text("slack_channel_id"),
+  managerUserIds: integer("manager_user_ids").array(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

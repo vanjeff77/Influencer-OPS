@@ -32,6 +32,7 @@ interface Client {
   logoUrl?: string | null;
   memo?: string | null;
   status?: string | null;
+  managerUserIds?: number[] | null;
   createdAt?: string | null;
 }
 
@@ -67,6 +68,7 @@ export default function SettingsPage() {
   const [clientStatus, setClientStatus] = useState("active");
   const [clientLogoUrl, setClientLogoUrl] = useState<string | null>(null);
   const [clientSlackChannelId, setClientSlackChannelId] = useState("");
+  const [clientManagerUserIds, setClientManagerUserIds] = useState<number[]>([]);
 
   const [workspaceName, setWorkspaceName] = useState("");
   const [aiDraftEnabled, setAiDraftEnabled] = useState(false);
@@ -107,7 +109,7 @@ export default function SettingsPage() {
   });
 
   const createClientMutation = useMutation({
-    mutationFn: (data: { workspaceId: number; name: string; memo?: string; status?: string; logoUrl?: string | null }) =>
+    mutationFn: (data: { workspaceId: number; name: string; memo?: string; status?: string; logoUrl?: string | null; slackChannelId?: string | null; managerUserIds?: number[] | null }) =>
       apiRequest('POST', '/api/clients', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/clients?workspaceId=${workspaceId}`] });
@@ -362,6 +364,7 @@ export default function SettingsPage() {
     setClientStatus("active");
     setClientLogoUrl(null);
     setClientSlackChannelId("");
+    setClientManagerUserIds([]);
     setEditingClient(null);
   };
 
@@ -381,6 +384,7 @@ export default function SettingsPage() {
     setClientStatus(client.status || "active");
     setClientLogoUrl(client.logoUrl || null);
     setClientSlackChannelId((client as any).slackChannelId || "");
+    setClientManagerUserIds(client.managerUserIds || []);
     setClientDialogOpen(true);
   };
 
@@ -398,7 +402,7 @@ export default function SettingsPage() {
     if (editingClient) {
       updateClientMutation.mutate({
         id: editingClient.id,
-        data: { name: clientName, memo: clientMemo, status: clientStatus, logoUrl: clientLogoUrl, slackChannelId: clientSlackChannelId || null },
+        data: { name: clientName, memo: clientMemo, status: clientStatus, logoUrl: clientLogoUrl, slackChannelId: clientSlackChannelId || null, managerUserIds: clientManagerUserIds.length > 0 ? clientManagerUserIds : null },
       });
     } else {
       createClientMutation.mutate({
@@ -408,6 +412,7 @@ export default function SettingsPage() {
         status: clientStatus,
         logoUrl: clientLogoUrl,
         slackChannelId: clientSlackChannelId || null,
+        managerUserIds: clientManagerUserIds.length > 0 ? clientManagerUserIds : null,
       });
     }
   };
@@ -1069,6 +1074,34 @@ export default function SettingsPage() {
                           <p className="text-xs text-muted-foreground">이 클라이언트의 캠페인 메일 알림을 받을 Slack 채널 ID (비어있으면 기본 채널로 전송)</p>
                         </div>
                       </div>
+                      <div>
+                        <Label>담당 매니저</Label>
+                        <p className="text-xs text-muted-foreground mb-2">이 클라이언트 캠페인의 일괄 메일 발송 시 CC에 자동 추가됩니다.</p>
+                        <div className="mt-1 space-y-2 max-h-32 overflow-y-auto border rounded-md p-2">
+                          {users.filter(u => u.role !== 'CLIENT').map((user) => (
+                            <div key={user.id} className="flex items-center gap-2">
+                              <Checkbox
+                                id={`manager-create-${user.id}`}
+                                checked={clientManagerUserIds.includes(user.id)}
+                                onCheckedChange={(checked) => {
+                                  if (checked) {
+                                    setClientManagerUserIds([...clientManagerUserIds, user.id]);
+                                  } else {
+                                    setClientManagerUserIds(clientManagerUserIds.filter(id => id !== user.id));
+                                  }
+                                }}
+                                data-testid={`checkbox-manager-create-${user.id}`}
+                              />
+                              <label htmlFor={`manager-create-${user.id}`} className="text-sm">
+                                {user.name} <span className="text-muted-foreground">({user.email})</span>
+                              </label>
+                            </div>
+                          ))}
+                          {users.filter(u => u.role !== 'CLIENT').length === 0 && (
+                            <p className="text-xs text-muted-foreground">등록된 멤버가 없습니다.</p>
+                          )}
+                        </div>
+                      </div>
                       <div className="flex justify-end gap-2">
                         <Button variant="outline" onClick={() => setClientDialogOpen(false)}>{KO.common.cancel}</Button>
                         <Button onClick={handleClientSubmit} disabled={createClientMutation.isPending} data-testid="button-submit-client">
@@ -1104,6 +1137,14 @@ export default function SettingsPage() {
                         <div>
                           <p className="font-medium text-sm">{client.name}</p>
                           {client.memo && <p className="text-xs text-muted-foreground">{client.memo}</p>}
+                          {client.managerUserIds && client.managerUserIds.length > 0 && (
+                            <p className="text-xs text-muted-foreground">
+                              담당: {client.managerUserIds.map(uid => {
+                                const u = users.find(u => u.id === uid);
+                                return u?.name || u?.email || `#${uid}`;
+                              }).join(', ')}
+                            </p>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -1411,6 +1452,34 @@ export default function SettingsPage() {
                     data-testid="input-edit-client-slack-channel"
                   />
                   <p className="text-xs text-muted-foreground">이 클라이언트의 캠페인 메일 알림을 받을 Slack 채널 ID (비어있으면 기본 채널로 전송)</p>
+                </div>
+              </div>
+              <div>
+                <Label>담당 매니저</Label>
+                <p className="text-xs text-muted-foreground mb-2">이 클라이언트 캠페인의 일괄 메일 발송 시 CC에 자동 추가됩니다.</p>
+                <div className="mt-1 space-y-2 max-h-32 overflow-y-auto border rounded-md p-2">
+                  {users.filter(u => u.role !== 'CLIENT').map((user) => (
+                    <div key={user.id} className="flex items-center gap-2">
+                      <Checkbox
+                        id={`manager-edit-${user.id}`}
+                        checked={clientManagerUserIds.includes(user.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setClientManagerUserIds([...clientManagerUserIds, user.id]);
+                          } else {
+                            setClientManagerUserIds(clientManagerUserIds.filter(id => id !== user.id));
+                          }
+                        }}
+                        data-testid={`checkbox-manager-edit-${user.id}`}
+                      />
+                      <label htmlFor={`manager-edit-${user.id}`} className="text-sm">
+                        {user.name} <span className="text-muted-foreground">({user.email})</span>
+                      </label>
+                    </div>
+                  ))}
+                  {users.filter(u => u.role !== 'CLIENT').length === 0 && (
+                    <p className="text-xs text-muted-foreground">등록된 멤버가 없습니다.</p>
+                  )}
                 </div>
               </div>
               <div className="flex justify-end gap-2">

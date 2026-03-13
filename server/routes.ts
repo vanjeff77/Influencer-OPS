@@ -4617,6 +4617,7 @@ export async function registerRoutes(
     memo: z.string().optional().nullable(),
     status: z.enum(['active', 'inactive']).optional(),
     slackChannelId: z.string().optional().nullable(),
+    managerUserIds: z.array(z.number()).optional().nullable(),
   });
 
   // Helper to check if user is OWNER
@@ -4701,6 +4702,31 @@ export async function registerRoutes(
       
       await storage.deleteClient(clientId);
       res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get('/api/clients/:id/manager-emails', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const clientId = parseInt(req.params.id);
+      const client = await storage.getClient(clientId);
+      if (!client) return res.status(404).json({ message: "Client not found" });
+
+      const userId = (req.user as any).id;
+      const member = await storage.getWorkspaceMember(userId, client.workspaceId);
+      if (!member) return res.status(403).json({ message: "Forbidden" });
+
+      const managerUserIds = client.managerUserIds || [];
+      if (managerUserIds.length === 0) return res.json([]);
+
+      const users = await storage.getWorkspaceUsers(client.workspaceId);
+      const managerEmails = users
+        .filter((u: any) => managerUserIds.includes(u.id))
+        .map((u: any) => u.email)
+        .filter(Boolean);
+      res.json(managerEmails);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }

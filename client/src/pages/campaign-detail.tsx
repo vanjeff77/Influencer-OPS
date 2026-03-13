@@ -1020,6 +1020,7 @@ export default function CampaignDetail() {
               campaignName={campaign.name}
               workspaceId={workspaceId || 1}
               campaignCcEmails={campaign.ccEmails}
+              clientId={campaign.clientId}
               lineItems={
                 campaign.items?.map((item) => ({
                   id: item.id,

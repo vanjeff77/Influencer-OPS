@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -36,6 +36,7 @@ interface BulkEmailDialogProps {
   campaignName: string;
   lineItems: CampaignLineItem[];
   workspaceId: number;
+  clientId?: number | null;
 }
 
 interface EligibleItem {
@@ -64,7 +65,7 @@ interface ValidationResult {
 
 type Step = 'template' | 'preview' | 'test' | 'confirm';
 
-export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, lineItems, workspaceId }: BulkEmailDialogProps) {
+export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, lineItems, workspaceId, clientId }: BulkEmailDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
@@ -95,6 +96,12 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
     enabled: open && !!workspaceId,
   });
 
+  const { data: clientManagerEmails } = useQuery<string[]>({
+    queryKey: ['/api/clients', clientId, 'manager-emails'],
+    queryFn: () => fetch(`/api/clients/${clientId}/manager-emails`).then(r => r.json()),
+    enabled: open && !!clientId,
+  });
+
   const availableAccounts = useMemo(() => {
     return emailAccounts || [];
   }, [emailAccounts]);
@@ -103,7 +110,23 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
     if (!selectedEmailAccountId || !availableAccounts.length) return null;
     return availableAccounts.find((acc: any) => acc.id.toString() === selectedEmailAccountId);
   }, [selectedEmailAccountId, availableAccounts]);
-  
+
+  useEffect(() => {
+    if (!clientManagerEmails?.length || !selectedAccount) return;
+    const senderEmail = selectedAccount.email?.toLowerCase();
+    const managerCc = clientManagerEmails
+      .filter((email: string) => email.toLowerCase() !== senderEmail)
+      .join(', ');
+    if (managerCc) {
+      setCc((prev) => {
+        const existing = prev.split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+        const newEmails = managerCc.split(',').map((e: string) => e.trim()).filter((e: string) => !existing.includes(e.toLowerCase()));
+        if (newEmails.length === 0) return prev;
+        return prev ? `${prev}, ${newEmails.join(', ')}` : newEmails.join(', ');
+      });
+    }
+  }, [clientManagerEmails, selectedAccount]);
+
   const previewMutation = useMutation({
     mutationFn: async (influencerId: number) => {
       const res = await apiRequest('POST', '/api/bulk-email/preview', {
