@@ -8,21 +8,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, CheckCircle, Loader2, FileVideo, FileImage, File, AlertCircle, Clock, FileText, ExternalLink, Link2, Copy } from "lucide-react";
+import { Upload, CheckCircle, Loader2, FileVideo, FileImage, File, AlertCircle, Clock, FileText, ExternalLink, Link2, ArrowLeft, Wallet, FileSignature, FolderUp, Info } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 
-type Step = 'email' | 'settlement' | 'upload' | 'complete';
-
-interface SettlementInfo {
-  bankName: string;
-  accountHolder: string;
-  accountNumber: string;
-  settlementType: string;
-  businessName: string;
-  businessRegNo: string;
-  freelancerId: string;
-}
+type Section = 'email' | 'menu' | 'settlement' | 'contract' | 'content' | 'postinfo';
 
 interface SubmissionHistoryItem {
   id: number;
@@ -32,6 +22,19 @@ interface SubmissionHistoryItem {
   memo: string | null;
   submittedAt: string;
   oneDriveLink: string | null;
+}
+
+interface VerifiedData {
+  influencerId: number;
+  influencerName: string;
+  lineItemId: number;
+  hasSettlementInfo: boolean;
+  settlementConfirmed: boolean;
+  hasContractFile: boolean;
+  submissionCount: number;
+  hasPostInfo: boolean;
+  postUrl: string;
+  metaPartnershipCode: string;
 }
 
 const BANK_LIST = [
@@ -46,22 +49,28 @@ const BANK_LIST = [
 export default function SubmitPage() {
   const { campaignId } = useParams<{ campaignId: string }>();
   const { toast } = useToast();
-  
-  const [step, setStep] = useState<Step>('email');
-  const [email, setEmail] = useState('');
-  const [verifiedData, setVerifiedData] = useState<{ influencerId: number; influencerName: string; lineItemId: number; settlementInfo: SettlementInfo; hasSettlementInfo: boolean; settlementConfirmed: boolean; postUrl: string; metaPartnershipCode: string } | null>(null);
-  const [memo, setMemo] = useState('');
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [isUploading, setIsUploading] = useState(false);
-  const [submissionHistory, setSubmissionHistory] = useState<SubmissionHistoryItem[]>([]);
-  const [postUrl, setPostUrl] = useState('');
-  const [metaPartnershipCode, setMetaPartnershipCode] = useState('');
 
-  const [settlement, setSettlement] = useState<SettlementInfo>({
+  const [section, setSection] = useState<Section>('email');
+  const [email, setEmail] = useState('');
+  const [verifiedData, setVerifiedData] = useState<VerifiedData | null>(null);
+
+  const [settlement, setSettlement] = useState({
     bankName: '', accountHolder: '', accountNumber: '',
     settlementType: '', businessName: '', businessRegNo: '', freelancerId: ''
   });
+
+  const [contractFile, setContractFile] = useState<File | null>(null);
+  const [contractUploading, setContractUploading] = useState(false);
+  const [contractProgress, setContractProgress] = useState(0);
+
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [memo, setMemo] = useState('');
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
+  const [submissionHistory, setSubmissionHistory] = useState<SubmissionHistoryItem[]>([]);
+
+  const [postUrl, setPostUrl] = useState('');
+  const [metaPartnershipCode, setMetaPartnershipCode] = useState('');
 
   const { data: campaignInfo, isLoading: isLoadingCampaign, error: campaignError } = useQuery<{
     id: number;
@@ -95,12 +104,29 @@ export default function SubmitPage() {
     }
   }, [email, campaignId]);
 
-  const verifyEmail = useMutation({
-    mutationFn: async (email: string) => {
+  const refreshVerifiedData = useCallback(async () => {
+    if (!email || !campaignId) return;
+    try {
       const res = await fetch(`/api/submit/${campaignId}/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setVerifiedData(data);
+      }
+    } catch (e) {
+      console.error('Failed to refresh verified data:', e);
+    }
+  }, [email, campaignId]);
+
+  const verifyEmail = useMutation({
+    mutationFn: async (emailVal: string) => {
+      const res = await fetch(`/api/submit/${campaignId}/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailVal })
       });
       if (!res.ok) {
         const data = await res.json();
@@ -112,21 +138,7 @@ export default function SubmitPage() {
       setVerifiedData(data);
       setPostUrl(data.postUrl || '');
       setMetaPartnershipCode(data.metaPartnershipCode || '');
-      const info = data.settlementInfo;
-      setSettlement({
-        bankName: info.bankName,
-        accountHolder: info.accountHolder,
-        accountNumber: data.hasSettlementInfo ? '' : info.accountNumber,
-        settlementType: info.settlementType,
-        businessName: info.businessName,
-        businessRegNo: '',
-        freelancerId: '',
-      });
-      if (data.settlementConfirmed && data.hasSettlementInfo) {
-        setStep('upload');
-      } else {
-        setStep('settlement');
-      }
+      setSection('menu');
     },
     onError: (error: Error) => {
       toast({ title: "인증 실패", description: error.message, variant: "destructive" });
@@ -153,7 +165,9 @@ export default function SubmitPage() {
       return res.json();
     },
     onSuccess: () => {
-      setStep('upload');
+      toast({ title: "저장 완료", description: "정산정보가 등록되었습니다." });
+      refreshVerifiedData();
+      setSection('menu');
     },
     onError: (error: Error) => {
       toast({ title: "저장 실패", description: error.message, variant: "destructive" });
@@ -174,7 +188,9 @@ export default function SubmitPage() {
       return res.json();
     },
     onSuccess: () => {
-      toast({ title: "저장 완료", description: "게시물 정보가 저장되었습니다." });
+      toast({ title: "저장 완료", description: "업로드 정보가 저장되었습니다." });
+      refreshVerifiedData();
+      setSection('menu');
     },
     onError: (error: Error) => {
       toast({ title: "저장 실패", description: error.message, variant: "destructive" });
@@ -208,14 +224,87 @@ export default function SubmitPage() {
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-    }
+    if (file) setSelectedFile(file);
   }, []);
 
-  const handleUpload = async () => {
-    if (!selectedFile || !verifiedData) return;
+  const handleContractFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) setContractFile(file);
+  }, []);
 
+  const handleContractUpload = async () => {
+    if (!contractFile || !verifiedData) return;
+    setContractUploading(true);
+    setContractProgress(0);
+
+    try {
+      const sessionRes = await fetch(`/api/submit/${campaignId}/contract-upload-session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, fileName: contractFile.name })
+      });
+      if (!sessionRes.ok) {
+        const data = await sessionRes.json();
+        throw new Error(data.message || '업로드 세션 생성 실패');
+      }
+      const session = await sessionRes.json();
+
+      const CHUNK_SIZE = 10 * 1024 * 1024;
+      const totalChunks = Math.ceil(contractFile.size / CHUNK_SIZE);
+      let uploadedFileId: string | null = null;
+
+      for (let i = 0; i < totalChunks; i++) {
+        const start = i * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, contractFile.size);
+        const chunk = contractFile.slice(start, end);
+
+        const uploadRes = await fetch(session.uploadUrl, {
+          method: 'PUT',
+          headers: {
+            'Content-Length': String(chunk.size),
+            'Content-Range': `bytes ${start}-${end - 1}/${contractFile.size}`
+          },
+          body: chunk
+        });
+
+        if (!uploadRes.ok && uploadRes.status !== 202) throw new Error('파일 업로드 실패');
+        if (uploadRes.status === 200 || uploadRes.status === 201) {
+          try {
+            const uploadedFile = await uploadRes.json();
+            uploadedFileId = uploadedFile.id;
+          } catch (e) {
+            console.error('Failed to parse upload response:', e);
+          }
+        }
+        setContractProgress(Math.round(((i + 1) / totalChunks) * 100));
+      }
+
+      const completeRes = await fetch(`/api/submit/${campaignId}/contract-complete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          fileName: session.finalFileName,
+          fileSize: contractFile.size,
+          folderId: session.folderId,
+          fileId: uploadedFileId
+        })
+      });
+      if (!completeRes.ok) throw new Error('제출 기록 저장 실패');
+
+      toast({ title: "제출 완료", description: "계약서 서명본이 제출되었습니다." });
+      setContractFile(null);
+      refreshVerifiedData();
+      setSection('menu');
+    } catch (error: any) {
+      toast({ title: "업로드 실패", description: error.message, variant: "destructive" });
+    } finally {
+      setContractUploading(false);
+    }
+  };
+
+  const handleContentUpload = async () => {
+    if (!selectedFile || !verifiedData) return;
     setIsUploading(true);
     setUploadProgress(0);
 
@@ -223,29 +312,23 @@ export default function SubmitPage() {
       const sessionRes = await fetch(`/api/submit/${campaignId}/upload-session`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email,
-          fileName: selectedFile.name,
-          submissionType: 'file'
-        })
+        body: JSON.stringify({ email, fileName: selectedFile.name, submissionType: 'file' })
       });
-
       if (!sessionRes.ok) {
         const data = await sessionRes.json();
         throw new Error(data.message || '업로드 세션 생성 실패');
       }
-
       const session = await sessionRes.json();
 
       const CHUNK_SIZE = 10 * 1024 * 1024;
       const totalChunks = Math.ceil(selectedFile.size / CHUNK_SIZE);
       let uploadedFileId: string | null = null;
-      
+
       for (let i = 0; i < totalChunks; i++) {
         const start = i * CHUNK_SIZE;
         const end = Math.min(start + CHUNK_SIZE, selectedFile.size);
         const chunk = selectedFile.slice(start, end);
-        
+
         const uploadRes = await fetch(session.uploadUrl, {
           method: 'PUT',
           headers: {
@@ -255,10 +338,7 @@ export default function SubmitPage() {
           body: chunk
         });
 
-        if (!uploadRes.ok && uploadRes.status !== 202) {
-          throw new Error('파일 업로드 실패');
-        }
-
+        if (!uploadRes.ok && uploadRes.status !== 202) throw new Error('파일 업로드 실패');
         if (uploadRes.status === 200 || uploadRes.status === 201) {
           try {
             const uploadedFile = await uploadRes.json();
@@ -267,7 +347,6 @@ export default function SubmitPage() {
             console.error('Failed to parse upload response:', e);
           }
         }
-
         setUploadProgress(Math.round(((i + 1) / totalChunks) * 100));
       }
 
@@ -284,15 +363,13 @@ export default function SubmitPage() {
           memo
         })
       });
+      if (!completeRes.ok) throw new Error('제출 기록 저장 실패');
 
-      if (!completeRes.ok) {
-        throw new Error('제출 기록 저장 실패');
-      }
-
-      setStep('complete');
       toast({ title: "업로드 완료", description: "파일이 성공적으로 제출되었습니다." });
+      setSelectedFile(null);
+      setMemo('');
       fetchHistory();
-
+      refreshVerifiedData();
     } catch (error: any) {
       toast({ title: "업로드 실패", description: error.message, variant: "destructive" });
     } finally {
@@ -313,8 +390,9 @@ export default function SubmitPage() {
     return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
   };
 
-  const stepIndex = step === 'email' ? 1 : step === 'settlement' ? 2 : step === 'upload' ? 3 : 3;
-  const totalSteps = 3;
+  const goToMenu = () => {
+    setSection('menu');
+  };
 
   if (isLoadingCampaign) {
     return (
@@ -342,28 +420,15 @@ export default function SubmitPage() {
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/30 p-4 md:p-8">
       <div className="max-w-lg mx-auto">
         <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold mb-1">콘텐츠 제출</h1>
+          <h1 className="text-2xl font-bold mb-1">인플루언서 포탈</h1>
           <p className="text-muted-foreground">{campaignInfo.name}</p>
         </div>
 
-        {step !== 'complete' && (
-          <div className="flex items-center gap-2 mb-6 px-4" data-testid="step-indicator">
-            {[1, 2, 3].map((s) => (
-              <div key={s} className="flex-1">
-                <div className={`h-1.5 rounded-full transition-colors ${s < stepIndex ? 'bg-primary' : s === stepIndex ? 'bg-primary/50' : 'bg-muted'}`} />
-              </div>
-            ))}
-            <span className="text-xs text-muted-foreground ml-1">{stepIndex}/{totalSteps}</span>
-          </div>
-        )}
-
-        {step === 'email' && (
+        {section === 'email' && (
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">이메일 확인</CardTitle>
-              <CardDescription>
-                등록된 이메일 주소를 입력해주세요
-              </CardDescription>
+              <CardDescription>등록된 이메일 주소를 입력해주세요</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -378,8 +443,8 @@ export default function SubmitPage() {
                   data-testid="input-submit-email"
                 />
               </div>
-              <Button 
-                className="w-full" 
+              <Button
+                className="w-full"
                 onClick={() => verifyEmail.mutate(email)}
                 disabled={!email || verifyEmail.isPending}
                 data-testid="button-verify-email"
@@ -391,15 +456,115 @@ export default function SubmitPage() {
           </Card>
         )}
 
-        {step === 'settlement' && verifiedData && (
+        {section === 'menu' && verifiedData && (
+          <div className="space-y-4">
+            <Card>
+              <CardContent className="pt-6">
+                <p className="text-center text-sm text-muted-foreground mb-1">
+                  안녕하세요, <span className="font-semibold text-foreground">{verifiedData.influencerName}</span>님!
+                </p>
+                <p className="text-center text-xs text-muted-foreground">
+                  아래 메뉴에서 필요한 항목을 선택해주세요.
+                </p>
+              </CardContent>
+            </Card>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => {
+                  setSettlement({ bankName: '', accountHolder: '', accountNumber: '', settlementType: '', businessName: '', businessRegNo: '', freelancerId: '' });
+                  setSection('settlement');
+                }}
+                className="relative flex flex-col items-center gap-3 p-5 rounded-xl border bg-card hover:border-primary/50 hover:shadow-md transition-all text-center"
+                data-testid="menu-settlement"
+              >
+                {verifiedData.hasSettlementInfo && (
+                  <Badge className="absolute top-2 right-2 bg-green-500 hover:bg-green-500 text-white text-[10px] px-1.5 py-0.5">
+                    <CheckCircle className="w-3 h-3 mr-0.5" />
+                    완료
+                  </Badge>
+                )}
+                <Wallet className="h-8 w-8 text-blue-500" />
+                <span className="text-sm font-medium">정산정보 입력</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setContractFile(null);
+                  setContractProgress(0);
+                  setSection('contract');
+                }}
+                className="relative flex flex-col items-center gap-3 p-5 rounded-xl border bg-card hover:border-primary/50 hover:shadow-md transition-all text-center"
+                data-testid="menu-contract"
+              >
+                {verifiedData.hasContractFile && (
+                  <Badge className="absolute top-2 right-2 bg-green-500 hover:bg-green-500 text-white text-[10px] px-1.5 py-0.5">
+                    <CheckCircle className="w-3 h-3 mr-0.5" />
+                    완료
+                  </Badge>
+                )}
+                <FileSignature className="h-8 w-8 text-purple-500" />
+                <span className="text-sm font-medium">계약서 서명본 제출</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setSelectedFile(null);
+                  setMemo('');
+                  setUploadProgress(0);
+                  setSection('content');
+                }}
+                className="relative flex flex-col items-center gap-3 p-5 rounded-xl border bg-card hover:border-primary/50 hover:shadow-md transition-all text-center"
+                data-testid="menu-content"
+              >
+                {verifiedData.submissionCount > 0 && (
+                  <Badge className="absolute top-2 right-2 bg-blue-500 hover:bg-blue-500 text-white text-[10px] px-1.5 py-0.5">
+                    {verifiedData.submissionCount}건
+                  </Badge>
+                )}
+                <FolderUp className="h-8 w-8 text-orange-500" />
+                <span className="text-sm font-medium">콘텐츠 제출</span>
+              </button>
+
+              <button
+                onClick={() => setSection('postinfo')}
+                className="relative flex flex-col items-center gap-3 p-5 rounded-xl border bg-card hover:border-primary/50 hover:shadow-md transition-all text-center"
+                data-testid="menu-postinfo"
+              >
+                {verifiedData.hasPostInfo && (
+                  <Badge className="absolute top-2 right-2 bg-green-500 hover:bg-green-500 text-white text-[10px] px-1.5 py-0.5">
+                    <CheckCircle className="w-3 h-3 mr-0.5" />
+                    완료
+                  </Badge>
+                )}
+                <Info className="h-8 w-8 text-teal-500" />
+                <span className="text-sm font-medium">업로드 정보 기입</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {section === 'settlement' && verifiedData && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">정산 정보 확인</CardTitle>
-              <CardDescription>
-                {verifiedData.influencerName}님, 정산에 필요한 정보를 {verifiedData.hasSettlementInfo ? '확인해주세요. 보안을 위해 계좌번호와 등록번호는 다시 입력해주세요.' : '입력해주세요'}
-              </CardDescription>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={goToMenu} data-testid="button-back-menu">
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+                <div>
+                  <CardTitle className="text-lg">정산정보 입력</CardTitle>
+                  <CardDescription>정산에 필요한 정보를 입력해주세요</CardDescription>
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
+              {verifiedData.hasSettlementInfo && (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800">
+                  <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+                  <p className="text-xs text-green-700 dark:text-green-400">이미 등록된 정산정보가 있습니다. 수정이 필요한 경우 아래에 새로 입력해주세요.</p>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label>은행명 <span className="text-destructive">*</span></Label>
                 <Select
@@ -506,19 +671,113 @@ export default function SubmitPage() {
                 data-testid="button-save-settlement"
               >
                 {saveSettlement.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                확인 후 다음
+                등록하기
               </Button>
             </CardContent>
           </Card>
         )}
 
-        {step === 'upload' && verifiedData && (
+        {section === 'contract' && verifiedData && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">파일 업로드</CardTitle>
-              <CardDescription>
-                안녕하세요, {verifiedData.influencerName}님!
-              </CardDescription>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={goToMenu} data-testid="button-back-menu-contract">
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+                <div>
+                  <CardTitle className="text-lg">계약서 서명본 제출</CardTitle>
+                  <CardDescription>서명된 계약서를 업로드해주세요</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {verifiedData.hasContractFile && (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800">
+                  <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+                  <p className="text-xs text-green-700 dark:text-green-400">이미 계약서가 제출되었습니다. 다시 제출하면 기존 파일이 교체됩니다.</p>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label>서명된 계약서 파일</Label>
+                <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
+                  <input
+                    type="file"
+                    onChange={handleContractFileSelect}
+                    className="hidden"
+                    id="contract-upload"
+                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                    data-testid="input-contract-file"
+                  />
+                  <label htmlFor="contract-upload" className="cursor-pointer">
+                    {contractFile ? (
+                      <div className="flex items-center justify-center gap-3">
+                        {getFileIcon(contractFile)}
+                        <div className="text-left">
+                          <p className="font-medium text-sm">{contractFile.name}</p>
+                          <p className="text-xs text-muted-foreground">{formatFileSize(contractFile.size)}</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <FileSignature className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                        <p className="text-sm text-muted-foreground">클릭하여 파일 선택</p>
+                        <p className="text-xs text-muted-foreground mt-1">PDF, JPG, PNG, DOC 지원</p>
+                      </>
+                    )}
+                  </label>
+                </div>
+              </div>
+
+              {contractUploading && (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>업로드 중...</span>
+                    <span>{contractProgress}%</span>
+                  </div>
+                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-primary transition-all duration-300"
+                      style={{ width: `${contractProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <Button
+                className="w-full"
+                onClick={handleContractUpload}
+                disabled={!contractFile || contractUploading}
+                data-testid="button-upload-contract"
+              >
+                {contractUploading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    업로드 중...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4 mr-2" />
+                    제출하기
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {section === 'content' && verifiedData && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={goToMenu} data-testid="button-back-menu-content">
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+                <div>
+                  <CardTitle className="text-lg">콘텐츠 제출</CardTitle>
+                  <CardDescription>초안 또는 완성본 파일을 업로드해주세요</CardDescription>
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -528,11 +787,11 @@ export default function SubmitPage() {
                     type="file"
                     onChange={handleFileSelect}
                     className="hidden"
-                    id="file-upload"
+                    id="content-upload"
                     accept="video/*,image/*,.pdf,.doc,.docx"
                     data-testid="input-file-upload"
                   />
-                  <label htmlFor="file-upload" className="cursor-pointer">
+                  <label htmlFor="content-upload" className="cursor-pointer">
                     {selectedFile ? (
                       <div className="flex items-center justify-center gap-3">
                         {getFileIcon(selectedFile)}
@@ -570,7 +829,7 @@ export default function SubmitPage() {
                     <span>{uploadProgress}%</span>
                   </div>
                   <div className="h-2 bg-muted rounded-full overflow-hidden">
-                    <div 
+                    <div
                       className="h-full bg-primary transition-all duration-300"
                       style={{ width: `${uploadProgress}%` }}
                     />
@@ -580,7 +839,7 @@ export default function SubmitPage() {
 
               <Button
                 className="w-full"
-                onClick={handleUpload}
+                onClick={handleContentUpload}
                 disabled={!selectedFile || isUploading}
                 data-testid="button-upload"
               >
@@ -596,132 +855,113 @@ export default function SubmitPage() {
                   </>
                 )}
               </Button>
+
+              {submissionHistory.length > 0 && (
+                <div className="pt-4 border-t">
+                  <h3 className="font-semibold mb-3 flex items-center gap-2 text-sm">
+                    <Clock className="w-4 h-4" />
+                    제출 내역 ({submissionHistory.length}건)
+                  </h3>
+                  <div className="overflow-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>파일명</TableHead>
+                          <TableHead>크기</TableHead>
+                          <TableHead>제출일시</TableHead>
+                          <TableHead>파일</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {submissionHistory.map((sub) => (
+                          <TableRow key={sub.id} data-testid={`row-history-${sub.id}`}>
+                            <TableCell className="max-w-[200px] truncate">
+                              <div className="flex items-center gap-1">
+                                <FileText className="w-3 h-3 flex-shrink-0" />
+                                {sub.fileName}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-xs whitespace-nowrap">{formatFileSize(sub.fileSize)}</TableCell>
+                            <TableCell className="text-xs whitespace-nowrap">
+                              {sub.submittedAt ? new Date(sub.submittedAt).toLocaleString('ko-KR') : '-'}
+                            </TableCell>
+                            <TableCell>
+                              {sub.oneDriveLink ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 px-2"
+                                  onClick={() => window.open(sub.oneDriveLink!, '_blank')}
+                                  data-testid={`button-view-file-${sub.id}`}
+                                >
+                                  <ExternalLink className="w-3 h-3 mr-1" />
+                                  열기
+                                </Button>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">-</span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
 
-        {step === 'complete' && (
-          <div className="space-y-4">
-            <Card>
-              <CardContent className="pt-6 text-center">
-                <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
-                <h2 className="text-xl font-semibold mb-2">제출 완료!</h2>
-                <p className="text-muted-foreground mb-4">
-                  파일이 성공적으로 업로드되었습니다.<br />
-                  담당자가 확인 후 연락드리겠습니다.
-                </p>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setStep('upload');
-                    setSelectedFile(null);
-                    setMemo('');
-                    setUploadProgress(0);
-                  }}
-                  data-testid="button-upload-another"
-                >
-                  <Upload className="h-4 w-4 mr-2" />
-                  추가 파일 업로드
+        {section === 'postinfo' && verifiedData && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={goToMenu} data-testid="button-back-menu-postinfo">
+                  <ArrowLeft className="h-4 w-4" />
                 </Button>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Link2 className="w-4 h-4" />
-                  게시물 정보
-                </CardTitle>
-                <CardDescription>
-                  콘텐츠 게시 후 아래 정보를 입력해주세요
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="postUrl">게시물 URL</Label>
-                  <Input
-                    id="postUrl"
-                    placeholder="https://instagram.com/p/... 또는 https://youtube.com/..."
-                    value={postUrl}
-                    onChange={(e) => setPostUrl(e.target.value)}
-                    data-testid="input-post-url"
-                  />
+                <div>
+                  <CardTitle className="text-lg">업로드 정보 기입</CardTitle>
+                  <CardDescription>콘텐츠 게시 후 아래 정보를 입력해주세요</CardDescription>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="metaPartnershipCode">Meta 파트너십 코드</Label>
-                  <Input
-                    id="metaPartnershipCode"
-                    placeholder="파트너십 코드를 입력해주세요"
-                    value={metaPartnershipCode}
-                    onChange={(e) => setMetaPartnershipCode(e.target.value)}
-                    data-testid="input-meta-partnership-code"
-                  />
-                </div>
-                <Button
-                  className="w-full"
-                  onClick={() => savePostInfo.mutate()}
-                  disabled={savePostInfo.isPending}
-                  data-testid="button-save-post-info"
-                >
-                  {savePostInfo.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                  저장
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {verifiedData && submissionHistory.length > 0 && (
-          <Card className="mt-4">
-            <CardContent className="pt-4">
-              <h3 className="font-semibold mb-3 flex items-center gap-2">
-                <Clock className="w-4 h-4" />
-                제출 내역 ({submissionHistory.length}건)
-              </h3>
-              <div className="overflow-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>파일명</TableHead>
-                      <TableHead>크기</TableHead>
-                      <TableHead>제출일시</TableHead>
-                      <TableHead>파일</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {submissionHistory.map((sub) => (
-                      <TableRow key={sub.id} data-testid={`row-history-${sub.id}`}>
-                        <TableCell className="max-w-[200px] truncate">
-                          <div className="flex items-center gap-1">
-                            <FileText className="w-3 h-3 flex-shrink-0" />
-                            {sub.fileName}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-xs whitespace-nowrap">{formatFileSize(sub.fileSize)}</TableCell>
-                        <TableCell className="text-xs whitespace-nowrap">
-                          {sub.submittedAt ? new Date(sub.submittedAt).toLocaleString('ko-KR') : '-'}
-                        </TableCell>
-                        <TableCell>
-                          {sub.oneDriveLink ? (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 px-2"
-                              onClick={() => window.open(sub.oneDriveLink!, '_blank')}
-                              data-testid={`button-view-file-${sub.id}`}
-                            >
-                              <ExternalLink className="w-3 h-3 mr-1" />
-                              열기
-                            </Button>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
               </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {verifiedData.hasPostInfo && (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800">
+                  <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+                  <p className="text-xs text-green-700 dark:text-green-400">이미 정보가 등록되었습니다. 수정이 필요한 경우 아래에 다시 입력해주세요.</p>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label htmlFor="postUrl">게시물 URL</Label>
+                <Input
+                  id="postUrl"
+                  placeholder="https://instagram.com/p/... 또는 https://youtube.com/..."
+                  value={postUrl}
+                  onChange={(e) => setPostUrl(e.target.value)}
+                  data-testid="input-post-url"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="metaPartnershipCode">Meta 파트너십 코드</Label>
+                <Input
+                  id="metaPartnershipCode"
+                  placeholder="파트너십 코드를 입력해주세요"
+                  value={metaPartnershipCode}
+                  onChange={(e) => setMetaPartnershipCode(e.target.value)}
+                  data-testid="input-meta-partnership-code"
+                />
+              </div>
+              <Button
+                className="w-full"
+                onClick={() => savePostInfo.mutate()}
+                disabled={savePostInfo.isPending || (!postUrl && !metaPartnershipCode)}
+                data-testid="button-save-post-info"
+              >
+                {savePostInfo.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                저장하기
+              </Button>
             </CardContent>
           </Card>
         )}

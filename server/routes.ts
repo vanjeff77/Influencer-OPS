@@ -5058,21 +5058,22 @@ export async function registerRoutes(
         if (val.length <= visibleEnd) return val;
         return '*'.repeat(val.length - visibleEnd) + val.slice(-visibleEnd);
       };
+      const submissionCount = await db.select({ count: sql<number>`count(*)::int` })
+        .from(contentSubmissions)
+        .where(and(
+          eq(contentSubmissions.campaignId, campaignId),
+          eq(contentSubmissions.influencerId, inf.id)
+        ));
+
       res.json({
         influencerId: inf.id,
         influencerName: inf.name,
         lineItemId: result.lineItem.id,
-        settlementInfo: {
-          bankName: inf.bankName || '',
-          accountHolder: inf.accountHolder || '',
-          accountNumber: maskValue(inf.accountNumber),
-          settlementType: inf.settlementType || '',
-          businessName: inf.businessName || '',
-          businessRegNo: maskValue(inf.businessRegNo),
-          freelancerId: maskValue(inf.freelancerId),
-        },
         hasSettlementInfo: !!(inf.bankName && inf.accountHolder && inf.accountNumber && inf.settlementType && inf.businessName && (inf.settlementType === '프리랜서' ? inf.freelancerId : inf.businessRegNo)),
         settlementConfirmed: !!result.lineItem.settlementConfirmedAt,
+        hasContractFile: !!result.lineItem.contractFileId,
+        submissionCount: submissionCount[0]?.count || 0,
+        hasPostInfo: !!(result.lineItem.postUrl || result.lineItem.metaPartnershipCode),
         postUrl: result.lineItem.postUrl || '',
         metaPartnershipCode: result.lineItem.metaPartnershipCode || '',
       });
@@ -5141,6 +5142,100 @@ export async function registerRoutes(
       await db.update(campaignInfluencers).set({ settlementConfirmedAt: new Date() }).where(eq(campaignInfluencers.id, result.lineItem.id));
 
       res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Public: 계약서 서명본 OneDrive 업로드 세션
+  app.post('/api/submit/:campaignId/contract-upload-session', async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.campaignId);
+      const { email, fileName } = req.body;
+
+      if (!email) return res.status(400).json({ message: "이메일이 필요합니다" });
+      if (!fileName || typeof fileName !== 'string') return res.status(400).json({ message: "파일명이 필요합니다" });
+
+      const campaign = await storage.getCampaign(campaignId);
+      if (!campaign) return res.status(404).json({ message: "캠페인을 찾을 수 없습니다" });
+
+      const result = await storage.findInfluencerByEmailInCampaign(campaignId, email.toLowerCase().trim());
+      if (!result) return res.status(403).json({ message: "이 캠페인에 등록된 이메일이 아닙니다" });
+
+      const { lineItem, influencer } = result;
+      const { createFolderIfNotExists, createUploadSession } = await import('./onedrive');
+
+      const sanitizedCampaignName = campaign.name.replace(/[<>:"/\\|?*]/g, '_');
+      const sanitizedInfluencerName = influencer.name.replace(/[<>:"/\\|?*]/g, '_');
+      const folderPath = `계약서/${sanitizedCampaignName}/${sanitizedInfluencerName}`;
+
+      const folderId = await createFolderIfNotExists(folderPath);
+
+      const timestamp = new Date().toISOString().split('T')[0];
+      const ext = fileName.split('.').pop() || '';
+      const baseName = fileName.replace(`.${ext}`, '');
+      const finalFileName = `계약서_${timestamp}_${baseName}.${ext}`;
+
+      const session = await createUploadSession(folderId, finalFileName);
+
+      res.json({
+        uploadUrl: session.uploadUrl,
+        expirationDateTime: session.expirationDateTime,
+        folderId,
+        finalFileName,
+        influencerId: influencer.id,
+        lineItemId: lineItem.id,
+      });
+    } catch (err: any) {
+      console.error('Contract upload session error:', err);
+      res.status(500).json({ message: err.message || "업로드 세션 생성 실패" });
+    }
+  });
+
+  // Public: 계약서 제출 완료 기록
+  app.post('/api/submit/:campaignId/contract-complete', async (req, res) => {
+    try {
+      const campaignId = parseInt(req.params.campaignId);
+      const { email, fileName, fileSize, folderId, fileId } = req.body;
+
+      if (!email) return res.status(400).json({ message: "이메일이 필요합니다" });
+      if (!fileId) return res.status(400).json({ message: "파일 업로드가 완료되지 않았습니다" });
+      if (!fileName) return res.status(400).json({ message: "파일명이 필요합니다" });
+
+      const result = await storage.findInfluencerByEmailInCampaign(campaignId, email.toLowerCase().trim());
+      if (!result) return res.status(403).json({ message: "이 캠페인에 등록된 이메일이 아닙니다" });
+
+      const { lineItem, influencer } = result;
+
+      let oneDriveLink: string | null = null;
+      if (fileId) {
+        try {
+          const { getFileLink } = await import('./onedrive');
+          oneDriveLink = await getFileLink(fileId);
+
+          await db.update(campaignInfluencers)
+            .set({ contractUrl: oneDriveLink, contractFileId: fileId })
+            .where(eq(campaignInfluencers.id, lineItem.id));
+        } catch (linkErr) {
+          console.error('Failed to generate OneDrive link for contract:', linkErr);
+        }
+      }
+
+      const campaign = await storage.getCampaign(campaignId);
+      if (campaign) {
+        await storage.createTimelineEvent({
+          workspaceId: campaign.workspaceId,
+          influencerId: influencer.id,
+          campaignId,
+          lineItemId: lineItem.id,
+          eventType: 'contract_signed',
+          title: '계약서 서명본 제출',
+          description: `${influencer.name}님이 서명된 계약서(${fileName})를 제출했습니다`,
+          metadata: { fileName, fileSize, oneDriveLink }
+        });
+      }
+
+      res.json({ success: true, oneDriveLink });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }

@@ -37,6 +37,7 @@ Preferred communication style: Simple, everyday language.
 - **Email Communication**: Features include attaching existing email threads, bulk email sending, integrated messenger with Gmail syncing, auto-email synchronization, and message soft-delete (hover trash icon on bubbles + delete button in full message dialog, `deletedAt` column on `conversation_messages`, `DELETE /api/messages/:messageId`).
 - **Finance & Tracking**: Real-time finance summary, CSV export, and settlement management with workflow and role-based access.
 - **Security**: IMAP password encryption (AES-256-CBC), Zod validation, authentication, and workspace authorization.
+- **Influencer Submission Portal**: Public portal (`/submit/:campaignId`) with email verification, featuring a 4-button menu: settlement info entry (always fresh, no pre-fill), signed contract upload (OneDrive), content file upload (OneDrive), and post info entry (URL, Meta partnership code). Completion badges on settlement/contract/post info; upload count badge on content.
 - **Contract Management**: CRUD operations for templates, rich text editor, variable substitution, and DOCX/PDF export.
 - **Google Sheets Auto-Sync**: Syncs campaign influencer contract/settlement data to Google Sheets, triggered by data changes.
 - **Client Management**: URL-based client logos, client manager assignment with multi-select, and auto-population of CC fields.
