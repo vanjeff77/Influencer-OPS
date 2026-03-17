@@ -218,7 +218,7 @@ export default function SubmitPage() {
   const isSettlementValid = () => {
     if (!settlement.bankName || !settlement.accountHolder || !settlement.accountNumber || !settlement.settlementType || !settlement.businessName) return false;
     if (settlement.settlementType === '프리랜서' && !settlement.freelancerId) return false;
-    if (settlement.settlementType === '사업자' && !settlement.businessRegNo) return false;
+    if ((settlement.settlementType === '사업자' || settlement.settlementType === '면세사업자') && !settlement.businessRegNo) return false;
     return true;
   };
 
@@ -615,26 +615,27 @@ export default function SubmitPage() {
                     <SelectValue placeholder="정산유형을 선택해주세요" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="사업자">사업자</SelectItem>
-                    <SelectItem value="프리랜서">프리랜서</SelectItem>
+                    <SelectItem value="사업자">사업자 (세금계산서 처리, 부가세 10%)</SelectItem>
+                    <SelectItem value="프리랜서">프리랜서 (부가세 X, 3.3% 공제)</SelectItem>
+                    <SelectItem value="면세사업자">면세사업자 (*해당하는 경우에만 선택)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="businessName">
-                  {settlement.settlementType === '사업자' ? '사업자명' : '성명'} <span className="text-destructive">*</span>
+                  {(settlement.settlementType === '사업자' || settlement.settlementType === '면세사업자') ? '사업자명' : '성명'} <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   id="businessName"
-                  placeholder={settlement.settlementType === '사업자' ? '사업자명을 입력해주세요' : '성명을 입력해주세요'}
+                  placeholder={(settlement.settlementType === '사업자' || settlement.settlementType === '면세사업자') ? '사업자명을 입력해주세요' : '성명을 입력해주세요'}
                   value={settlement.businessName}
                   onChange={(e) => setSettlement(prev => ({ ...prev, businessName: e.target.value }))}
                   data-testid="input-business-name"
                 />
               </div>
 
-              {settlement.settlementType === '사업자' && (
+              {(settlement.settlementType === '사업자' || settlement.settlementType === '면세사업자') && (
                 <div className="space-y-2">
                   <Label htmlFor="businessRegNo">사업자등록번호 <span className="text-destructive">*</span></Label>
                   <Input

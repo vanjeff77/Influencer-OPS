@@ -5096,7 +5096,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: "필수 항목을 모두 입력해주세요" });
       }
 
-      if (!['사업자', '프리랜서'].includes(settlementType)) {
+      if (!['사업자', '프리랜서', '면세사업자'].includes(settlementType)) {
         return res.status(400).json({ message: "정산유형이 올바르지 않습니다" });
       }
 
@@ -5110,7 +5110,7 @@ export async function registerRoutes(
         }
       }
 
-      if (settlementType === '사업자') {
+      if (settlementType === '사업자' || settlementType === '면세사업자') {
         if (!businessRegNo || !/^\d{3}-\d{2}-\d{5}$/.test(businessRegNo)) {
           return res.status(400).json({ message: "사업자등록번호 형식이 올바르지 않습니다 (000-00-00000)" });
         }
@@ -5133,7 +5133,7 @@ export async function registerRoutes(
       if (settlementType === '프리랜서') {
         updateData.freelancerId = freelancerId;
         updateData.businessRegNo = null;
-      } else if (settlementType === '사업자') {
+      } else if (settlementType === '사업자' || settlementType === '면세사업자') {
         updateData.businessRegNo = businessRegNo;
         updateData.freelancerId = null;
       }

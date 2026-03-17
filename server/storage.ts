@@ -847,7 +847,7 @@ export class DatabaseStorage implements IStorage {
     const isSettlementInfoComplete = (inf: Influencer | undefined): boolean => {
       if (!inf) return false;
       const hasBank = !!inf.bankName && !!inf.accountHolder && !!inf.accountNumber;
-      if (inf.settlementType === '사업자') {
+      if (inf.settlementType === '사업자' || inf.settlementType === '면세사업자') {
         return hasBank && !!inf.businessName && !!inf.businessRegNo;
       } else if (inf.settlementType === '프리랜서') {
         return hasBank && !!inf.freelancerId;
@@ -950,7 +950,7 @@ export class DatabaseStorage implements IStorage {
     const isSettlementInfoComplete = (): boolean => {
       if (!inf) return false;
       const hasBank = !!inf.bankName && !!inf.accountHolder && !!inf.accountNumber;
-      if (inf.settlementType === '사업자') {
+      if (inf.settlementType === '사업자' || inf.settlementType === '면세사업자') {
         return hasBank && !!inf.businessName && !!inf.businessRegNo;
       } else if (inf.settlementType === '프리랜서') {
         return hasBank && !!inf.freelancerId;

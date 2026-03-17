@@ -559,7 +559,7 @@ function SettlementDetailSheet({ item, workspaceId, onClose, onMarkPaid, isMarki
                   <span className="text-muted-foreground">{KO.pages.settlement.accountNumber}</span>
                   <span className="font-mono">{inf?.accountNumber || '-'}</span>
                 </div>
-                {inf?.settlementType === '사업자' && (
+                {(inf?.settlementType === '사업자' || inf?.settlementType === '면세사업자') && (
                   <>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">{KO.pages.settlement.businessName}</span>

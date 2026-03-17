@@ -1596,7 +1596,7 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
 
   const isSettlementInfoComplete = () => {
     const hasBank = bankName && accountHolder && accountNumber;
-    if (settlementType === '사업자') {
+    if (settlementType === '사업자' || settlementType === '면세사업자') {
       return hasBank && businessName && businessRegNo;
     } else if (settlementType === '프리랜서') {
       return hasBank && freelancerId;
@@ -1718,8 +1718,9 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
                 <SelectValue placeholder="유형 선택" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="사업자">{KO.pages.settlement.business}</SelectItem>
-                <SelectItem value="프리랜서">{KO.pages.settlement.freelancer}</SelectItem>
+                <SelectItem value="사업자">사업자 (세금계산서 처리, 부가세 10%)</SelectItem>
+                <SelectItem value="프리랜서">프리랜서 (부가세 X, 3.3% 공제)</SelectItem>
+                <SelectItem value="면세사업자">면세사업자 (*해당하는 경우에만 선택)</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -1753,7 +1754,7 @@ function InfluencerDetailPanel({ influencer, lineItem }: { influencer?: Campaign
               data-testid="input-account-number"
             />
           </div>
-          {settlementType === '사업자' && (
+          {(settlementType === '사업자' || settlementType === '면세사업자') && (
             <>
               <div>
                 <label className="text-xs font-medium text-muted-foreground">{KO.pages.settlement.businessName}</label>

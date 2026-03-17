@@ -1079,7 +1079,7 @@ function ContractInfoDialog({ item, campaignId, onClose }: ContractInfoDialogPro
   const [accountHolder, setAccountHolder] = useState(inf?.accountHolder || '');
   const [businessName, setBusinessName] = useState(inf?.businessName || '');
   const [idNumber, setIdNumber] = useState(
-    inf?.settlementType === '사업자' ? (inf?.businessRegNo || '') : (inf?.freelancerId || '')
+    (inf?.settlementType === '사업자' || inf?.settlementType === '면세사업자') ? (inf?.businessRegNo || '') : (inf?.freelancerId || '')
   );
   
   const [isSaving, setIsSaving] = useState(false);
@@ -1101,7 +1101,7 @@ function ContractInfoDialog({ item, campaignId, onClose }: ContractInfoDialogPro
         accountHolder: accountHolder || null,
         businessName: businessName || null,
       };
-      if (settlementType === '사업자') {
+      if (settlementType === '사업자' || settlementType === '면세사업자') {
         influencerUpdates.businessRegNo = idNumber || null;
         influencerUpdates.freelancerId = null;
       } else {
@@ -1254,7 +1254,7 @@ function ContractInfoDialog({ item, campaignId, onClose }: ContractInfoDialogPro
                 <Label className="text-xs">정산 유형</Label>
                 <Select value={settlementType} onValueChange={(val) => {
                     setSettlementType(val);
-                    if (val === '사업자') {
+                    if (val === '사업자' || val === '면세사업자') {
                       setIdNumber(inf?.businessRegNo || '');
                     } else {
                       setIdNumber(inf?.freelancerId || '');
@@ -1264,8 +1264,9 @@ function ContractInfoDialog({ item, campaignId, onClose }: ContractInfoDialogPro
                     <SelectValue placeholder="선택" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="사업자">사업자</SelectItem>
-                    <SelectItem value="프리랜서">프리랜서</SelectItem>
+                    <SelectItem value="사업자">사업자 (세금계산서 처리, 부가세 10%)</SelectItem>
+                    <SelectItem value="프리랜서">프리랜서 (부가세 X, 3.3% 공제)</SelectItem>
+                    <SelectItem value="면세사업자">면세사업자 (*해당하는 경우에만 선택)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1279,11 +1280,11 @@ function ContractInfoDialog({ item, campaignId, onClose }: ContractInfoDialogPro
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">{settlementType === '사업자' ? '사업자등록번호' : '주민등록번호'}</Label>
+                <Label className="text-xs">{(settlementType === '사업자' || settlementType === '면세사업자') ? '사업자등록번호' : '주민등록번호'}</Label>
                 <Input
                   value={idNumber}
                   onChange={(e) => setIdNumber(e.target.value)}
-                  placeholder={settlementType === '사업자' ? '000-00-00000' : '000000-0000000'}
+                  placeholder={(settlementType === '사업자' || settlementType === '면세사업자') ? '000-00-00000' : '000000-0000000'}
                   data-testid="input-contract-id-number"
                 />
               </div>
