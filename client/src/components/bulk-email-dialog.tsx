@@ -113,6 +113,15 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
   const availableAccounts = useMemo(() => {
     return emailAccounts || [];
   }, [emailAccounts]);
+
+  useEffect(() => {
+    if (!selectedEmailAccountId && availableAccounts.length > 0 && currentUser?.email) {
+      const match = availableAccounts.find((acc: any) => acc.email?.toLowerCase() === currentUser.email.toLowerCase());
+      if (match) {
+        setSelectedEmailAccountId(match.id.toString());
+      }
+    }
+  }, [availableAccounts, currentUser?.email]);
   
   const selectedAccount = useMemo(() => {
     if (!selectedEmailAccountId || !availableAccounts.length) return null;
