@@ -18,6 +18,7 @@ import { Mail, Send, Eye, AlertCircle, Check, X, Loader2, FileText, Users, TestT
 import DOMPurify from 'dompurify';
 import { KO } from '@/i18n/ko';
 import { TiptapEditor } from '@/components/tiptap-editor';
+import { useUser } from '@/hooks/use-auth';
 
 interface CampaignLineItem {
   id: number;
@@ -68,6 +69,7 @@ type Step = 'template' | 'preview' | 'test' | 'confirm';
 export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, lineItems, workspaceId, clientId }: BulkEmailDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { data: currentUser } = useUser();
   
   const [step, setStep] = useState<Step>('template');
   const [subject, setSubject] = useState(`[${campaignName}] 안녕하세요, {{influencer_name}}님!`);
@@ -82,6 +84,12 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
   const [allowResend, setAllowResend] = useState(false);
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const [checkedLineItemIds, setCheckedLineItemIds] = useState<Set<number>>(() => new Set(lineItems.map(li => li.id)));
+
+  useEffect(() => {
+    if (open && currentUser?.email && !testEmail) {
+      setTestEmail(currentUser.email);
+    }
+  }, [open, currentUser?.email]);
   
   
   const { data: emailAccounts, isLoading: isLoadingAccounts } = useQuery<any[]>({

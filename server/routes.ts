@@ -3441,8 +3441,26 @@ export async function registerRoutes(
         renderedBody += `<br><br>--<br>${emailAccount.signature}`;
       }
       
-      const bulkSmtpSettings = getImapSmtpSettings(emailAccount);
-      if (emailAccount.provider === 'imap' && bulkSmtpSettings.smtpHost && bulkSmtpSettings.imapPassword) {
+      const useGmailApi = emailAccount.provider === 'gmail' && emailAccount.refreshToken && emailAccount.useGmailApi;
+      
+      if (useGmailApi) {
+        try {
+          const { sendEmailForAccount } = await import('./gmail');
+          await sendEmailForAccount(
+            emailAccount.refreshToken!, testEmail, renderedSubject, renderedBody,
+            undefined, ccEmails.length > 0 ? ccEmails : undefined,
+            undefined, undefined,
+            { forceUniqueThread: true, fromEmail: emailAccount.email }
+          );
+          res.json({ success: true, message: `테스트 메일이 ${testEmail}로 발송되었습니다` });
+        } catch (gmailErr: any) {
+          res.status(500).json({ success: false, message: gmailErr.message || 'Gmail API 오류' });
+        }
+      } else if (emailAccount.provider === 'imap' || (emailAccount.provider === 'gmail' && !emailAccount.useGmailApi)) {
+        const bulkSmtpSettings = getImapSmtpSettings(emailAccount);
+        if (!bulkSmtpSettings.smtpHost || !bulkSmtpSettings.imapPassword) {
+          return res.status(400).json({ message: "SMTP 설정이 누락되었습니다" });
+        }
         const decryptedPassword = decryptPassword(bulkSmtpSettings.imapPassword);
         
         const transporter = createSmtpTransporter({
@@ -3468,7 +3486,7 @@ export async function registerRoutes(
           res.status(500).json({ success: false, message: result.error });
         }
       } else {
-        res.status(400).json({ message: "IMAP/SMTP 계정만 지원됩니다" });
+        res.status(400).json({ message: "이메일 계정 설정이 올바르지 않습니다. Gmail OAuth 연결 또는 IMAP/SMTP 설정을 확인해주세요." });
       }
     } catch (err: any) {
       res.status(500).json({ message: err.message });
