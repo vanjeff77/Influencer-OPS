@@ -4097,8 +4097,11 @@ export async function registerRoutes(
       '정산유형': lineItem.influencer?.settlementType || '',
       '생년월일': lineItem.influencer?.birthDate || '',
       '플랫폼': primaryAccount?.platform || '',
+      '플랫폼명': primaryAccount?.platform || '',
       '채널URL': primaryAccount?.url || '',
+      '계정URL': primaryAccount?.url || '',
       '채널핸들': primaryAccount?.handle || '',
+      '계정명': primaryAccount?.handle || '',
       '2차활용기간': lineItem.offerUsageMonths ? lineItem.offerUsageMonths + '개월' : '',
       '2차활용갱신비용': lineItem.offerUsageRenewalFee ? (lineItem.offerUsageRenewalFee).toLocaleString() + '원' : '',
     };
