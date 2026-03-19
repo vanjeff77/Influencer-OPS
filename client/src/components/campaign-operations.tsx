@@ -24,7 +24,7 @@ import { ko } from "date-fns/locale";
 import { 
   Filter, AlertCircle, Clock, FileText, Calendar, MessageSquare, 
   CheckCircle2, CircleDot, Circle, Instagram, Youtube, Twitter, Check,
-  ExternalLink, Save, AlertTriangle, CalendarIcon, Send, Download, Mail, Loader2, ArrowLeft, Pencil, ClipboardList
+  ExternalLink, Save, AlertTriangle, CalendarIcon, Send, Download, Mail, Loader2, ArrowLeft, Pencil, ClipboardList, Eye, Paperclip
 } from "lucide-react";
 import type { CampaignInfluencer, Influencer, InfluencerAccount, FeedbackNote, User } from "@shared/schema";
 import { KO } from "@/i18n/ko";
@@ -989,8 +989,8 @@ function ContractGenerateDialog({ item, campaignId, workspaceId, onClose }: Cont
                     disabled={!hasSavedContent}
                     data-testid="button-email-contract"
                   >
-                    <Mail className="w-4 h-4 mr-1" />
-                    이메일 발송
+                    <Eye className="w-4 h-4 mr-1" />
+                    발송 전 검토
                   </Button>
                 </div>
               </div>
@@ -1012,17 +1012,83 @@ function ContractGenerateDialog({ item, campaignId, workspaceId, onClose }: Cont
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showEmailDialog} onOpenChange={(open) => !open && setShowEmailDialog(false)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>계약서 이메일 발송</DialogTitle>
-            <DialogDescription>
-              {item.influencer?.name}님에게 계약서 PDF를 첨부하여 이메일을 보냅니다.
-              기존 이메일 스레드의 답장으로 발송됩니다.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div>
+      <ContractEmailReviewDialog
+        open={showEmailDialog}
+        onOpenChange={(open) => !open && setShowEmailDialog(false)}
+        item={item}
+        emailBody={emailBody}
+        setEmailBody={setEmailBody}
+        onSend={handleSendEmail}
+        isSending={isSendingEmail}
+      />
+    </>
+  );
+}
+
+function ContractEmailReviewDialog({ 
+  open, onOpenChange, item, emailBody, setEmailBody, onSend, isSending 
+}: { 
+  open: boolean; 
+  onOpenChange: (open: boolean) => void; 
+  item: LineItemWithDetails;
+  emailBody: string;
+  setEmailBody: (v: string) => void;
+  onSend: () => void;
+  isSending: boolean;
+}) {
+  const { data: preview, isLoading } = useQuery<{
+    threadSubject: string;
+    toEmail: string;
+    fromEmail: string;
+    subject: string;
+    attachmentName: string;
+    influencerName: string;
+    campaignName: string;
+  }>({
+    queryKey: ['/api/line-items', item.id, 'contract-email-preview'],
+    enabled: open,
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>계약서 발송 검토</DialogTitle>
+          <DialogDescription>
+            발송 전 아래 내용을 확인해주세요.
+          </DialogDescription>
+        </DialogHeader>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : preview ? (
+          <div className="space-y-4 py-2">
+            <div className="rounded-lg border bg-muted/50 p-4 space-y-3 text-sm">
+              <div className="flex items-start gap-2">
+                <span className="text-muted-foreground whitespace-nowrap min-w-[60px]">스레드</span>
+                <span className="font-medium" data-testid="text-preview-thread">{preview.threadSubject}</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-muted-foreground whitespace-nowrap min-w-[60px]">보내는이</span>
+                <span data-testid="text-preview-from">{preview.fromEmail}</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-muted-foreground whitespace-nowrap min-w-[60px]">받는이</span>
+                <span data-testid="text-preview-to">{preview.toEmail}</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-muted-foreground whitespace-nowrap min-w-[60px]">제목</span>
+                <span className="font-medium" data-testid="text-preview-subject">{preview.subject}</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <Paperclip className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
+                <span className="text-xs text-muted-foreground" data-testid="text-preview-attachment">{preview.attachmentName}</span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
               <Label>이메일 본문</Label>
               <Textarea
                 value={emailBody}
@@ -1032,27 +1098,28 @@ function ContractGenerateDialog({ item, campaignId, workspaceId, onClose }: Cont
                 data-testid="textarea-email-body"
               />
             </div>
-            <div className="text-xs text-muted-foreground p-3 bg-muted rounded-md space-y-1">
-              <p>수신: {item.influencer?.email || '이메일 없음'}</p>
-              <p>첨부: 계약서_{item.influencer?.name}_{new Date().toISOString().split('T')[0]}.pdf</p>
-            </div>
           </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setShowEmailDialog(false)}>
-              취소
-            </Button>
-            <Button 
-              onClick={handleSendEmail} 
-              disabled={isSendingEmail}
-              data-testid="button-confirm-send-email"
-            >
-              {isSendingEmail ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Send className="w-4 h-4 mr-1" />}
-              발송
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+        ) : (
+          <div className="py-6 text-center text-sm text-muted-foreground">
+            미리보기를 불러올 수 없습니다. 이메일 스레드가 연결되어 있는지 확인해주세요.
+          </div>
+        )}
+
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel-review">
+            취소
+          </Button>
+          <Button 
+            onClick={onSend} 
+            disabled={isSending || isLoading || !preview}
+            data-testid="button-confirm-send-email"
+          >
+            {isSending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Send className="w-4 h-4 mr-1" />}
+            발송
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

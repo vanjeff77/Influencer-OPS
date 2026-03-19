@@ -4438,6 +4438,47 @@ export async function registerRoutes(
     }
   });
 
+  // Preview contract email details before sending
+  app.get('/api/line-items/:id/contract-email-preview', async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+      const lineItemId = parseInt(req.params.id);
+
+      const lineItem = await storage.getLineItemWithDetails(lineItemId);
+      if (!lineItem) return res.status(404).json({ message: "Line item not found" });
+
+      if (!lineItem.contractContent) {
+        return res.status(400).json({ message: "저장된 계약서 내용이 없습니다." });
+      }
+
+      const conversation = await storage.getConversationByLineItem(lineItemId);
+      if (!conversation) {
+        return res.status(400).json({ message: "연결된 이메일 스레드가 없습니다." });
+      }
+
+      const campaign = await storage.getCampaign(lineItem.campaignId);
+      const previewUserId = (req.user as any)?.id;
+      const previewAccounts = previewUserId ? await storage.getEmailAccounts(previewUserId, campaign?.workspaceId || 0) : [];
+      const account = (conversation.emailAccountId && previewAccounts.find(a => a.id === conversation.emailAccountId)) || previewAccounts[0];
+
+      const subject = conversation.subjectPrefix ? `${conversation.subjectPrefix} 계약서 송부`.trim() : '계약서 송부';
+      const filename = `계약서_${lineItem.influencer?.name || 'contract'}_${new Date().toISOString().split('T')[0]}.pdf`;
+
+      res.json({
+        threadSubject: conversation.subjectPrefix || '(제목 없음)',
+        toEmail: lineItem.influencer?.email || '',
+        fromEmail: account?.email || '',
+        subject,
+        attachmentName: filename,
+        influencerName: lineItem.influencer?.name || '',
+        campaignName: campaign?.name || '',
+      });
+    } catch (err: any) {
+      console.error('Contract email preview error:', err);
+      res.status(500).json({ message: err.message || '미리보기 실패' });
+    }
+  });
+
   // Send contract PDF via email (through existing conversation thread)
   app.post('/api/line-items/:id/send-contract-email', async (req, res) => {
     try {
