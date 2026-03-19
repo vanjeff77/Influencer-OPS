@@ -4077,6 +4077,7 @@ export async function registerRoutes(
 
   // === Contract Content Helper ===
   async function renderContractContent(templateContent: string, lineItem: any, campaign: any, extraVariables?: Record<string, string>): Promise<string> {
+    const primaryAccount = lineItem.influencer?.accounts?.[0];
     const defaultVariables: Record<string, string> = {
       '인플루언서명': lineItem.influencer?.name || '',
       '캠페인명': campaign?.name || '',
@@ -4095,6 +4096,9 @@ export async function registerRoutes(
       '사업자등록번호': lineItem.influencer?.businessRegNo || '',
       '정산유형': lineItem.influencer?.settlementType || '',
       '생년월일': lineItem.influencer?.birthDate || '',
+      '플랫폼': primaryAccount?.platform || '',
+      '채널URL': primaryAccount?.url || '',
+      '채널핸들': primaryAccount?.handle || '',
       '2차활용기간': lineItem.offerUsageMonths ? lineItem.offerUsageMonths + '개월' : '',
       '2차활용갱신비용': lineItem.offerUsageRenewalFee ? (lineItem.offerUsageRenewalFee).toLocaleString() + '원' : '',
     };
