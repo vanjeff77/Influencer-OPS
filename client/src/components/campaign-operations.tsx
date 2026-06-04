@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest, encodeContent } from "@/lib/queryClient";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { api } from "@shared/routes";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -720,9 +720,8 @@ function ContractGenerateDialog({ item, campaignId, workspaceId, onClose }: Cont
     setIsSaving(true);
     try {
       await apiRequest('PATCH', `/api/line-items/${item.id}/contract-content`, {
-        contractContent: encodeContent(contractContent ?? ''),
+        contractContent: contractContent ?? '',
         contractTemplateId: selectedTemplateId,
-        _enc: true,
       });
       setHasSavedContent(true);
       queryClient.invalidateQueries({ queryKey: ['/api/line-items', item.id, 'contract-content'] });

@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { apiRequest, encodeContent } from '@/lib/queryClient';
+import { apiRequest } from '@/lib/queryClient';
 import { api } from '@shared/routes';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Mail, Send, Eye, AlertCircle, Check, X, Loader2, FileText, Users, TestTube, RotateCcw, Star } from 'lucide-react';
@@ -147,9 +147,8 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
   const previewMutation = useMutation({
     mutationFn: async (influencerId: number) => {
       const res = await apiRequest('POST', '/api/bulk-email/preview', {
-        subject: encodeContent(subject),
-        body: encodeContent(body),
-        _enc: true,
+        subject,
+        body,
         influencerId,
         campaignId,
         emailAccountId: selectedEmailAccountId ? parseInt(selectedEmailAccountId) : undefined,
@@ -161,9 +160,8 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
   const testMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest('POST', '/api/bulk-email/test', {
-        subject: encodeContent(subject),
-        body: encodeContent(body),
-        _enc: true,
+        subject,
+        body,
         cc: cc.trim() || undefined,
         testEmail,
         emailAccountId: parseInt(selectedEmailAccountId),
@@ -212,9 +210,8 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
     mutationFn: async (resend?: boolean) => {
       const selectedLineItemIds = Array.from(checkedLineItemIds);
       const res = await apiRequest('POST', '/api/bulk-email/validate', {
-        subject: encodeContent(subject),
-        body: encodeContent(body),
-        _enc: true,
+        subject,
+        body,
         campaignId,
         allowResend: resend ?? allowResend,
         lineItemIds: selectedLineItemIds,
@@ -229,9 +226,8 @@ export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, 
   const startMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest('POST', '/api/bulk-email/start', {
-        subject: encodeContent(subject),
-        body: encodeContent(body),
-        _enc: true,
+        subject,
+        body,
         cc: cc.trim() || undefined,
         campaignId,
         emailAccountId: parseInt(selectedEmailAccountId),

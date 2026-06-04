@@ -392,12 +392,7 @@ export default function CampaignDetail() {
     const updated = { ...current, [tab]: value || undefined };
     if (!value) delete updated[tab];
     try {
-      const res = await fetch(`/api/workspaces/${campaignWorkspaceId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tabDescriptions: updated }),
-      });
-      if (!res.ok) throw new Error();
+      await apiRequest("PATCH", `/api/workspaces/${campaignWorkspaceId}`, { tabDescriptions: updated });
       queryClient.invalidateQueries({ queryKey: ["/api/workspaces"] });
       toast({ title: "탭 설명이 저장되었습니다." });
       setEditingTabDesc(null);

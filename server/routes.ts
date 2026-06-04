@@ -3354,22 +3354,8 @@ export async function registerRoutes(
   // === BULK EMAIL ===
   
   // Preview template with variable substitution
-  // Decode base64-encoded fields (client encodes to avoid the production WAF blocking
-  // requests whose JSON body contains raw HTML). Only runs when the client sets `_enc: true`.
-  const decodeEncodedFields = (req: any, fields: string[]) => {
-    if (req.body && req.body._enc) {
-      for (const f of fields) {
-        if (typeof req.body[f] === 'string') {
-          req.body[f] = Buffer.from(req.body[f], 'base64').toString('utf8');
-        }
-      }
-    }
-  };
-  const decodeBulkContent = (req: any) => decodeEncodedFields(req, ['subject', 'body']);
-
   app.post('/api/bulk-email/preview', async (req, res) => {
     try {
-      decodeBulkContent(req);
       const { subject, body, influencerId, campaignId, emailAccountId } = req.body;
       const { renderTemplate, validateVariables, convertToGmailCompatibleHtml } = await import('./smtp');
       
@@ -3423,7 +3409,6 @@ export async function registerRoutes(
     try {
       if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
       
-      decodeBulkContent(req);
       const { subject, body, cc, testEmail, emailAccountId, influencerId, campaignId } = req.body;
       const { renderTemplate, createSmtpTransporter, sendEmail, convertToGmailCompatibleHtml } = await import('./smtp');
       const { decryptPassword } = await import('./imap');
@@ -3511,7 +3496,6 @@ export async function registerRoutes(
   // Validate recipients and get summary before sending
   app.post('/api/bulk-email/validate', async (req, res) => {
     try {
-      decodeBulkContent(req);
       const { subject, body, campaignId, lineItemIds, allowResend } = req.body;
       const { validateVariables } = await import('./smtp');
       
@@ -3616,7 +3600,6 @@ export async function registerRoutes(
       if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
       const user = req.user as any;
       
-      decodeBulkContent(req);
       const { subject, body, cc, campaignId, emailAccountId, eligible, useSignature: useSignatureOverride } = req.body;
       const { renderTemplate, startBulkEmailWorker, convertToGmailCompatibleHtml } = await import('./smtp');
       
@@ -3990,7 +3973,6 @@ export async function registerRoutes(
   app.post(api.emailTemplates.create.path, async (req, res) => {
     try {
       if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-      decodeEncodedFields(req, ['subject', 'bodyHtml']);
       const wId = parseInt(req.params.workspaceId);
       const input = api.emailTemplates.create.input.parse({ ...req.body, workspaceId: wId });
       const template = await storage.createEmailTemplate(input);
@@ -4003,7 +3985,6 @@ export async function registerRoutes(
   app.patch(api.emailTemplates.update.path, async (req, res) => {
     try {
       if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-      decodeEncodedFields(req, ['subject', 'bodyHtml']);
       const id = parseInt(req.params.id);
       const input = api.emailTemplates.update.input.parse(req.body);
       const template = await storage.updateEmailTemplate(id, input);
@@ -4051,7 +4032,6 @@ export async function registerRoutes(
   app.post(api.contractTemplates.create.path, async (req, res) => {
     try {
       if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-      decodeEncodedFields(req, ['content']);
       const wId = parseInt(req.params.workspaceId);
       const input = api.contractTemplates.create.input.parse({ ...req.body, workspaceId: wId });
       const template = await storage.createContractTemplate(input);
@@ -4064,7 +4044,6 @@ export async function registerRoutes(
   app.patch(api.contractTemplates.update.path, async (req, res) => {
     try {
       if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-      decodeEncodedFields(req, ['content']);
       const id = parseInt(req.params.id);
       const existing = await storage.getContractTemplate(id);
       if (!existing) return res.status(404).json({ message: "Template not found" });
@@ -4168,7 +4147,6 @@ export async function registerRoutes(
   app.patch('/api/line-items/:id/contract-content', async (req, res) => {
     try {
       if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-      decodeEncodedFields(req, ['contractContent']);
       const lineItemId = parseInt(req.params.id);
       const { contractContent, contractTemplateId } = req.body;
 

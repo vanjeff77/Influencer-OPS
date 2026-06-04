@@ -24,6 +24,23 @@ app.use(
 
 app.use(express.urlencoded({ extended: false, limit: '10mb' }));
 
+// The production WAF (Cloudflare) blocks requests whose JSON body contains raw HTML,
+// returning an HTML 403 before the request ever reaches Express. To avoid this, the
+// client wraps the entire JSON body in a single base64 string under `__enc` and sets
+// the `X-Encoded-Body` header. Here we transparently unwrap it back into req.body so
+// all downstream routes are unaffected. Requests without the header (external webhooks,
+// OAuth callbacks, multipart uploads) pass through untouched.
+app.use((req, res, next) => {
+  if (req.headers["x-encoded-body"] && req.body && typeof req.body.__enc === "string") {
+    try {
+      req.body = JSON.parse(Buffer.from(req.body.__enc, "base64").toString("utf8"));
+    } catch {
+      return res.status(400).json({ message: "Invalid encoded request body" });
+    }
+  }
+  next();
+});
+
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
     hour: "numeric",

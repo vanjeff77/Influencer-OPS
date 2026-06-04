@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, buildUrl } from "@shared/routes";
+import { apiRequest } from "@/lib/queryClient";
 
 export function useEmailAccounts(workspaceId: number) {
   return useQuery({
@@ -58,12 +59,7 @@ export function useSyncEmail(accountId: number) {
 export function useSendBulkEmail() {
   return useMutation({
     mutationFn: async (data: { accountId: number; to: string[]; subject: string; bodyTemplate: string }) => {
-      const res = await fetch(api.email.sendBulk.path, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) throw new Error("Failed to send emails");
+      const res = await apiRequest("POST", api.email.sendBulk.path, data);
       return api.email.sendBulk.responses[200].parse(await res.json());
     },
   });

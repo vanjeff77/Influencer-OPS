@@ -1,40 +1,53 @@
 ---
 name: Production WAF blocks raw HTML in request bodies
-description: Deployed app's WAF returns an HTML 403 (not from Express) when a POST JSON body contains raw HTML; dev domain has no such WAF.
+description: Deployed app's WAF returns an HTML 403 (not from Express) when a JSON body contains raw HTML; solved globally by base64-wrapping every apiRequest body.
 ---
 
 # Production WAF blocks raw HTML in JSON request bodies
 
-On the **deployed** app (Cloudflare-fronted), POST requests whose JSON body contains
-raw HTML email/template content can be blocked with a **403 whose body is an HTML
-page**, *before* the request reaches Express (so it never appears in deployment logs).
-The `.replit.dev` dev domain has no such WAF, so the same request returns 200 in dev —
-the bug is production-only and not reproducible locally.
+On the **deployed** app (Cloudflare-fronted), write requests whose JSON body contains
+raw HTML (email/template/contract content) can be blocked with a **403 whose body is an
+HTML page**, *before* the request reaches Express (so it never appears in deployment
+logs). The `.replit.dev` dev domain has no such WAF, so the same request returns 200 in
+dev — the bug is production-only and not reproducible locally.
 
-**Symptom:** client toast shows `서버 오류 (403)`. In `client/src/lib/queryClient.ts`,
-`handleGlobalError` shows the generic `서버 오류 (status)` message *only when the error
-body starts with `<!`/`<html`* (i.e. an HTML response). Our routes only ever return
-JSON, so an HTML 403 means an infra/WAF block, not our code.
+**Diagnosing:** if a prod write fails but there is NO matching entry in deployment logs,
+the request was blocked before Express (WAF), not by our code. Note the client error
+flow in `client/src/lib/queryClient.ts`: `handleGlobalError` returns *silently* on 401
+(so the user sees only the mutation's own onError toast, no status), and shows
+`서버 오류 (status)` only when the error body starts with `<!`/`<html` (an HTML/WAF
+response). A reported toast without a status code does NOT confirm the cause — check logs.
 
-**Fix pattern:** base64-encode the HTML fields client-side (UTF-8 safe:
-`TextEncoder` → byte string → `btoa`) and send a flag `_enc: true`; decode server-side
-with `Buffer.from(x,'base64').toString('utf8')` before use (and before any Zod parse —
-Zod ZodObjects strip the unknown `_enc` key by default, so it never reaches storage).
+## Current solution: global base64 body wrapping (transport layer)
 
-- Client helper: canonical shared `encodeContent(str)` exported from
-  `client/src/lib/queryClient.ts` — reuse it everywhere, do not re-define locally.
-- Server helper: generic `decodeEncodedFields(req, fields)` (in `server/routes.ts`);
-  `decodeBulkContent` delegates to it. Decode only listed fields that are present
-  strings, so partial PATCH updates never clobber absent fields.
+WAF-safety is handled once, transparently, for ALL writes — do NOT scatter per-field
+encoding anymore (the old `_enc:true` + `decodeEncodedFields` per-field approach was
+removed in favor of this):
 
-Applied to: 4 `/api/bulk-email/*` endpoints (`subject`,`body`); email-template
-create/update (`subject`,`bodyHtml`); contract-template create/update (`content`);
-line-item contract-content PATCH (`contractContent`).
+- **Client** (`apiRequest` in `client/src/lib/queryClient.ts`): for any request with a
+  body, sends `{ __enc: base64(JSON.stringify(data)) }` and header `X-Encoded-Body: 1`.
+  `encodeContent(str)` is the UTF-8-safe base64 helper (TextEncoder → byte string → btoa).
+- **Server** (middleware in `server/index.ts`, right after `express.json`): when the
+  header is present and `req.body.__enc` is a string, replaces `req.body` with the decoded
+  JSON; returns 400 on decode failure. Requests without the header (external webhooks,
+  OAuth callbacks, multipart uploads) pass through untouched. `req.rawBody` (captured by
+  express.json verify) is only used by such external callers, so it's unaffected.
 
-**Why:** transport obfuscation to avoid WAF false-positives on HTML payloads.
+**Why base64 bypasses the WAF:** WAF HTML/XSS rules match `<tag` patterns; a pure base64
+string (alphanumeric + `/+=`) never matches. Same dependency for any base64 approach.
 
-**How to apply / still-exposed:** any *other* route carrying rich HTML in a JSON body is
-still vulnerable — notably `POST /api/conversations/:id/messages` (regular message
-send). If a user reports a production-only 403 on an HTML-carrying send, apply the same
-`encodeContent` + `_enc` + `decodeEncodedFields` pattern there. When `_enc` is set, every
-listed field that IS present must be encoded, or the server will mangle a plaintext field.
+**Why global, not per-field:** the user hit this repeatedly (bulk email, then templates,
+then contract content). Per-field meant enumerating every HTML field on every endpoint —
+fragile and easy to miss one. Global makes it a transport concern, immune to new fields.
+
+## How to apply / stay consistent
+
+- Route every mutating JSON request through `apiRequest`. Raw `fetch` with a JSON body
+  bypasses the wrapper and stays WAF-exposed. Bodyless `fetch(url,{method:'POST'})`
+  (logout, onboarding, tracking-start) is fine — no body, no risk.
+- Base64 inflates ~33%; Express limit is 10mb so effective max original JSON is ~7mb —
+  only a concern for very large rich-text payloads.
+
+**Verify in dev** (no WAF there, so this only proves decode correctness, not WAF bypass):
+encoded body with raw HTML inside → reaches Express, decodes, returns normal response;
+bad `__enc` with header → 400; non-encoded plain request → still works (backward compat).
