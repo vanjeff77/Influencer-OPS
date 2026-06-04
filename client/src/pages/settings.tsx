@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, encodeContent } from "@/lib/queryClient";
 import { KO } from "@/i18n/ko";
 import { Switch } from "@/components/ui/switch";
 import { Plus, Pencil, Trash2, Building2, Users, Shield, FileText, Star, Settings, RotateCcw, Mail, X, Sparkles, ImageDown, Loader2, CheckCircle, AlertCircle, Bell, Sheet, ExternalLink } from "lucide-react";
@@ -1629,7 +1629,12 @@ function EmailTemplatesSection({ workspaceId }: { workspaceId: number }) {
 
   const createMutation = useMutation({
     mutationFn: (data: { name: string; description?: string; type: string; subject: string; bodyHtml: string; isDefault?: boolean }) =>
-      apiRequest('POST', `/api/workspaces/${workspaceId}/email-templates`, data),
+      apiRequest('POST', `/api/workspaces/${workspaceId}/email-templates`, {
+        ...data,
+        subject: encodeContent(data.subject),
+        bodyHtml: encodeContent(data.bodyHtml),
+        _enc: true,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/workspaces', workspaceId, 'email-templates'] });
       toast({ title: KO.emailTemplates.created });
@@ -1641,7 +1646,12 @@ function EmailTemplatesSection({ workspaceId }: { workspaceId: number }) {
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: Partial<EmailTemplate> }) =>
-      apiRequest('PATCH', `/api/workspaces/${workspaceId}/email-templates/${id}`, data),
+      apiRequest('PATCH', `/api/workspaces/${workspaceId}/email-templates/${id}`, {
+        ...data,
+        ...(typeof data.subject === 'string' ? { subject: encodeContent(data.subject) } : {}),
+        ...(typeof data.bodyHtml === 'string' ? { bodyHtml: encodeContent(data.bodyHtml) } : {}),
+        _enc: true,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/workspaces', workspaceId, 'email-templates'] });
       toast({ title: KO.emailTemplates.updated });
@@ -1870,7 +1880,11 @@ function ContractTemplatesSection({ workspaceId }: { workspaceId: number }) {
 
   const createMutation = useMutation({
     mutationFn: (data: { name: string; description?: string; content: string; isDefault?: boolean }) =>
-      apiRequest('POST', `/api/workspaces/${workspaceId}/contract-templates`, data),
+      apiRequest('POST', `/api/workspaces/${workspaceId}/contract-templates`, {
+        ...data,
+        content: encodeContent(data.content),
+        _enc: true,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/workspaces', workspaceId, 'contract-templates'] });
       toast({ title: KO.contractTemplates.created });
@@ -1882,7 +1896,11 @@ function ContractTemplatesSection({ workspaceId }: { workspaceId: number }) {
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: Partial<ContractTemplate> }) =>
-      apiRequest('PATCH', `/api/workspaces/${workspaceId}/contract-templates/${id}`, data),
+      apiRequest('PATCH', `/api/workspaces/${workspaceId}/contract-templates/${id}`, {
+        ...data,
+        ...(typeof data.content === 'string' ? { content: encodeContent(data.content) } : {}),
+        _enc: true,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/workspaces', workspaceId, 'contract-templates'] });
       toast({ title: KO.contractTemplates.updated });

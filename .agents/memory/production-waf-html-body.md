@@ -18,13 +18,23 @@ JSON, so an HTML 403 means an infra/WAF block, not our code.
 
 **Fix pattern:** base64-encode the HTML fields client-side (UTF-8 safe:
 `TextEncoder` → byte string → `btoa`) and send a flag `_enc: true`; decode server-side
-with `Buffer.from(x,'base64').toString('utf8')` before use. Applied to the 4
-`/api/bulk-email/*` POST endpoints (preview, test, validate, start) via shared
-`decodeBulkContent(req)` helper.
+with `Buffer.from(x,'base64').toString('utf8')` before use (and before any Zod parse —
+Zod ZodObjects strip the unknown `_enc` key by default, so it never reaches storage).
+
+- Client helper: canonical shared `encodeContent(str)` exported from
+  `client/src/lib/queryClient.ts` — reuse it everywhere, do not re-define locally.
+- Server helper: generic `decodeEncodedFields(req, fields)` (in `server/routes.ts`);
+  `decodeBulkContent` delegates to it. Decode only listed fields that are present
+  strings, so partial PATCH updates never clobber absent fields.
+
+Applied to: 4 `/api/bulk-email/*` endpoints (`subject`,`body`); email-template
+create/update (`subject`,`bodyHtml`); contract-template create/update (`content`);
+line-item contract-content PATCH (`contractContent`).
 
 **Why:** transport obfuscation to avoid WAF false-positives on HTML payloads.
 
-**How to apply / still-exposed:** any *other* POST route carrying rich HTML in JSON is
+**How to apply / still-exposed:** any *other* route carrying rich HTML in a JSON body is
 still vulnerable — notably `POST /api/conversations/:id/messages` (regular message
 send). If a user reports a production-only 403 on an HTML-carrying send, apply the same
-`_enc` encode/decode pattern there.
+`encodeContent` + `_enc` + `decodeEncodedFields` pattern there. When `_enc` is set, every
+listed field that IS present must be encoded, or the server will mangle a plaintext field.

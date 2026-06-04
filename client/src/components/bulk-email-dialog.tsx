@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { apiRequest } from '@/lib/queryClient';
+import { apiRequest, encodeContent } from '@/lib/queryClient';
 import { api } from '@shared/routes';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Mail, Send, Eye, AlertCircle, Check, X, Loader2, FileText, Users, TestTube, RotateCcw, Star } from 'lucide-react';
@@ -65,15 +65,6 @@ interface ValidationResult {
 }
 
 type Step = 'template' | 'preview' | 'test' | 'confirm';
-
-// Encode HTML content to base64 (UTF-8 safe) so the production WAF doesn't block
-// requests that contain raw HTML in the body.
-function encodeContent(str: string): string {
-  const bytes = new TextEncoder().encode(str);
-  let bin = '';
-  bytes.forEach((b) => (bin += String.fromCharCode(b)));
-  return btoa(bin);
-}
 
 export function BulkEmailDialog({ open, onOpenChange, campaignId, campaignName, lineItems, workspaceId, clientId }: BulkEmailDialogProps) {
   const { toast } = useToast();
