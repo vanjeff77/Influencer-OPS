@@ -3354,8 +3354,21 @@ export async function registerRoutes(
   // === BULK EMAIL ===
   
   // Preview template with variable substitution
+  // Decode base64-encoded subject/body (client encodes to avoid WAF blocking raw HTML in request bodies)
+  const decodeBulkContent = (req: any) => {
+    if (req.body && req.body._enc) {
+      if (typeof req.body.subject === 'string') {
+        req.body.subject = Buffer.from(req.body.subject, 'base64').toString('utf8');
+      }
+      if (typeof req.body.body === 'string') {
+        req.body.body = Buffer.from(req.body.body, 'base64').toString('utf8');
+      }
+    }
+  };
+
   app.post('/api/bulk-email/preview', async (req, res) => {
     try {
+      decodeBulkContent(req);
       const { subject, body, influencerId, campaignId, emailAccountId } = req.body;
       const { renderTemplate, validateVariables, convertToGmailCompatibleHtml } = await import('./smtp');
       
@@ -3409,6 +3422,7 @@ export async function registerRoutes(
     try {
       if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
       
+      decodeBulkContent(req);
       const { subject, body, cc, testEmail, emailAccountId, influencerId, campaignId } = req.body;
       const { renderTemplate, createSmtpTransporter, sendEmail, convertToGmailCompatibleHtml } = await import('./smtp');
       const { decryptPassword } = await import('./imap');
@@ -3496,6 +3510,7 @@ export async function registerRoutes(
   // Validate recipients and get summary before sending
   app.post('/api/bulk-email/validate', async (req, res) => {
     try {
+      decodeBulkContent(req);
       const { subject, body, campaignId, lineItemIds, allowResend } = req.body;
       const { validateVariables } = await import('./smtp');
       
@@ -3600,6 +3615,7 @@ export async function registerRoutes(
       if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
       const user = req.user as any;
       
+      decodeBulkContent(req);
       const { subject, body, cc, campaignId, emailAccountId, eligible, useSignature: useSignatureOverride } = req.body;
       const { renderTemplate, startBulkEmailWorker, convertToGmailCompatibleHtml } = await import('./smtp');
       

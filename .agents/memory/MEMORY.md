@@ -1,0 +1,1 @@
+- [Production WAF blocks raw HTML bodies](production-waf-html-body.md) — deployed 403 (HTML page, not in server logs) on POST JSON with raw HTML; dev has no WAF. Fix: base64-encode HTML fields + `_enc` flag, decode server-side.
