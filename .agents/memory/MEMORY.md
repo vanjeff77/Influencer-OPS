@@ -1,1 +1,1 @@
-- [Production WAF blocks raw HTML bodies](production-waf-html-body.md) — deployed 403 (HTML page, not in server logs) on JSON with raw HTML; dev has no WAF. Fix: `apiRequest` base64-wraps the whole body (`__enc` + `X-Encoded-Body` header), server middleware unwraps. Route all JSON writes through `apiRequest`.
+- [Off-Replit deployment](off-replit-deployment.md) — app is portable, but Replit integrations (Gmail/OneDrive/Sheets/AI) break and need own keys; Dockerfile installs Chromium for PDF.
